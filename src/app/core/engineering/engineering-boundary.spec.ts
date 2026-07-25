@@ -31,6 +31,7 @@ describe('package import boundaries', () => {
       'component-catalog',
       'drone-build-domain',
       'compatibility-engine',
+      'propulsion-data',
       'aircraft-engineering',
       'aircraft-compiler',
       'aircraft-runtime-adapter',

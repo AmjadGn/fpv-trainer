@@ -2,8 +2,8 @@
   {
     "id": "aeroguard-2",
     "buildFingerprint": "5cb8b9cee51e8574",
-    "compilationContextFingerprint": "c354d8e453e30a04",
-    "artifactFingerprint": "01fbfdf68698b47b",
+    "compilationContextFingerprint": "1c46c7794011cea0",
+    "artifactFingerprint": "8a5444a3ff57509b",
     "runtimeCompatibilitySignature": "dee62f7b0371bd05",
     "totalMassKg": 0.30750000000000005,
     "centerOfMass": {
@@ -20,13 +20,18 @@
     "thrustToWeight": 2.8820765271872895,
     "runtimeRollInertia": 0.541143243307555,
     "runtimeMaxRollRate": 3.5850112,
-    "rankedContextFingerprint": "a3954a9cda8d0b71"
+    "rankedContextFingerprint": "0a768f2fcabc3f02",
+    "propulsionSourceMode": "peak-thrust-hint-fallback",
+    "propulsionConfidence": "low",
+    "propulsionDatasetRevisionId": null,
+    "propulsionDatasetFingerprint": null,
+    "propulsionFallbackWarningPresent": true
   },
   {
     "id": "velocity-x",
     "buildFingerprint": "84252df5f05a8b46",
-    "compilationContextFingerprint": "c354d8e453e30a04",
-    "artifactFingerprint": "ce25d15bfe67f339",
+    "compilationContextFingerprint": "1c46c7794011cea0",
+    "artifactFingerprint": "1b8ca2921c6e34fe",
     "runtimeCompatibilitySignature": "dee62f7b0371bd05",
     "totalMassKg": 0.6485000000000001,
     "centerOfMass": {
@@ -43,13 +48,18 @@
     "thrustToWeight": 5.031606695290708,
     "runtimeRollInertia": 0.8924323725934173,
     "runtimeMaxRollRate": 7.570384,
-    "rankedContextFingerprint": "a3954a9cda8d0b71"
+    "rankedContextFingerprint": "0a768f2fcabc3f02",
+    "propulsionSourceMode": "curated-estimate-table",
+    "propulsionConfidence": "medium",
+    "propulsionDatasetRevisionId": "ds-velocity-x-2207-6x4x3@1",
+    "propulsionDatasetFingerprint": "68110c67cc139acd",
+    "propulsionFallbackWarningPresent": false
   },
   {
     "id": "nano-scout",
     "buildFingerprint": "f6632e03d12918a1",
-    "compilationContextFingerprint": "c354d8e453e30a04",
-    "artifactFingerprint": "b3cd40e5b817932c",
+    "compilationContextFingerprint": "1c46c7794011cea0",
+    "artifactFingerprint": "7204fab4c607cda7",
     "runtimeCompatibilitySignature": "dee62f7b0371bd05",
     "totalMassKg": 0.07590000000000002,
     "centerOfMass": {
@@ -66,13 +76,18 @@
     "thrustToWeight": 1.9769561053964717,
     "runtimeRollInertia": 0.3168965426736865,
     "runtimeMaxRollRate": 2.570656,
-    "rankedContextFingerprint": "a3954a9cda8d0b71"
+    "rankedContextFingerprint": "0a768f2fcabc3f02",
+    "propulsionSourceMode": "peak-thrust-hint-fallback",
+    "propulsionConfidence": "low",
+    "propulsionDatasetRevisionId": null,
+    "propulsionDatasetFingerprint": null,
+    "propulsionFallbackWarningPresent": true
   },
   {
     "id": "apex-r5",
     "buildFingerprint": "9cb8f0faf5c3a258",
-    "compilationContextFingerprint": "c354d8e453e30a04",
-    "artifactFingerprint": "fb6e368d3b7240d7",
+    "compilationContextFingerprint": "1c46c7794011cea0",
+    "artifactFingerprint": "3d43aed0d7df92a0",
     "runtimeCompatibilitySignature": "dee62f7b0371bd05",
     "totalMassKg": 0.48429999999999995,
     "centerOfMass": {
@@ -85,17 +100,22 @@
       "pitch": 0.0008378112071030353,
       "yaw": 0.0015805232979558127
     },
-    "maxThrustNewtons": 35.711999999999996,
-    "thrustToWeight": 7.516760215727987,
+    "maxThrustNewtons": 35.712,
+    "thrustToWeight": 7.516760215727988,
     "runtimeRollInertia": 0.6094944118242827,
     "runtimeMaxRollRate": 7.071136,
-    "rankedContextFingerprint": "a3954a9cda8d0b71"
+    "rankedContextFingerprint": "0a768f2fcabc3f02",
+    "propulsionSourceMode": "curated-estimate-table",
+    "propulsionConfidence": "medium",
+    "propulsionDatasetRevisionId": "ds-apex-r5-2306-5x4x3@1",
+    "propulsionDatasetFingerprint": "e1bec9980ca73e88",
+    "propulsionFallbackWarningPresent": false
   },
   {
     "id": "flux-f5",
     "buildFingerprint": "ab2b53f9a279e758",
-    "compilationContextFingerprint": "c354d8e453e30a04",
-    "artifactFingerprint": "bb7460f4affee6cc",
+    "compilationContextFingerprint": "1c46c7794011cea0",
+    "artifactFingerprint": "2122083dbf191abf",
     "runtimeCompatibilitySignature": "dee62f7b0371bd05",
     "totalMassKg": 0.5435000000000001,
     "centerOfMass": {
@@ -112,13 +132,18 @@
     "thrustToWeight": 5.373485366395739,
     "runtimeRollInertia": 0.636757640963837,
     "runtimeMaxRollRate": 6.213039999999999,
-    "rankedContextFingerprint": "a3954a9cda8d0b71"
+    "rankedContextFingerprint": "0a768f2fcabc3f02",
+    "propulsionSourceMode": "peak-thrust-hint-fallback",
+    "propulsionConfidence": "low",
+    "propulsionDatasetRevisionId": null,
+    "propulsionDatasetFingerprint": null,
+    "propulsionFallbackWarningPresent": true
   },
   {
     "id": "horizon-l7",
     "buildFingerprint": "6088d08c808881c7",
-    "compilationContextFingerprint": "c354d8e453e30a04",
-    "artifactFingerprint": "5ff450ff3c31be35",
+    "compilationContextFingerprint": "1c46c7794011cea0",
+    "artifactFingerprint": "9326b1c26f82944a",
     "runtimeCompatibilitySignature": "dee62f7b0371bd05",
     "totalMassKg": 0.7965,
     "centerOfMass": {
@@ -135,6 +160,11 @@
     "thrustToWeight": 4.342392462436001,
     "runtimeRollInertia": 1.176184803430262,
     "runtimeMaxRollRate": 8.254527999999997,
-    "rankedContextFingerprint": "a3954a9cda8d0b71"
+    "rankedContextFingerprint": "0a768f2fcabc3f02",
+    "propulsionSourceMode": "peak-thrust-hint-fallback",
+    "propulsionConfidence": "low",
+    "propulsionDatasetRevisionId": null,
+    "propulsionDatasetFingerprint": null,
+    "propulsionFallbackWarningPresent": true
   }
 ]

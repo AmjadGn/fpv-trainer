@@ -35,21 +35,22 @@ export interface VersionManifest {
 }
 
 /**
- * Stabilization bump (v1.1.1 engineering core):
- * - validationRulesVersion / engineeringModelVersion / propulsionModelVersion /
- *   compilerVersion / runtimeAdapterVersion reflect ResolvedAssembly, topology
- *   propulsion, SI inertia, and policy-aware compilation context.
- * flightModelCompatibilityVersion stays 1.0.0 — single fixed-timestep runtime.
+ * v1.1.2 — propulsion performance dataset architecture:
+ * - propulsionModelVersion 1.1.2: dataset matching, interpolation, fallback metadata
+ * - engineeringModelVersion / compilerVersion 1.1.2: compiled propulsion source fields
+ * - validationRulesVersion 1.1.2: dataset eligibility policy in compilation context
+ * - runtimeAdapterVersion / flightModelCompatibilityVersion unchanged — runtime mapping
+ *   still consumes compiled totals/curves through the same adapter path
  */
 export const V1_1_VERSION_MANIFEST: VersionManifest = {
   buildSchemaVersion: '1.1.0',
   componentSchemaVersion: '1.1.0',
   catalogReleaseVersion: '1.1.0',
-  validationRulesVersion: '1.1.1',
-  engineeringModelVersion: '1.1.1',
+  validationRulesVersion: '1.1.2',
+  engineeringModelVersion: '1.1.2',
   aerodynamicModelVersion: '1.1.0',
-  propulsionModelVersion: '1.1.1',
-  compilerVersion: '1.1.1',
+  propulsionModelVersion: '1.1.2',
+  compilerVersion: '1.1.2',
   runtimeAdapterVersion: '1.1.1',
   flightModelCompatibilityVersion: '1.0.0',
 };

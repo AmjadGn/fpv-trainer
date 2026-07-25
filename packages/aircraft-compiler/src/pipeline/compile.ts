@@ -26,6 +26,10 @@ import {
   calculatePerformanceMetrics,
   validateEngineeringIntegrity,
 } from '@fpv/aircraft-engineering';
+import type {
+  PropulsionCalibrationProfileRevision,
+  PropulsionPerformanceDatasetRevision,
+} from '@fpv/propulsion-data';
 import { normalizeBuildRevision } from '../normalization/normalize';
 import {
   fingerprintBuildInput,
@@ -51,6 +55,8 @@ export interface CompileOptions {
   readonly cache?: CompilationCache;
   readonly skipCache?: boolean;
   readonly collectTrace?: boolean;
+  readonly propulsionDatasets?: readonly PropulsionPerformanceDatasetRevision[];
+  readonly propulsionCalibrations?: readonly PropulsionCalibrationProfileRevision[];
 }
 
 function stage(
@@ -151,11 +157,20 @@ export function compileAircraft(
   if (s6) trace.push(s6);
 
   t0 = Date.now();
+  const calibrationMap = new Map<string, PropulsionCalibrationProfileRevision>();
+  for (const cal of options.propulsionCalibrations ?? []) {
+    calibrationMap.set(cal.targetDatasetRevisionId, cal);
+  }
   const propulsion = solvePropulsion(
     assembly,
     electrical,
     mass.totalTakeoffMassKg,
     normalized.tuning,
+    {
+      datasets: options.propulsionDatasets,
+      datasetPolicy: policy.datasetPolicy,
+      calibrationsByDatasetRevisionId: calibrationMap,
+    },
   );
   const s7 = stage('propulsion', t0, [...propulsion.warnings], collectTrace);
   if (s7) trace.push(s7);

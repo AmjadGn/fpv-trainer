@@ -10,6 +10,7 @@
       "@fpv/drone-build-domain": ["packages/drone-build-domain/src/index.ts"],
       "@fpv/compatibility-engine": ["packages/compatibility-engine/src/index.ts"],
       "@fpv/aircraft-engineering": ["packages/aircraft-engineering/src/index.ts"],
+      "@fpv/propulsion-data": ["packages/propulsion-data/src/index.ts"],
       "@fpv/aircraft-compiler": ["packages/aircraft-compiler/src/index.ts"],
       "@fpv/aircraft-runtime-adapter": ["packages/aircraft-runtime-adapter/src/index.ts"],
       "@fpv/drone-build-persistence": ["packages/drone-build-persistence/src/index.ts"],

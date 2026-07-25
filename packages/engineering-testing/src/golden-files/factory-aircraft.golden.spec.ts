@@ -23,6 +23,11 @@ export interface FactoryGoldenRow {
   readonly runtimeRollInertia: number;
   readonly runtimeMaxRollRate: number;
   readonly rankedContextFingerprint: string;
+  readonly propulsionSourceMode: string;
+  readonly propulsionConfidence: string;
+  readonly propulsionDatasetRevisionId: string | null;
+  readonly propulsionDatasetFingerprint: string | null;
+  readonly propulsionFallbackWarningPresent: boolean;
 }
 
 const GOLDEN_PATH = resolve(
@@ -35,6 +40,7 @@ function captureGoldens(): FactoryGoldenRow[] {
   return FACTORY_GOLDEN_AIRCRAFT_IDS.map((id) => {
     const craft = compileFactoryAircraft(id, { policy: FREE_FLIGHT_POLICY });
     const spec = craft.compilation.specification!;
+    const primary = spec.propulsion.units[0];
     return {
       id,
       buildFingerprint: spec.buildFingerprint,
@@ -53,6 +59,13 @@ function captureGoldens(): FactoryGoldenRow[] {
       runtimeRollInertia: spec.flightRuntime.rollInertia,
       runtimeMaxRollRate: spec.flightRuntime.maxRollRate,
       rankedContextFingerprint: rankedCtx,
+      propulsionSourceMode: primary.source.dataSourceMode,
+      propulsionConfidence: primary.confidence,
+      propulsionDatasetRevisionId: primary.source.datasetRevisionId,
+      propulsionDatasetFingerprint: primary.source.datasetFingerprint,
+      propulsionFallbackWarningPresent: spec.propulsion.warnings.some((w) =>
+        w.includes('PROP_LEGACY_PEAK_THRUST_HINT_FALLBACK'),
+      ),
     };
   });
 }
