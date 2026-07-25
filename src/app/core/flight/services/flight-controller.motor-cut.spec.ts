@@ -81,6 +81,23 @@ describe('FlightControllerService motor cut', () => {
     expect(service.position()).not.toEqual({ x: 0, y: altitudeAtCut, z: 0 });
   });
 
+  it('falls near free-fall after motor cut (simulator ballistic, not soft float)', () => {
+    service.reset({ position: { x: 0, y: 40, z: 0 } });
+    service.arm(0);
+    service.disarm();
+
+    const coastSeconds = 0.5;
+    const steps = Math.round(coastSeconds / dt);
+    step(steps);
+
+    const freeFallSpeed = FLIGHT_CONFIG.gravity * coastSeconds;
+    // Quadratic aero drag may shave a little, but must stay simulator-real —
+    // not the old viscous armed-flight float (~half free-fall).
+    expect(-service.velocity().y).toBeGreaterThan(freeFallSpeed * 0.85);
+    expect(-service.velocity().y).toBeLessThan(freeFallSpeed * 1.05);
+    expect(service.position().y).toBeLessThan(40 - 0.5 * freeFallSpeed * coastSeconds * 0.7);
+  });
+
   it('accounts for upward momentum: climb then cut still gets downward acceleration', () => {
     service.arm(0);
     step(90, { throttle: 1, yaw: 0, pitch: 0, roll: 0 });

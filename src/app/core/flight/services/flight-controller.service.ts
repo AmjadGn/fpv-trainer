@@ -462,13 +462,53 @@ export class FlightControllerService {
   }
 
   /**
-   * Passive disarmed flight: gravity + aerodynamic drag, no thrust, no stick rates.
-   * Residual angular momentum is damped and continues to advance orientation.
+   * Passive disarmed flight: ballistic gravity + light quadratic aero drag.
+   * Does not reuse armed-flight viscous drag (that model is for powered handling
+   * feel and produces an unrealistically soft “float” after motor cut).
+   * Residual angular momentum is damped; orientation keeps integrating.
    * Does not increment armed flight time.
    */
   private integratePassiveMotorCut(dt: number): void {
     this.integratePassiveAngular(dt);
-    this.integrateLinear(ZERO_FLIGHT_INPUT, dt);
+    this.integratePassiveBallistic(dt);
+  }
+
+  /**
+   * Dead-motor ballistic translation for a simulator:
+   * a = g_down − c |v_rel| v_rel
+   *
+   * c is kept small and only lightly scaled by the aircraft linearDrag so
+   * factory craft still differ without parachute-like descent.
+   */
+  private integratePassiveBallistic(dt: number): void {
+    const cfg = this.cfg;
+    const rel = this.scratchRel;
+    rel.x = this.vel.x - this.windVel.x;
+    rel.y = this.vel.y - this.windVel.y;
+    rel.z = this.vel.z - this.windVel.z;
+
+    const speed = Math.hypot(rel.x, rel.y, rel.z);
+    // ~0.02–0.08 range for catalog linearDrag values → terminal ≈ 11–22 m/s.
+    const quadraticDrag =
+      0.02 + 0.05 * clamp(cfg.linearDrag, 0, 1.2);
+
+    let ax = 0;
+    let ay = -cfg.gravity;
+    let az = 0;
+    if (speed > 1e-8) {
+      const dragAccel = quadraticDrag * speed;
+      ax -= dragAccel * rel.x;
+      ay -= dragAccel * rel.y;
+      az -= dragAccel * rel.z;
+    }
+
+    this.vel.x += ax * dt;
+    this.vel.y += ay * dt;
+    this.vel.z += az * dt;
+
+    this.pos.x += this.vel.x * dt;
+    this.pos.y += this.vel.y * dt;
+    this.pos.z += this.vel.z * dt;
   }
 
   private integratePassiveAngular(dt: number): void {
