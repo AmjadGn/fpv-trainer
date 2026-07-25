@@ -14,6 +14,7 @@
       </p>
     </div>
     <div class="hangar__header-actions">
+      <button type="button" class="action" (click)="openBuilder()">Drone Builder</button>
       <button type="button" class="action" (click)="toggleAutoRotate()" [attr.aria-pressed]="autoRotate()">
         {{ autoRotate() ? 'Pause rotation' : 'Auto-rotate' }}
       </button>
@@ -179,6 +180,7 @@
       </div>
 
       <div class="hangar__cta">
+        <button type="button" class="action" (click)="customizeInBuilder()">Customize in Builder</button>
         <button type="button" class="action" (click)="openCompare()">Compare</button>
         <button type="button" class="action" (click)="startTestFlight()">Test Flight</button>
         <button type="button" class="action action--primary" (click)="startFullFlight()">

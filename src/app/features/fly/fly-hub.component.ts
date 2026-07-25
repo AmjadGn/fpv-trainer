@@ -39,6 +39,11 @@ import { FpvButtonDirective } from '../../shared/ui/fpv-button.directive';
               Open Hangar
             </button>
           </fpv-panel>
+          <fpv-panel title="Drone Builder" subtitle="Build, validate, compile, and fly a custom aircraft.">
+            <button type="button" fpvButton variant="secondary" size="sm" (click)="builder()">
+              Open Builder
+            </button>
+          </fpv-panel>
           <fpv-panel title="Environments & weather" subtitle="Pick a world and flight conditions.">
             <button type="button" fpvButton variant="secondary" size="sm" (click)="environments()">
               Environments
@@ -118,6 +123,10 @@ export class FlyHubComponent {
 
   protected hangar(): void {
     this.shell.showHangar();
+  }
+
+  protected builder(): void {
+    this.shell.showBuilder();
   }
 
   protected environments(): void {

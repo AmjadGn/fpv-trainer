@@ -12,6 +12,7 @@ import { CoursesComponent } from './features/courses/courses.component';
 import { EnvironmentsComponent } from './features/environments/environments.component';
 import { FlightComponent } from './features/flight/flight.component';
 import { HangarComponent } from './features/hangar/hangar.component';
+import { DroneBuilderComponent } from './features/drone-builder/drone-builder.component';
 import { HomeComponent } from './features/home/home.component';
 import { LearnHubComponent } from './features/learn/learn-hub.component';
 import { FlyHubComponent } from './features/fly/fly-hub.component';
@@ -60,6 +61,7 @@ interface ShellNavItem {
     PrivacyCenterComponent,
     DiagnosticsPanelComponent,
     HangarComponent,
+    DroneBuilderComponent,
     CoursesComponent,
     EnvironmentsComponent,
     WeatherChallengesComponent,
@@ -111,6 +113,7 @@ export class App {
 
   protected readonly secondaryNav: ShellNavItem[] = [
     { id: 'hangar', label: 'Hangar', icon: 'fly', kind: 'view', view: 'hangar' },
+    { id: 'builder', label: 'Builder', icon: 'fly', kind: 'view', view: 'builder' },
     { id: 'academy', label: 'Academy', icon: 'academy', kind: 'view', view: 'academy' },
     { id: 'replays', label: 'Replays', icon: 'replay', kind: 'action' },
     { id: 'leaderboards', label: 'Leaderboards', icon: 'leaderboard', kind: 'route', route: '/leaderboards' },
@@ -179,7 +182,8 @@ export class App {
           this.shell.view() === 'courses' ||
           this.shell.view() === 'environments' ||
           this.shell.view() === 'challenges' ||
-          this.shell.view() === 'hangar'
+          this.shell.view() === 'hangar' ||
+          this.shell.view() === 'builder'
         );
       }
       if (item.view === 'learn') {
@@ -234,6 +238,8 @@ export class App {
       this.showFlyHub();
     } else if (item.view === 'hangar') {
       this.showHangar();
+    } else if (item.view === 'builder') {
+      this.showBuilder();
     } else if (item.view === 'courses') {
       this.showCourses();
     } else if (item.view === 'academy') {
@@ -273,6 +279,11 @@ export class App {
   protected showHangar(): void {
     void this.router.navigateByUrl('/app');
     this.shell.showHangar();
+  }
+
+  protected showBuilder(): void {
+    void this.router.navigateByUrl('/app');
+    this.shell.showBuilder();
   }
 
   protected showCourses(): void {

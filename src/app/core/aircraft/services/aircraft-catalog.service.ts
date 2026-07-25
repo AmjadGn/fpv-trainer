@@ -3,14 +3,15 @@ import { Injectable, computed, signal } from '@angular/core';
 import {
   AIRCRAFT_CATALOG,
   AIRCRAFT_CATALOG_VERSION,
-  findAircraftById,
-  listProductionAircraft,
-  resolveAircraftId,
 } from '../data/aircraft-catalog';
 import type { AircraftDefinition } from '../models/aircraft-definition.model';
 import type { AircraftCategory } from '../models/aircraft-definition.model';
 import type { AircraftId } from '../models/aircraft-ids';
-import { validateAircraftDefinition } from '../validators/aircraft-definition.validator';
+import { DEFAULT_AIRCRAFT_ID } from '../models/aircraft-ids';
+import {
+  validateAircraftDefinition,
+  type ValidationResult,
+} from '../validators/aircraft-definition.validator';
 
 export interface AircraftFilter {
   query?: string;
@@ -18,6 +19,8 @@ export interface AircraftFilter {
   skill?: AircraftDefinition['recommendedSkillLevel'] | 'all';
   favoritesOnly?: boolean;
   favoriteIds?: ReadonlySet<string>;
+  /** When true, include user-compiled aircraft tagged `user-build`. */
+  includeUserBuilds?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -31,22 +34,34 @@ export class AircraftCatalogService {
       (a) => a.releaseStatus === 'available' && a.unlockPolicy !== 'dev-only',
     ),
   );
+  readonly userAircraft = computed(() =>
+    this._catalog().filter((a) => a.tags.includes('user-build')),
+  );
+  readonly factoryAircraft = computed(() =>
+    this._catalog().filter((a) => !a.tags.includes('user-build')),
+  );
 
   list(): AircraftDefinition[] {
-    return listProductionAircraft();
+    return this.productionAircraft();
   }
 
   getById(id: string | null | undefined): AircraftDefinition | undefined {
-    return findAircraftById(id);
+    if (!id) {
+      return undefined;
+    }
+    return this._catalog().find((a) => a.id === id || a.slug === id);
   }
 
   require(id: string | null | undefined): AircraftDefinition {
-    const resolved = resolveAircraftId(id);
-    const def = findAircraftById(resolved);
+    const def = this.getById(id) ?? this.getById(DEFAULT_AIRCRAFT_ID);
     if (!def) {
-      throw new Error(`Aircraft catalog corrupted — missing ${resolved}`);
+      throw new Error(`Aircraft catalog corrupted — missing ${id ?? 'default'}`);
     }
     return def;
+  }
+
+  validateDefinition(def: AircraftDefinition): ValidationResult {
+    return validateAircraftDefinition(def);
   }
 
   validateAll(): { ok: boolean; errors: string[] } {
@@ -67,15 +82,50 @@ export class AircraftCatalogService {
         errors.push(`${def.id}: ${result.errors.join('; ')}`);
       }
     }
-    if (this._catalog().length < 6) {
+    const factoryCount = this._catalog().filter(
+      (a) => !a.tags.includes('user-build'),
+    ).length;
+    if (factoryCount < 6) {
       errors.push('expected at least six commercial aircraft');
     }
     return { ok: errors.length === 0, errors };
   }
 
+  /**
+   * Register or replace a user-compiled aircraft definition.
+   * Factory definitions are never removed.
+   */
+  registerCompiledAircraft(def: AircraftDefinition): void {
+    const result = validateAircraftDefinition(def);
+    if (!result.ok) {
+      throw new Error(
+        `Cannot register invalid aircraft ${def.id}: ${result.errors.join('; ')}`,
+      );
+    }
+    this._catalog.update((list) => {
+      const idx = list.findIndex((a) => a.id === def.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = def;
+        return next;
+      }
+      return [...list, def];
+    });
+  }
+
+  removeUserAircraft(id: string): void {
+    this._catalog.update((list) =>
+      list.filter((a) => !(a.id === id && a.tags.includes('user-build'))),
+    );
+  }
+
   filter(opts: AircraftFilter): AircraftDefinition[] {
     const q = (opts.query ?? '').trim().toLowerCase();
+    const includeUser = opts.includeUserBuilds !== false;
     return this.list().filter((a) => {
+      if (!includeUser && a.tags.includes('user-build')) {
+        return false;
+      }
       if (opts.favoritesOnly && opts.favoriteIds && !opts.favoriteIds.has(a.id)) {
         return false;
       }

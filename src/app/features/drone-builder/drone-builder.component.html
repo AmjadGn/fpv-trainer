@@ -1,0 +1,206 @@
+<div class="fpv-page-bg">
+  <main class="fpv-page builder">
+    <fpv-page-header
+      eyebrow="Drone Builder"
+      title="Build your aircraft"
+      support="Choose a flying style, adjust parts, check compatibility, then compile and fly in the simulator."
+    >
+      <div actions class="builder__header-actions">
+        <button type="button" fpvButton variant="ghost" size="sm" (click)="backToFly()">
+          Fly hub
+        </button>
+        <button type="button" fpvButton variant="ghost" size="sm" (click)="backToHangar()">
+          Hangar
+        </button>
+      </div>
+    </fpv-page-header>
+
+    <div class="builder__mode" role="group" aria-label="Builder mode">
+      <button
+        type="button"
+        fpvButton
+        size="sm"
+        [variant]="snapshot().mode === 'simple' ? 'primary' : 'secondary'"
+        (click)="setMode('simple')"
+      >
+        Simple
+      </button>
+      <button
+        type="button"
+        fpvButton
+        size="sm"
+        [variant]="snapshot().mode === 'advanced' ? 'primary' : 'secondary'"
+        (click)="setMode('advanced')"
+      >
+        Advanced
+      </button>
+      <span class="builder__phase" aria-live="polite">{{ snapshot().phase }}</span>
+      @if (snapshot().dirty) {
+        <span class="builder__dirty">Unsaved changes</span>
+      }
+    </div>
+
+    @if (facade.errorMessage(); as err) {
+      <p class="builder__error" role="alert">{{ err }}</p>
+    }
+
+    <div class="builder__grid">
+      <fpv-panel title="Flying style" subtitle="Intent guides recommendations. It never skips validation.">
+        <div class="builder__intent-grid">
+          @for (intent of intents; track intent.id) {
+            <button
+              type="button"
+              class="builder__intent"
+              [class.builder__intent--active]="snapshot().intentId === intent.id"
+              (click)="chooseIntent(intent.id)"
+            >
+              <strong>{{ intent.title }}</strong>
+              <span>{{ intent.shortDescription }}</span>
+            </button>
+          }
+        </div>
+        <div class="builder__row">
+          <button type="button" fpvButton variant="secondary" size="sm" (click)="applyRecommended()">
+            Use recommended build
+          </button>
+        </div>
+      </fpv-panel>
+
+      <fpv-panel
+        [title]="snapshot().buildName || 'Current build'"
+        subtitle="Shared build used by Simple and Advanced modes."
+      >
+        <p class="builder__meta">
+          Mode: <strong>{{ snapshot().mode }}</strong>
+          · Category: <strong>{{ snapshot().activeCategory }}</strong>
+          · Compile:
+          <strong>{{ snapshot().canCompile ? 'ready' : 'blocked' }}</strong>
+        </p>
+        @if (snapshot().compileBlockedReason) {
+          <p class="builder__blocked">{{ snapshot().compileBlockedReason }}</p>
+        }
+
+        <div class="builder__categories" role="tablist" aria-label="Component categories">
+          @for (cat of ['frame', 'motor', 'propeller', 'esc', 'battery', 'flight-controller', 'camera', 'video-transmitter', 'receiver']; track cat) {
+            <button
+              type="button"
+              class="builder__cat"
+              [class.builder__cat--active]="snapshot().activeCategory === cat"
+              (click)="setCategory(cat)"
+            >
+              {{ cat }}
+            </button>
+          }
+        </div>
+
+        <ul class="builder__options">
+          @for (opt of options(); track opt.revisionId) {
+            <li>
+              <button
+                type="button"
+                class="builder__option"
+                [class.builder__option--selected]="
+                  snapshot().selectedRevisionIdsBySlot['frame'] === opt.revisionId ||
+                  snapshot().selectedRevisionIdsBySlot['motor'] === opt.revisionId ||
+                  snapshot().selectedRevisionIdsBySlot['propeller'] === opt.revisionId ||
+                  snapshot().selectedRevisionIdsBySlot['esc'] === opt.revisionId ||
+                  snapshot().selectedRevisionIdsBySlot['battery'] === opt.revisionId ||
+                  snapshot().selectedRevisionIdsBySlot['fc'] === opt.revisionId ||
+                  snapshot().selectedRevisionIdsBySlot['camera'] === opt.revisionId ||
+                  snapshot().selectedRevisionIdsBySlot['vtx'] === opt.revisionId ||
+                  snapshot().selectedRevisionIdsBySlot['receiver'] === opt.revisionId
+                "
+                (click)="selectOption(opt.revisionId)"
+              >
+                <strong>{{ opt.name }}</strong>
+                <span>{{ opt.simplePerformanceEffect }}</span>
+                @if (opt.massKg !== null) {
+                  <span>{{ opt.massKg | number: '1.0-3' }} kg</span>
+                }
+              </button>
+            </li>
+          } @empty {
+            <li class="builder__empty">Choose a flying style to load compatible parts.</li>
+          }
+        </ul>
+      </fpv-panel>
+
+      <fpv-panel title="Compatibility" subtitle="Blocking issues prevent compilation.">
+        @if (blocking().length === 0 && warnings().length === 0) {
+          <p class="builder__ok">No compatibility issues detected for this draft.</p>
+        }
+        <ul class="builder__issues">
+          @for (issue of blocking(); track issue.domainCode + issue.title) {
+            <li class="builder__issue builder__issue--error">
+              <strong>{{ issue.title }}</strong>
+              <span>{{ issue.suggestedAction }}</span>
+              @if (snapshot().mode === 'advanced') {
+                <code>{{ issue.domainCode }}</code>
+              }
+            </li>
+          }
+          @for (issue of warnings(); track issue.domainCode + issue.title) {
+            <li class="builder__issue builder__issue--warn">
+              <strong>{{ issue.title }}</strong>
+              <span>{{ issue.suggestedAction }}</span>
+            </li>
+          }
+        </ul>
+      </fpv-panel>
+
+      <fpv-panel title="Performance" subtitle="Statistics from the shared engineering pipeline.">
+        <ul class="builder__stats">
+          @for (stat of simpleStats(); track stat.id) {
+            <li>
+              <span>{{ snapshot().mode === 'simple' ? stat.simpleLabel : stat.label }}</span>
+              <strong>
+                {{ stat.value }}{{ stat.unit ? ' ' + stat.unit : '' }}
+              </strong>
+              @if (snapshot().mode === 'advanced') {
+                <small>{{ stat.source }} · {{ stat.confidence }}</small>
+              }
+            </li>
+          } @empty {
+            <li class="builder__empty">Compile a build to refresh engineering statistics.</li>
+          }
+        </ul>
+      </fpv-panel>
+    </div>
+
+    <div class="builder__actions">
+      <button type="button" fpvButton variant="secondary" size="sm" (click)="save()">
+        Save draft
+      </button>
+      <button
+        type="button"
+        fpvButton
+        variant="secondary"
+        size="sm"
+        [disabled]="!snapshot().canCompile"
+        (click)="compile()"
+      >
+        Compile
+      </button>
+      <button
+        type="button"
+        fpvButton
+        variant="primary"
+        size="sm"
+        [disabled]="!snapshot().canCompile"
+        [attr.aria-label]="launchLabel()"
+        (click)="compileAndFly()"
+      >
+        {{ launchLabel() }}
+      </button>
+    </div>
+
+    @if (snapshot().lastCompile; as compile) {
+      <p class="builder__compile" [class.builder__compile--ok]="compile.ok" role="status">
+        {{ compile.message }}
+        @if (compile.aircraftDisplayName) {
+          <span> Launching aircraft: <strong>{{ compile.aircraftDisplayName }}</strong></span>
+        }
+      </p>
+    }
+  </main>
+</div>

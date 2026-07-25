@@ -38,6 +38,8 @@ import type { AircraftCategory } from '../../core/aircraft/models/aircraft-defin
 import type { AircraftId } from '../../core/aircraft/models/aircraft-ids';
 import { AIRCRAFT_STATS_DISCLAIMER } from '../../core/aircraft/models/aircraft-stats.model';
 import { AppShellService } from '../../core/shell/app-shell.service';
+import { DroneBuilderFacadeService } from '../drone-builder/services/drone-builder-facade.service';
+import type { FactoryAircraftId } from '@fpv/factory-aircraft';
 
 @Component({
   selector: 'app-hangar',
@@ -54,6 +56,7 @@ export class HangarComponent implements AfterViewInit, OnDestroy {
   private readonly comparison = inject(AircraftComparisonService);
   private readonly persistence = inject(AircraftPersistenceService);
   private readonly shell = inject(AppShellService);
+  private readonly builderFacade = inject(DroneBuilderFacadeService);
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly canvasHost = viewChild.required<ElementRef<HTMLElement>>('hangarCanvas');
@@ -211,6 +214,23 @@ export class HangarComponent implements AfterViewInit, OnDestroy {
     const id = this.selected.select(this.previewDef().id);
     this.dispose();
     this.shell.showFlight({ kind: 'free', aircraftId: id });
+  }
+
+  protected openBuilder(): void {
+    this.dispose();
+    this.shell.showBuilder();
+  }
+
+  protected customizeInBuilder(): void {
+    const craft = this.previewDef();
+    if (!craft.tags.includes('user-build')) {
+      this.builderFacade.duplicateFactoryAircraft(
+        craft.id as FactoryAircraftId,
+        `${craft.displayName} (Custom)`,
+      );
+    }
+    this.dispose();
+    this.shell.showBuilder();
   }
 
   protected onKeyNav(event: KeyboardEvent): void {

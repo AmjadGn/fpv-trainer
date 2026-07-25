@@ -20,6 +20,7 @@ export type AppView =
   | 'sync'
   | 'online-challenges'
   | 'hangar'
+  | 'builder'
   | 'flight';
 
 export type FlightLaunchIntent =
@@ -106,6 +107,10 @@ export class AppShellService {
 
   showHangar(): void {
     this.view.set('hangar');
+  }
+
+  showBuilder(): void {
+    this.view.set('builder');
   }
 
   showFlight(intent?: FlightLaunchIntent): void {
