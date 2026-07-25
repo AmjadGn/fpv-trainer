@@ -6,6 +6,7 @@ import type {
   BuildFingerprint,
   ArtifactFingerprint,
   CompilationContextFingerprint,
+  RuntimeCompatibilitySignature,
 } from '@fpv/engineering-kernel';
 import { domainError, hashCanonical } from '@fpv/engineering-kernel';
 import type { ComponentRevision, CatalogRelease } from '@fpv/component-catalog';
@@ -46,6 +47,7 @@ export interface DroneBuildRepository {
 export interface CompiledArtifactRecord {
   readonly buildFingerprint: BuildFingerprint;
   readonly compilationContextFingerprint: CompilationContextFingerprint;
+  readonly runtimeCompatibilitySignature: RuntimeCompatibilitySignature;
   readonly artifactFingerprint: ArtifactFingerprint;
   readonly engineeringModelVersion: string;
   readonly compilerVersion: string;
@@ -58,6 +60,7 @@ export interface CompiledArtifactRepository {
   get(
     buildFingerprint: BuildFingerprint,
     compilationContextFingerprint: CompilationContextFingerprint,
+    runtimeCompatibilitySignature: RuntimeCompatibilitySignature,
     engineeringModelVersion: string,
     compilerVersion: string,
   ): Promise<CompiledArtifactRecord | null>;

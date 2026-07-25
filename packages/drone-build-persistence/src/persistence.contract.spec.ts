@@ -80,8 +80,35 @@ describe('build revision persistence contracts', () => {
         z: number;
       };
       mutablePos.x = 99;
+      (draft.tuning as { thrustCurveExponent: number }).thrustCurveExponent = 9;
+      const draftConfig = draft.selections[0].configuration as Record<
+        string,
+        string | number | boolean
+      >;
+      draftConfig['hack'] = true;
       expect(published.selections[0].transform.position.x).not.toBe(99);
+      expect(published.tuning.thrustCurveExponent).not.toBe(9);
+      expect(published.selections[0].configuration['hack']).toBeUndefined();
       expect(Object.isFrozen(published)).toBe(true);
+    });
+
+    it('rejects concurrent-style conflicting inserts with stable error code', async () => {
+      const repo = createMemoryBuildRepository();
+      const rev = sampleRevision('mem-race@1');
+      await repo.insertRevision(rev);
+      const conflicting = {
+        ...rev,
+        notes: 'different canonical content',
+      };
+      try {
+        await repo.insertRevision(conflicting);
+        expect.unreachable('should have thrown');
+      } catch (e) {
+        const err = e as { code?: string; message?: string };
+        expect(String(err.code ?? err.message)).toMatch(
+          /REVISION_IMMUTABLE_CONFLICT|Cannot overwrite/,
+        );
+      }
     });
   });
 

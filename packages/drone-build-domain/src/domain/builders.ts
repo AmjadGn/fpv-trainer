@@ -79,7 +79,17 @@ export function createQuadSelections(input: {
   readonly armPositions: readonly { x: number; y: number; z: number }[];
   readonly rotations?: readonly ('cw' | 'ccw')[];
 }): { selections: ComponentSelection[]; topology: TopologyEdge[] } {
+  if (input.armPositions.length !== 4) {
+    throw new Error(
+      `createQuadSelections supports X-quad only (exactly 4 arm positions); got ${input.armPositions.length}`,
+    );
+  }
   const rotations = input.rotations ?? (['cw', 'ccw', 'cw', 'ccw'] as const);
+  if (rotations.length !== 4) {
+    throw new Error(
+      `createQuadSelections requires 4 propeller rotations; got ${rotations.length}`,
+    );
+  }
   const selections: ComponentSelection[] = [
     {
       selectionId: 'frame',
@@ -95,7 +105,7 @@ export function createQuadSelections(input: {
   const topology: TopologyEdge[] = [];
 
   for (let i = 0; i < 4; i++) {
-    const arm = input.armPositions[i] ?? { x: 0, y: 0, z: 0 };
+    const arm = input.armPositions[i];
     const motorId = `motor-${i}`;
     const propId = `prop-${i}`;
     selections.push({

@@ -14,6 +14,7 @@ export interface FactoryGoldenRow {
   readonly buildFingerprint: string;
   readonly compilationContextFingerprint: string;
   readonly artifactFingerprint: string;
+  readonly runtimeCompatibilitySignature: string;
   readonly totalMassKg: number;
   readonly centerOfMass: { x: number; y: number; z: number };
   readonly inertiaKgM2: { roll: number; pitch: number; yaw: number };
@@ -39,6 +40,7 @@ function captureGoldens(): FactoryGoldenRow[] {
       buildFingerprint: spec.buildFingerprint,
       compilationContextFingerprint: spec.compilationContextFingerprint,
       artifactFingerprint: spec.artifactFingerprint,
+      runtimeCompatibilitySignature: spec.runtimeCompatibilitySignature,
       totalMassKg: spec.physicalAssembly.totalMassKg,
       centerOfMass: { ...spec.physicalAssembly.centerOfMass },
       inertiaKgM2: {

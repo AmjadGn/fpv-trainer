@@ -2,6 +2,7 @@ import type {
   ArtifactFingerprint,
   BuildFingerprint,
   CompilationContextFingerprint,
+  RuntimeCompatibilitySignature,
   VersionManifest,
 } from '@fpv/engineering-kernel';
 import type { ValidationReport } from '@fpv/compatibility-engine';
@@ -143,7 +144,10 @@ export interface CompiledAircraftSpecification {
   readonly versionManifest: VersionManifest;
   readonly buildFingerprint: BuildFingerprint;
   readonly compilationContextFingerprint: CompilationContextFingerprint;
+  /** Physical engineering output identity (excludes flightRuntime). */
   readonly artifactFingerprint: ArtifactFingerprint;
+  /** Runtime adapter + flight-model compatibility (separate from ArtifactFingerprint). */
+  readonly runtimeCompatibilitySignature: RuntimeCompatibilitySignature;
 }
 
 export interface CompilationTraceStage {

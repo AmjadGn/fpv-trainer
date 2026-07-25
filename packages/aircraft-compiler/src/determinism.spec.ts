@@ -6,8 +6,12 @@ import {
 import {
   compileAircraft,
   createMemoryCompilationCache,
+  fingerprintBuildInput,
   fingerprintCompilationContext,
+  fingerprintCompiledArtifact,
+  fingerprintRuntimeCompatibility,
   normalizeBuildRevision,
+  mapSiInertiaToSolver,
 } from '@fpv/aircraft-compiler';
 import {
   executeValidation,
@@ -27,7 +31,8 @@ import {
   materializeFactoryRevision,
   compileFactoryAircraft,
 } from '@fpv/factory-aircraft';
-import { mapSiInertiaToSolver } from '@fpv/aircraft-compiler';
+import { V1_1_VERSION_MANIFEST, asComponentRevisionId, vec3 } from '@fpv/engineering-kernel';
+import type { ComponentRevision } from '@fpv/component-catalog';
 
 function racingFixture(overrides: {
   frame?: string;
@@ -280,5 +285,158 @@ describe('@fpv package engineering foundation', () => {
     const b = compileFactoryAircraft('nano-scout');
     expect(a.physics.wheelbaseMeters).not.toBe(b.physics.wheelbaseMeters);
     expect(a.physics.propellerDiameterMeters).not.toBe(b.physics.propellerDiameterMeters);
+  });
+
+  it('rejects unsupported motor-count archetypes and missing propeller rotation', () => {
+    const revision = racingFixture();
+    const snap = buildOfficialCatalogSnapshot();
+    const base = snap.revisions.get(asComponentRevisionId('frame-racing-5in@1'))!;
+    if (base.engineering.type !== 'frame') throw new Error('expected frame');
+    const hexFrame: ComponentRevision = {
+      ...base,
+      engineering: {
+        type: 'frame',
+        frame: {
+          ...base.engineering.frame,
+          armPositions: [
+            ...base.engineering.frame.armPositions,
+            vec3(0.1, 0, 0),
+            vec3(-0.1, 0, 0),
+          ],
+        },
+      },
+    };
+    const catalog = new Map(snap.revisions);
+    catalog.set(hexFrame.revisionId, hexFrame);
+    const assembly = resolveAssembly(normalizeBuildRevision(revision), catalog);
+    expect(assembly.expectedMotorCount).toBe(6);
+    expect(
+      executeValidation(assembly).issues.some(
+        (i) => i.ruleCode === 'STRUCT_SUPPORTED_ARCHETYPE',
+      ),
+    ).toBe(true);
+
+    const noRotation = {
+      ...revision,
+      selections: revision.selections.map((s) =>
+        s.selectionId.startsWith('prop-')
+          ? { ...s, propellerRotation: undefined }
+          : s,
+      ),
+    };
+    const missingRot = resolveAssembly(
+      normalizeBuildRevision(noRotation),
+      snap.revisions,
+    );
+    expect(
+      executeValidation(missingRot).issues.some(
+        (i) => i.ruleCode === 'RES_MISSING_PROP_ROTATION',
+      ),
+    ).toBe(true);
+  });
+
+  it('enforces fingerprint boundaries for build / context / artifact / runtime', () => {
+    const revision = racingFixture();
+    const list = [...buildOfficialCatalogSnapshot().revisions.values()];
+    const compiled = compileAircraft(revision, list, { policy: FREE_FLIGHT_POLICY });
+    expect(compiled.ok).toBe(true);
+    const spec = compiled.specification!;
+
+    const notesOnly = { ...revision, notes: 'presentation-only note' };
+    expect(fingerprintBuildInput(normalizeBuildRevision(notesOnly))).toBe(
+      fingerprintBuildInput(normalizeBuildRevision(revision)),
+    );
+
+    const tuned = {
+      ...revision,
+      tuning: { ...revision.tuning, thrustCurveExponent: 2.75 },
+    };
+    expect(fingerprintBuildInput(normalizeBuildRevision(tuned))).not.toBe(
+      fingerprintBuildInput(normalizeBuildRevision(revision)),
+    );
+
+    expect(fingerprintCompilationContext(FREE_FLIGHT_POLICY)).not.toBe(
+      fingerprintCompilationContext(RANKED_RACING_POLICY),
+    );
+
+    const runtimeA = fingerprintRuntimeCompatibility(V1_1_VERSION_MANIFEST);
+    const runtimeB = fingerprintRuntimeCompatibility({
+      ...V1_1_VERSION_MANIFEST,
+      runtimeAdapterVersion: '9.9.9',
+    });
+    expect(runtimeA).not.toBe(runtimeB);
+    expect(spec.runtimeCompatibilitySignature).toBe(runtimeA);
+
+    const physicalOnly = fingerprintCompiledArtifact(spec);
+    expect(physicalOnly).toBe(spec.artifactFingerprint);
+
+    const withDifferentRuntime = {
+      ...spec,
+      flightRuntime: {
+        ...spec.flightRuntime,
+        rollInertia: spec.flightRuntime.rollInertia + 10,
+        maxRollRate: spec.flightRuntime.maxRollRate + 1,
+      },
+    };
+    expect(fingerprintCompiledArtifact(withDifferentRuntime)).toBe(
+      spec.artifactFingerprint,
+    );
+
+    const withDifferentMass = {
+      ...spec,
+      physicalAssembly: {
+        ...spec.physicalAssembly,
+        totalMassKg: spec.physicalAssembly.totalMassKg + 0.05,
+      },
+    };
+    expect(fingerprintCompiledArtifact(withDifferentMass)).not.toBe(
+      spec.artifactFingerprint,
+    );
+  });
+
+  it('maps body axes consistently for motors and CoM into runtime offsets', () => {
+    const craft = compileFactoryAircraft('apex-r5');
+    const spec = craft.compilation.specification!;
+    const motors = spec.physicalAssembly.motorPositions;
+    expect(motors).toHaveLength(4);
+    // Body frame: +X forward-right quadrant arms exist; +Z is up in catalog arms (z≈0).
+    expect(motors.some((p) => p.x > 0 && p.y > 0)).toBe(true);
+    expect(motors.some((p) => p.x < 0 && p.y > 0)).toBe(true);
+    expect(motors.some((p) => p.x < 0 && p.y < 0)).toBe(true);
+    expect(motors.some((p) => p.x > 0 && p.y < 0)).toBe(true);
+    expect(spec.flightRuntime.centerOfMassOffset).toEqual(
+      spec.physicalAssembly.centerOfMass,
+    );
+    expect(craft.physics.angularAccelerationLimits.x).toBe(
+      spec.flightRuntime.rollAcceleration,
+    );
+    expect(craft.physics.angularAccelerationLimits.y).toBe(
+      spec.flightRuntime.yawAcceleration,
+    );
+    expect(craft.physics.angularAccelerationLimits.z).toBe(
+      spec.flightRuntime.pitchAcceleration,
+    );
+  });
+
+  it('rejects battery that does not power selected avionics', () => {
+    const revision = racingFixture();
+    const snap = buildOfficialCatalogSnapshot();
+    const noFcPower = {
+      ...revision,
+      topology: revision.topology.filter(
+        (e) =>
+          !(
+            e.kind === 'powers' &&
+            e.fromSelectionId === 'battery' &&
+            e.toSelectionId === 'fc'
+          ),
+      ),
+    };
+    const assembly = resolveAssembly(normalizeBuildRevision(noFcPower), snap.revisions);
+    expect(
+      executeValidation(assembly).issues.some(
+        (i) => i.ruleCode === 'TOPO_BATTERY_POWERS_AVIONICS',
+      ),
+    ).toBe(true);
   });
 });

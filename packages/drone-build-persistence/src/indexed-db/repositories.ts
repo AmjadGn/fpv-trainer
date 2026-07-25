@@ -140,8 +140,8 @@ export function createIndexedDbBuildRepository(): DroneBuildRepository {
 
 export function createIndexedDbArtifactRepository(): CompiledArtifactRepository {
   return {
-    async get(bf, ctx, eng, comp) {
-      const cacheKey = `${bf}|${ctx}|${eng}|${comp}`;
+    async get(bf, ctx, runtime, eng, comp) {
+      const cacheKey = `${bf}|${ctx}|${runtime}|${eng}|${comp}`;
       const row = await idbGet<{
         cacheKey: string;
         record: import('../ports/repositories').CompiledArtifactRecord;
@@ -149,7 +149,7 @@ export function createIndexedDbArtifactRepository(): CompiledArtifactRepository 
       return row?.record ?? null;
     },
     async save(record) {
-      const cacheKey = `${record.buildFingerprint}|${record.compilationContextFingerprint}|${record.engineeringModelVersion}|${record.compilerVersion}`;
+      const cacheKey = `${record.buildFingerprint}|${record.compilationContextFingerprint}|${record.runtimeCompatibilitySignature}|${record.engineeringModelVersion}|${record.compilerVersion}`;
       await idbPut('artifacts', { cacheKey, record });
     },
   };

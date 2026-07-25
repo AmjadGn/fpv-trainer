@@ -113,7 +113,8 @@ export const structuralRules: ValidationRule[] = [
     code: 'STRUCT_BATTERY_REQUIRED',
     phase: 'structural',
     evaluate(ctx): ValidationIssue[] {
-      if (!ctx.assembly.batterySelection) {
+      const batteries = ctx.assembly.selectionsByType.get('battery') ?? [];
+      if (batteries.length === 0) {
         return [
           issue(
             'STRUCT_BATTERY_REQUIRED',
@@ -124,6 +125,50 @@ export const structuralRules: ValidationRule[] = [
             {},
             'selections.battery',
             ['remediation.addBattery'],
+          ),
+        ];
+      }
+      if (batteries.length > 1) {
+        return [
+          issue(
+            'STRUCT_BATTERY_COUNT',
+            'error',
+            'validation.structural.multipleBatteries',
+            'structural',
+            batteries.map((b) => b.selectionId),
+          ),
+        ];
+      }
+      return [];
+    },
+  },
+  {
+    code: 'STRUCT_SUPPORTED_ARCHETYPE',
+    phase: 'structural',
+    evaluate(ctx): ValidationIssue[] {
+      /**
+       * v1.1.1 topology scope: supported multirotor X-quad only.
+       * expectedMotorCount is derived from frame.armPositions.length; community
+       * frames cannot opt into hex/octo by inventing arm counts — unsupported
+       * counts fail explicitly rather than compiling with fallbacks.
+       */
+      const expected = ctx.assembly.expectedMotorCount;
+      if (expected == null) return [];
+      if (expected !== 4) {
+        return [
+          issue(
+            'STRUCT_SUPPORTED_ARCHETYPE',
+            'error',
+            'validation.structural.unsupportedTopology',
+            'structural',
+            ctx.assembly.frameSelection
+              ? [ctx.assembly.frameSelection.selectionId]
+              : [],
+            {
+              expectedMotorCount: expected,
+              supportedArchetype: 'x-quad-4',
+              topologyScope: 'v1.1.1-multirotor-x-quad',
+            },
           ),
         ];
       }
@@ -361,6 +406,45 @@ export const topologyRules: ValidationRule[] = [
               [batt.selectionId, esc.selectionId],
             ),
           );
+        }
+      }
+      return issues;
+    },
+  },
+  {
+    code: 'TOPO_BATTERY_POWERS_AVIONICS',
+    phase: 'topology',
+    evaluate(ctx): ValidationIssue[] {
+      const batt = ctx.assembly.batterySelection;
+      if (!batt) return [];
+      const issues: ValidationIssue[] = [];
+      const requiredTypes = [
+        'flight-controller',
+        'camera',
+        'video-transmitter',
+        'receiver',
+      ] as const;
+      for (const type of requiredTypes) {
+        for (const sel of ctx.assembly.selectionsByType.get(type) ?? []) {
+          if (
+            !hasEdge(
+              ctx.revision.topology,
+              batt.selectionId,
+              sel.selectionId,
+              'powers',
+            )
+          ) {
+            issues.push(
+              issue(
+                'TOPO_BATTERY_POWERS_AVIONICS',
+                'error',
+                'validation.topology.batteryMustPowerElectronics',
+                'topology',
+                [batt.selectionId, sel.selectionId],
+                { componentType: type },
+              ),
+            );
+          }
         }
       }
       return issues;

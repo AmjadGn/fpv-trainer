@@ -193,6 +193,7 @@ describe('drone builder engineering core', () => {
     await artifacts.save({
       buildFingerprint: spec.buildFingerprint,
       compilationContextFingerprint: spec.compilationContextFingerprint,
+      runtimeCompatibilitySignature: spec.runtimeCompatibilitySignature,
       artifactFingerprint: spec.artifactFingerprint,
       engineeringModelVersion: spec.versionManifest.engineeringModelVersion,
       compilerVersion: spec.versionManifest.compilerVersion,
@@ -203,6 +204,7 @@ describe('drone builder engineering core', () => {
     const cached = await artifacts.get(
       spec.buildFingerprint,
       spec.compilationContextFingerprint,
+      spec.runtimeCompatibilitySignature,
       spec.versionManifest.engineeringModelVersion,
       spec.versionManifest.compilerVersion,
     );

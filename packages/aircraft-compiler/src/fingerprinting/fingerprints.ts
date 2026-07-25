@@ -2,6 +2,7 @@ import {
   asArtifactFingerprint,
   asBuildFingerprint,
   asCompilationContextFingerprint,
+  asRuntimeCompatibilitySignature,
   hashCanonical,
   V1_1_VERSION_MANIFEST,
   type VersionManifest,
@@ -12,7 +13,8 @@ import type { CompiledAircraftSpecification } from '../outputs/specification';
 
 /**
  * Build identity fingerprint — normalized build selections/topology/tuning only.
- * Does NOT include validation policy or competition mode.
+ * Does NOT include validation policy, competition mode, display name, notes,
+ * owner identity, timestamps, or presentation metadata.
  */
 export function fingerprintBuildInput(
   normalized: DroneBuildRevision,
@@ -39,6 +41,12 @@ export function fingerprintBuildInput(
 /**
  * Compilation-context fingerprint — policy + model/compiler versions that can
  * change eligibility or compiled validation outcomes.
+ *
+ * Runtime adapter / flight-model compatibility versions are intentionally
+ * excluded; they belong in RuntimeCompatibilitySignature (ADR-014 / ADR-015).
+ * There is no separate numeric-policy version — policyVersion covers limit fields.
+ *
+ * Property order cannot affect the hash (canonical sorted-key serialization).
  */
 export function fingerprintCompilationContext(
   policy: ValidationPolicy,
@@ -58,15 +66,39 @@ export function fingerprintCompilationContext(
     propulsionModelVersion: manifest.propulsionModelVersion,
     aerodynamicModelVersion: manifest.aerodynamicModelVersion,
     compilerVersion: manifest.compilerVersion,
-    runtimeAdapterVersion: manifest.runtimeAdapterVersion,
   };
   return asCompilationContextFingerprint(hashCanonical(payload));
 }
 
+/**
+ * Runtime compatibility signature — adapter + flight-model versions only.
+ * Use wherever solver-facing mapping must stay compatible; do not substitute
+ * a physical-only ArtifactFingerprint for runtime compatibility checks.
+ */
+export function fingerprintRuntimeCompatibility(
+  manifest: VersionManifest = V1_1_VERSION_MANIFEST,
+): ReturnType<typeof asRuntimeCompatibilitySignature> {
+  const payload = {
+    runtimeAdapterVersion: manifest.runtimeAdapterVersion,
+    flightModelCompatibilityVersion: manifest.flightModelCompatibilityVersion,
+  };
+  return asRuntimeCompatibilitySignature(hashCanonical(payload));
+}
+
+/**
+ * ArtifactFingerprint — physical engineering output identity only.
+ *
+ * Intentionally excludes flightRuntime / runtime-adapter outputs so adapter
+ * tuning changes do not rewrite physical goldens. Consumers that need runtime
+ * compatibility must also check RuntimeCompatibilitySignature.
+ */
 export function fingerprintCompiledArtifact(
   spec: Omit<
     CompiledAircraftSpecification,
-    'buildFingerprint' | 'compilationContextFingerprint' | 'artifactFingerprint'
+    | 'buildFingerprint'
+    | 'compilationContextFingerprint'
+    | 'artifactFingerprint'
+    | 'runtimeCompatibilitySignature'
   >,
 ): ReturnType<typeof asArtifactFingerprint> {
   const payload = {
@@ -101,8 +133,6 @@ export function fingerprintCompiledArtifact(
       pitchAcceleration: spec.controlAuthority.pitchAcceleration,
       yawAcceleration: spec.controlAuthority.yawAcceleration,
     },
-    // Physical SI assembly + engineering; runtime adapter outputs are excluded
-    // from artifact identity so adapter tuning changes do not rewrite physical goldens.
     versionManifest: {
       engineeringModelVersion: spec.versionManifest.engineeringModelVersion,
       compilerVersion: spec.versionManifest.compilerVersion,

@@ -87,6 +87,13 @@ function transformFinite(t: Transform3): boolean {
  * Authoritative join of a normalized build revision with only the component
  * revisions it selects. Downstream validation and engineering must consume this
  * model — never search the full catalog for selected hardware.
+ *
+ * Topology scope (v1.1.1): supported multirotor X-quad assemblies. Unsupported
+ * motor counts / archetypes must fail in structural validation — this resolver
+ * does not invent missing hardware or silently pick arbitrary catalog parts.
+ * Frame / battery convenience fields expose the sole selection of that type when
+ * present; multiple frames/batteries are rejected by structural rules rather
+ * than silently choosing the first.
  */
 export function resolveAssembly(
   revision: DroneBuildRevision,
@@ -170,6 +177,9 @@ export function resolveAssembly(
 
   let expectedMotorCount: number | null = null;
   if (frameComponent && frameComponent.engineering.type === 'frame') {
+    // Authoritative for official frames: arm layout defines motor count.
+    // Structural validation restricts this to the supported X-quad archetype
+    // so community armPositions length cannot invent unsupported topologies.
     expectedMotorCount = frameComponent.engineering.frame.armPositions.length;
   }
 
@@ -224,12 +234,21 @@ export function resolveAssembly(
       );
       continue;
     }
+    if (!propSel.propellerRotation) {
+      diagnostics.push(
+        diag(
+          'RES_MISSING_PROP_ROTATION',
+          'error',
+          'validation.resolution.missingPropellerRotation',
+          [propSel.selectionId],
+        ),
+      );
+      continue;
+    }
     propsSeen.add(propSel.selectionId);
     motorsSeen.add(motorSel.selectionId);
 
-    const rotation: PropRotation =
-      propSel.propellerRotation ??
-      (propulsionUnits.length % 2 === 0 ? 'cw' : 'ccw');
+    const rotation: PropRotation = propSel.propellerRotation;
 
     propulsionUnits.push({
       motorSelection: motorSel,

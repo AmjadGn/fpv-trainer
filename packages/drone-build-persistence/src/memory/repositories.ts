@@ -3,8 +3,6 @@ import type {
   ComponentRevisionId,
   DroneBuildId,
   DroneBuildRevisionId,
-  BuildFingerprint,
-  CompilationContextFingerprint,
 } from '@fpv/engineering-kernel';
 import type { CatalogRelease, ComponentRevision } from '@fpv/component-catalog';
 import type {
@@ -85,22 +83,18 @@ export function createMemoryBuildRepository(): DroneBuildRepository {
 
 export function createMemoryArtifactRepository(): CompiledArtifactRepository {
   const store = new Map<string, CompiledArtifactRecord>();
-  const key = (bf: string, ctx: string, eng: string, comp: string) =>
-    `${bf}|${ctx}|${eng}|${comp}`;
+  const key = (bf: string, ctx: string, runtime: string, eng: string, comp: string) =>
+    `${bf}|${ctx}|${runtime}|${eng}|${comp}`;
   return {
-    async get(
-      bf: BuildFingerprint,
-      ctx: CompilationContextFingerprint,
-      eng: string,
-      comp: string,
-    ) {
-      return store.get(key(bf, ctx, eng, comp)) ?? null;
+    async get(bf, ctx, runtime, eng, comp) {
+      return store.get(key(bf, ctx, runtime, eng, comp)) ?? null;
     },
-    async save(record: CompiledArtifactRecord) {
+    async save(record) {
       store.set(
         key(
           record.buildFingerprint,
           record.compilationContextFingerprint,
+          record.runtimeCompatibilitySignature,
           record.engineeringModelVersion,
           record.compilerVersion,
         ),

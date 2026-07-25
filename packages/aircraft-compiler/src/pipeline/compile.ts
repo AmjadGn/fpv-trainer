@@ -31,6 +31,7 @@ import {
   fingerprintBuildInput,
   fingerprintCompilationContext,
   fingerprintCompiledArtifact,
+  fingerprintRuntimeCompatibility,
 } from '../fingerprinting/fingerprints';
 import {
   createMemoryCompilationCache,
@@ -89,6 +90,7 @@ export function compileAircraft(
     policy,
     manifest,
   );
+  const runtimeCompatibilitySignature = fingerprintRuntimeCompatibility(manifest);
   const s1 = stage('resolution', t0, assembly.diagnostics.map((d) => d.code), collectTrace);
   if (s1) trace.push(s1);
 
@@ -96,6 +98,7 @@ export function compileAircraft(
     const cached = cache.get(
       buildFingerprint,
       compilationContextFingerprint,
+      runtimeCompatibilitySignature,
       manifest.engineeringModelVersion,
       manifest.compilerVersion,
     );
@@ -224,24 +227,47 @@ export function compileAircraft(
     };
   }
 
-  // Dimensions exclusively from active build selections — never full-catalog find.
+  // Dimensions exclusively from active build selections — never full-catalog find
+  // and never silent numeric fallbacks for unsupported / incomplete assemblies.
   const frame = assembly.frameComponent;
-  const wheelbase =
-    frame && frame.engineering.type === 'frame'
-      ? frame.engineering.frame.wheelbaseMeters
-      : 0.2;
+  if (!frame || frame.engineering.type !== 'frame') {
+    return {
+      ok: false,
+      specification: null,
+      validation,
+      integrityIssues: [
+        {
+          code: 'COMPILE_MISSING_FRAME_DIMENSIONS',
+          message: 'Compiled output requires a resolved frame with engineering data',
+          fatal: true,
+        },
+      ],
+      trace,
+    };
+  }
+  const wheelbase = frame.engineering.frame.wheelbaseMeters;
+  const primaryUnit = assembly.propulsionUnits[0];
+  if (
+    !primaryUnit ||
+    primaryUnit.propellerComponent.engineering.type !== 'propeller'
+  ) {
+    return {
+      ok: false,
+      specification: null,
+      validation,
+      integrityIssues: [
+        {
+          code: 'COMPILE_MISSING_PROPULSION_DIMENSIONS',
+          message: 'Compiled output requires topology-resolved propulsion units',
+          fatal: true,
+        },
+      ],
+      trace,
+    };
+  }
   const propDiameter =
-    assembly.propulsionUnits[0]?.propellerComponent.engineering.type ===
-    'propeller'
-      ? assembly.propulsionUnits[0].propellerComponent.engineering.propeller
-          .diameterMeters
-      : 0.12;
-
-  const dims = frame?.dimensions ?? {
-    widthMeters: wheelbase * 1.2,
-    lengthMeters: wheelbase * 1.2,
-    heightMeters: 0.05,
-  };
+    primaryUnit.propellerComponent.engineering.propeller.diameterMeters;
+  const dims = frame.dimensions;
 
   const flightRuntime: CompiledFlightRuntimeConfiguration =
     mapPhysicalToFlightRuntime({
@@ -326,11 +352,13 @@ export function compileAircraft(
     buildFingerprint,
     compilationContextFingerprint,
     artifactFingerprint,
+    runtimeCompatibilitySignature,
   };
 
   cache.set(
     buildFingerprint,
     compilationContextFingerprint,
+    runtimeCompatibilitySignature,
     manifest.engineeringModelVersion,
     manifest.compilerVersion,
     specification,
