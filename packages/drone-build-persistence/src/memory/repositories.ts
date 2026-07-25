@@ -3,7 +3,6 @@ import type {
   ComponentRevisionId,
   DroneBuildId,
   DroneBuildRevisionId,
-  BuildFingerprint,
 } from '@fpv/engineering-kernel';
 import type { CatalogRelease, ComponentRevision } from '@fpv/component-catalog';
 import type {
@@ -17,6 +16,7 @@ import type {
   CompiledArtifactRepository,
   DroneBuildRepository,
 } from '../ports/repositories';
+import { insertImmutableRevision } from '../ports/repositories';
 
 export function createMemoryCatalogRepository(
   releases: CatalogRelease[],
@@ -61,24 +61,40 @@ export function createMemoryBuildRepository(): DroneBuildRepository {
     async getRevision(id: DroneBuildRevisionId) {
       return revisions.get(id) ?? null;
     },
+    async revisionExists(id: DroneBuildRevisionId) {
+      return revisions.has(id);
+    },
+    async insertRevision(revision: DroneBuildRevision) {
+      await insertImmutableRevision(
+        {
+          getRevision: async (id) => revisions.get(id) ?? null,
+          putNew: async (r) => {
+            revisions.set(r.revisionId, r);
+          },
+        },
+        revision,
+      );
+    },
     async saveRevision(revision: DroneBuildRevision) {
-      revisions.set(revision.revisionId, revision);
+      await this.insertRevision(revision);
     },
   };
 }
 
 export function createMemoryArtifactRepository(): CompiledArtifactRepository {
   const store = new Map<string, CompiledArtifactRecord>();
-  const key = (bf: string, eng: string, comp: string) =>
-    `${bf}|${eng}|${comp}`;
+  const key = (bf: string, ctx: string, runtime: string, eng: string, comp: string) =>
+    `${bf}|${ctx}|${runtime}|${eng}|${comp}`;
   return {
-    async get(bf: BuildFingerprint, eng: string, comp: string) {
-      return store.get(key(bf, eng, comp)) ?? null;
+    async get(bf, ctx, runtime, eng, comp) {
+      return store.get(key(bf, ctx, runtime, eng, comp)) ?? null;
     },
-    async save(record: CompiledArtifactRecord) {
+    async save(record) {
       store.set(
         key(
           record.buildFingerprint,
+          record.compilationContextFingerprint,
+          record.runtimeCompatibilitySignature,
           record.engineeringModelVersion,
           record.compilerVersion,
         ),

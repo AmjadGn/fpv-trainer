@@ -1,35 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { compileFactoryAircraft } from '@fpv/factory-aircraft';
-import { FACTORY_GOLDEN_AIRCRAFT_IDS } from './golden-files/factory-ids';
+import { FACTORY_GOLDEN_AIRCRAFT_IDS } from '@fpv/engineering-testing';
+import { FREE_FLIGHT_POLICY } from '@fpv/compatibility-engine';
 
-describe('factory golden masters', () => {
-  it('produces stable fingerprints for all factory aircraft', () => {
-    const fingerprints = FACTORY_GOLDEN_AIRCRAFT_IDS.map((id) => {
-      const craft = compileFactoryAircraft(id);
-      return {
-        id,
-        build: craft.compilation.specification!.buildFingerprint,
-        artifact: craft.compilation.specification!.artifactFingerprint,
-        mass: craft.physics.takeoffMassKg,
-        thrust: craft.physics.maximumThrustNewtons,
-      };
-    });
-
-    // Recompile and compare — golden invariant is self-consistency.
-    for (const row of fingerprints) {
-      const again = compileFactoryAircraft(row.id);
-      expect(again.compilation.specification!.buildFingerprint).toBe(row.build);
-      expect(again.compilation.specification!.artifactFingerprint).toBe(
-        row.artifact,
-      );
-      expect(again.physics.takeoffMassKg).toBe(row.mass);
-      expect(again.physics.maximumThrustNewtons).toBe(row.thrust);
+describe('factory runtime regression', () => {
+  it('compiles and adapts every factory aircraft for the catalog runtime', () => {
+    for (const id of FACTORY_GOLDEN_AIRCRAFT_IDS) {
+      const craft = compileFactoryAircraft(id, { policy: FREE_FLIGHT_POLICY });
+      expect(craft.compilation.ok).toBe(true);
+      expect(craft.flightProfile.id).toBe(`flt-${id}`);
+      expect(craft.flightProfile.massKg).toBeGreaterThan(0);
+      expect(craft.physics.takeoffMassKg).toBeGreaterThan(0);
+      expect(craft.physics.physicalInertiaKgM2!.roll).toBeGreaterThan(0);
+      expect(Number.isFinite(craft.flightProfile.maxRollRate)).toBe(true);
     }
-
-    // Fingerprints must be unique across factory aircraft.
-    const builds = new Set(fingerprints.map((f) => f.build));
-    const artifacts = new Set(fingerprints.map((f) => f.artifact));
-    expect(builds.size).toBe(FACTORY_GOLDEN_AIRCRAFT_IDS.length);
-    expect(artifacts.size).toBe(FACTORY_GOLDEN_AIRCRAFT_IDS.length);
   });
 });

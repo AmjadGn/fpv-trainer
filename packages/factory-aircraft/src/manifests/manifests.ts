@@ -66,6 +66,16 @@ export interface FactoryBuildManifest {
   readonly receiverRevisionId: string;
   readonly armPositions: readonly { x: number; y: number; z: number }[];
   readonly tuning: UserTuningValues;
+  /**
+   * Product-character and accessibility assistance only.
+   * Must NOT feed physical engineering inputs.
+   * Classification:
+   * - Accessibility/training: selfLevelingAvailable, altitudeAssistAvailable,
+   *   landingTolerance, recoveryStrength
+   * - Product-character tuning: stabilizationStrength, brakingStrength,
+   *   collisionEnergyMultiplier, maxVelocityScale
+   * Competitive modes must set competitiveAssistDisabled when adapting.
+   */
   readonly characterHints: FlightCharacterHints;
 }
 

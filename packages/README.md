@@ -4,7 +4,7 @@
 engineering-kernel
         ↑
 component-catalog
-drone-build-domain
+drone-build-domain   (+ ResolvedAssembly joins selected catalog revisions)
 compatibility-engine
 aircraft-engineering
         ↑
@@ -13,6 +13,7 @@ aircraft-compiler
 aircraft-runtime-adapter
 drone-build-persistence
 factory-aircraft
+engineering-testing
         ↑
 Angular application (src/app)
 ```
@@ -24,8 +25,11 @@ Angular application (src/app)
 - Compiler depends on interfaces / pure domain types, not UI.
 - Runtime adapter depends on compiler outputs, not the reverse.
 - UI talks to application services only.
+- Validation and engineering consume `ResolvedAssembly`, never full-catalog `.find` for selected hardware.
 
 ## Workspace shape (v1.1)
 
 Path-aliased TypeScript modules under `packages/` (no Nx/pnpm workspaces yet).
 Import via `@fpv/<package-name>`.
+
+Engineering package tests: `npm run test:engineering` → `vitest.engineering.config.ts`.

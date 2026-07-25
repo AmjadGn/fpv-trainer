@@ -34,15 +34,22 @@ export interface VersionManifest {
   readonly flightModelCompatibilityVersion: string;
 }
 
+/**
+ * Stabilization bump (v1.1.1 engineering core):
+ * - validationRulesVersion / engineeringModelVersion / propulsionModelVersion /
+ *   compilerVersion / runtimeAdapterVersion reflect ResolvedAssembly, topology
+ *   propulsion, SI inertia, and policy-aware compilation context.
+ * flightModelCompatibilityVersion stays 1.0.0 — single fixed-timestep runtime.
+ */
 export const V1_1_VERSION_MANIFEST: VersionManifest = {
   buildSchemaVersion: '1.1.0',
   componentSchemaVersion: '1.1.0',
   catalogReleaseVersion: '1.1.0',
-  validationRulesVersion: '1.1.0',
-  engineeringModelVersion: '1.1.0',
+  validationRulesVersion: '1.1.1',
+  engineeringModelVersion: '1.1.1',
   aerodynamicModelVersion: '1.1.0',
-  propulsionModelVersion: '1.1.0',
-  compilerVersion: '1.1.0',
-  runtimeAdapterVersion: '1.1.0',
+  propulsionModelVersion: '1.1.1',
+  compilerVersion: '1.1.1',
+  runtimeAdapterVersion: '1.1.1',
   flightModelCompatibilityVersion: '1.0.0',
 };

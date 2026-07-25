@@ -3,9 +3,14 @@ import {
   type VersionManifest,
 } from '@fpv/engineering-kernel';
 import type { ComponentRevision } from '@fpv/component-catalog';
-import type { DroneBuildRevision } from '@fpv/drone-build-domain';
 import {
-  executeValidation,
+  resolveAssembly,
+  type DroneBuildRevision,
+} from '@fpv/drone-build-domain';
+import {
+  executePreEngineeringValidation,
+  executePostEngineeringValidation,
+  mergeValidationReports,
   FREE_FLIGHT_POLICY,
   type ValidationPolicy,
   type ValidationReport,
@@ -24,7 +29,9 @@ import {
 import { normalizeBuildRevision } from '../normalization/normalize';
 import {
   fingerprintBuildInput,
+  fingerprintCompilationContext,
   fingerprintCompiledArtifact,
+  fingerprintRuntimeCompatibility,
 } from '../fingerprinting/fingerprints';
 import {
   createMemoryCompilationCache,
@@ -34,7 +41,9 @@ import type {
   CompilationResult,
   CompilationTraceStage,
   CompiledAircraftSpecification,
+  CompiledFlightRuntimeConfiguration,
 } from '../outputs/specification';
+import { mapPhysicalToFlightRuntime } from '../runtime-mapping/map-to-runtime';
 
 export interface CompileOptions {
   readonly policy?: ValidationPolicy;
@@ -70,22 +79,26 @@ export function compileAircraft(
   const cache = options.cache ?? createMemoryCompilationCache();
 
   let t0 = Date.now();
-  const components = new Map<string, ComponentRevision>();
+  const catalogMap = new Map<string, ComponentRevision>();
   for (const c of componentList) {
-    components.set(c.revisionId, c);
+    catalogMap.set(c.revisionId, c);
   }
-  const s1 = stage('component-resolution', t0, [], collectTrace);
-  if (s1) trace.push(s1);
-
-  t0 = Date.now();
   const normalized = normalizeBuildRevision(revision);
-  const buildFingerprint = fingerprintBuildInput(normalized, manifest);
-  const s2 = stage('normalization', t0, [], collectTrace);
-  if (s2) trace.push(s2);
+  const assembly = resolveAssembly(normalized, catalogMap);
+  const buildFingerprint = fingerprintBuildInput(normalized);
+  const compilationContextFingerprint = fingerprintCompilationContext(
+    policy,
+    manifest,
+  );
+  const runtimeCompatibilitySignature = fingerprintRuntimeCompatibility(manifest);
+  const s1 = stage('resolution', t0, assembly.diagnostics.map((d) => d.code), collectTrace);
+  if (s1) trace.push(s1);
 
   if (!options.skipCache) {
     const cached = cache.get(
       buildFingerprint,
+      compilationContextFingerprint,
+      runtimeCompatibilitySignature,
       manifest.engineeringModelVersion,
       manifest.compilerVersion,
     );
@@ -103,13 +116,86 @@ export function compileAircraft(
   }
 
   t0 = Date.now();
-  const validation: ValidationReport = executeValidation(
-    normalized,
-    components,
+  const preValidation = executePreEngineeringValidation(assembly, policy);
+  const s2 = stage('pre-engineering-validation', t0, [], collectTrace);
+  if (s2) trace.push(s2);
+
+  if (!preValidation.canCompile) {
+    return {
+      ok: false,
+      specification: null,
+      validation: preValidation,
+      integrityIssues: [],
+      trace,
+    };
+  }
+
+  t0 = Date.now();
+  const mass = aggregateMass(assembly);
+  const s3 = stage('mass', t0, [], collectTrace);
+  if (s3) trace.push(s3);
+
+  t0 = Date.now();
+  const com = solveCenterOfMass(assembly);
+  const s4 = stage('center-of-mass', t0, [], collectTrace);
+  if (s4) trace.push(s4);
+
+  t0 = Date.now();
+  const inertia = estimateInertia(assembly, com, mass.totalTakeoffMassKg);
+  const s5 = stage('inertia', t0, [], collectTrace);
+  if (s5) trace.push(s5);
+
+  t0 = Date.now();
+  const electrical = solveElectricalSystem(assembly);
+  const s6 = stage('electrical', t0, [], collectTrace);
+  if (s6) trace.push(s6);
+
+  t0 = Date.now();
+  const propulsion = solvePropulsion(
+    assembly,
+    electrical,
+    mass.totalTakeoffMassKg,
+    normalized.tuning,
+  );
+  const s7 = stage('propulsion', t0, [...propulsion.warnings], collectTrace);
+  if (s7) trace.push(s7);
+
+  t0 = Date.now();
+  const aero = approximateAerodynamics(assembly, mass.totalTakeoffMassKg);
+  const s8 = stage('aerodynamics', t0, [...aero.warnings], collectTrace);
+  if (s8) trace.push(s8);
+
+  t0 = Date.now();
+  const authority = analyzeControlAuthority(propulsion, inertia);
+  const s9 = stage('control-authority', t0, [], collectTrace);
+  if (s9) trace.push(s9);
+
+  t0 = Date.now();
+  const performance = calculatePerformanceMetrics(
+    mass,
+    propulsion,
+    electrical,
+    authority,
+    aero,
+  );
+  const s10 = stage('performance', t0, [], collectTrace);
+  if (s10) trace.push(s10);
+
+  t0 = Date.now();
+  const postValidation = executePostEngineeringValidation(
+    assembly,
+    {
+      totalTakeoffMassKg: mass.totalTakeoffMassKg,
+      thrustToWeight: propulsion.thrustToWeight,
+    },
     policy,
   );
-  const s3 = stage('validation', t0, [], collectTrace);
-  if (s3) trace.push(s3);
+  const validation: ValidationReport = mergeValidationReports(
+    preValidation,
+    postValidation,
+  );
+  const s11 = stage('post-engineering-validation', t0, [], collectTrace);
+  if (s11) trace.push(s11);
 
   if (!validation.canCompile) {
     return {
@@ -120,67 +206,6 @@ export function compileAircraft(
       trace,
     };
   }
-
-  t0 = Date.now();
-  const mass = aggregateMass(normalized.selections, components);
-  const s4 = stage('mass', t0, [], collectTrace);
-  if (s4) trace.push(s4);
-
-  t0 = Date.now();
-  const com = solveCenterOfMass(normalized.selections, components);
-  const s5 = stage('center-of-mass', t0, [], collectTrace);
-  if (s5) trace.push(s5);
-
-  t0 = Date.now();
-  const inertia = estimateInertia(
-    normalized.selections,
-    components,
-    com,
-    mass.totalTakeoffMassKg,
-  );
-  const s6 = stage('inertia', t0, [], collectTrace);
-  if (s6) trace.push(s6);
-
-  t0 = Date.now();
-  const electrical = solveElectricalSystem(normalized.selections, components);
-  const s7 = stage('electrical', t0, [], collectTrace);
-  if (s7) trace.push(s7);
-
-  t0 = Date.now();
-  const propulsion = solvePropulsion(
-    normalized.selections,
-    components,
-    electrical,
-    mass.totalTakeoffMassKg,
-    normalized.tuning,
-  );
-  const s8 = stage('propulsion', t0, [], collectTrace);
-  if (s8) trace.push(s8);
-
-  t0 = Date.now();
-  const aero = approximateAerodynamics(
-    normalized.selections,
-    components,
-    mass.totalTakeoffMassKg,
-  );
-  const s9 = stage('aerodynamics', t0, [], collectTrace);
-  if (s9) trace.push(s9);
-
-  t0 = Date.now();
-  const authority = analyzeControlAuthority(propulsion, inertia);
-  const s10 = stage('control-authority', t0, [], collectTrace);
-  if (s10) trace.push(s10);
-
-  t0 = Date.now();
-  const performance = calculatePerformanceMetrics(
-    mass,
-    propulsion,
-    electrical,
-    authority,
-    aero,
-  );
-  const s11 = stage('performance', t0, [], collectTrace);
-  if (s11) trace.push(s11);
 
   t0 = Date.now();
   const integrityIssues = validateEngineeringIntegrity({
@@ -202,76 +227,69 @@ export function compileAircraft(
     };
   }
 
-  const frame = [...components.values()].find((c) => c.componentType === 'frame');
-  const prop = [...components.values()].find((c) => c.componentType === 'propeller');
-  const wheelbase =
-    frame && frame.engineering.type === 'frame'
-      ? frame.engineering.frame.wheelbaseMeters
-      : 0.2;
+  // Dimensions exclusively from active build selections — never full-catalog find
+  // and never silent numeric fallbacks for unsupported / incomplete assemblies.
+  const frame = assembly.frameComponent;
+  if (!frame || frame.engineering.type !== 'frame') {
+    return {
+      ok: false,
+      specification: null,
+      validation,
+      integrityIssues: [
+        {
+          code: 'COMPILE_MISSING_FRAME_DIMENSIONS',
+          message: 'Compiled output requires a resolved frame with engineering data',
+          fatal: true,
+        },
+      ],
+      trace,
+    };
+  }
+  const wheelbase = frame.engineering.frame.wheelbaseMeters;
+  const primaryUnit = assembly.propulsionUnits[0];
+  if (
+    !primaryUnit ||
+    primaryUnit.propellerComponent.engineering.type !== 'propeller'
+  ) {
+    return {
+      ok: false,
+      specification: null,
+      validation,
+      integrityIssues: [
+        {
+          code: 'COMPILE_MISSING_PROPULSION_DIMENSIONS',
+          message: 'Compiled output requires topology-resolved propulsion units',
+          fatal: true,
+        },
+      ],
+      trace,
+    };
+  }
   const propDiameter =
-    prop && prop.engineering.type === 'propeller'
-      ? prop.engineering.propeller.diameterMeters
-      : 0.12;
+    primaryUnit.propellerComponent.engineering.propeller.diameterMeters;
+  const dims = frame.dimensions;
 
-  const avgSpoolUp =
-    propulsion.units.reduce((a, u) => a + u.spoolUpTimeS, 0) /
-    Math.max(1, propulsion.units.length);
-  const avgSpoolDown =
-    propulsion.units.reduce((a, u) => a + u.spoolDownTimeS, 0) /
-    Math.max(1, propulsion.units.length);
-  const avgResponse =
-    propulsion.units.reduce((a, u) => a + u.responseTimeS, 0) /
-    Math.max(1, propulsion.units.length);
+  const flightRuntime: CompiledFlightRuntimeConfiguration =
+    mapPhysicalToFlightRuntime({
+      massKg: mass.totalTakeoffMassKg,
+      propulsion,
+      inertia,
+      authority,
+      aero,
+      electrical,
+      tuning: normalized.tuning,
+      centerOfMass: com,
+    });
 
-  const dims = frame?.dimensions ?? {
-    widthMeters: wheelbase * 1.2,
-    lengthMeters: wheelbase * 1.2,
-    heightMeters: 0.05,
-  };
-
-  const flightRuntime = {
-    massKg: mass.totalTakeoffMassKg,
-    maxThrustNewtons: propulsion.totalMaxThrustNewtons,
-    hoverThrottleRatio: propulsion.hoverThrottleEstimate,
-    thrustCurveExponent: normalized.tuning.thrustCurveExponent,
-    motorSpoolUpTime: avgSpoolUp,
-    motorSpoolDownTime: avgSpoolDown,
-    motorResponseTime: avgResponse,
-    linearDrag: aero.linearDrag,
-    frontalDragCoefficient: aero.frontalDragCoefficient,
-    lateralDragCoefficient: aero.lateralDragCoefficient,
-    verticalDragCoefficient: aero.verticalDragCoefficient,
-    angularDrag: Math.max(0.05, aero.angularDrag),
-    rollInertia: inertia.roll,
-    pitchInertia: inertia.pitch,
-    yawInertia: inertia.yaw,
-    rollAcceleration: authority.rollAcceleration,
-    pitchAcceleration: authority.pitchAcceleration,
-    yawAcceleration: authority.yawAcceleration,
-    maxRollRate: authority.maxRollRate,
-    maxPitchRate: authority.maxPitchRate,
-    maxYawRate: authority.maxYawRate,
-    groundEffectStrength: aero.groundEffectStrength,
-    groundEffectHeight: aero.groundEffectHeight,
-    propWashStrength: aero.propWashStrength,
-    windSensitivity: aero.windSensitivity,
-    glideEfficiency: aero.glideEfficiency,
-    centerOfMassOffset: { ...com.offsetFromOrigin },
-    nominalVoltage: electrical.nominalVoltage,
-    batteryCellCount: electrical.cellCount,
-    batteryCapacityMah: electrical.capacityAh * 1000,
-    safetyClamps: {
-      maxAngularAcceleration: 50,
-      minAngularDrag: 0.05,
-    },
-  };
-
-  const confidenceNotes: string[] = [];
+  const confidenceNotes: string[] = [
+    ...propulsion.warnings,
+    ...aero.warnings,
+  ];
   if (com.confidence !== 'high') {
     confidenceNotes.push(`center-of-mass confidence: ${com.confidence}`);
   }
-  confidenceNotes.push('aerodynamics: approximate model 1.1.0');
-  confidenceNotes.push('propulsion: thrust hints + prop coefficients');
+  confidenceNotes.push(`propulsion provenance: ${propulsion.dataProvenance}`);
+  confidenceNotes.push(`inertia model: ${inertia.modelVersion} (${inertia.units})`);
 
   const partial = {
     identity: {
@@ -290,6 +308,8 @@ export function compileAircraft(
         roll: inertia.roll,
         pitch: inertia.pitch,
         yaw: inertia.yaw,
+        tensorDiagonalKgM2: inertia.tensorDiagonalKgM2,
+        units: 'kg·m²' as const,
       },
       dimensions: {
         widthMeters: dims.widthMeters,
@@ -305,6 +325,10 @@ export function compileAircraft(
       totalMaxThrustNewtons: propulsion.totalMaxThrustNewtons,
       thrustToWeight: propulsion.thrustToWeight,
       hoverThrottleEstimate: propulsion.hoverThrottleEstimate,
+      modelVersion: propulsion.modelVersion,
+      dataProvenance: propulsion.dataProvenance,
+      confidence: propulsion.confidence,
+      warnings: propulsion.warnings,
     },
     electrical: { battery: electrical },
     aerodynamics: { model: aero },
@@ -326,11 +350,15 @@ export function compileAircraft(
   const specification: CompiledAircraftSpecification = {
     ...partial,
     buildFingerprint,
+    compilationContextFingerprint,
     artifactFingerprint,
+    runtimeCompatibilitySignature,
   };
 
   cache.set(
     buildFingerprint,
+    compilationContextFingerprint,
+    runtimeCompatibilitySignature,
     manifest.engineeringModelVersion,
     manifest.compilerVersion,
     specification,

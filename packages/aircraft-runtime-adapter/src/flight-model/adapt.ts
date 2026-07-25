@@ -1,5 +1,16 @@
 import type { CompiledAircraftSpecification } from '@fpv/aircraft-compiler';
 import { clamp } from '@fpv/engineering-kernel';
+import {
+  mapPhysicalToFlightRuntime,
+  mapSiInertiaToSolver,
+  mapPhysicalAuthorityToSolver,
+} from '@fpv/aircraft-compiler';
+
+export {
+  mapPhysicalToFlightRuntime,
+  mapSiInertiaToSolver,
+  mapPhysicalAuthorityToSolver,
+};
 
 /**
  * Portable flight profile shape — mirrors app FlightProfile without importing Angular.
@@ -84,6 +95,11 @@ export interface AdaptedPhysicsFields {
   readonly rollInertia: number;
   readonly pitchInertia: number;
   readonly yawInertia: number;
+  readonly physicalInertiaKgM2?: {
+    roll: number;
+    pitch: number;
+    yaw: number;
+  };
   readonly angularAccelerationLimits: { x: number; y: number; z: number };
   readonly angularVelocityLimits: { x: number; y: number; z: number };
   readonly throttleCurve: number;
@@ -92,6 +108,11 @@ export interface AdaptedPhysicsFields {
   readonly maximumDescentSpeed: number;
 }
 
+/**
+ * Product-character / accessibility assistance hints.
+ * These MUST NOT alter physical engineering outputs.
+ * Competitive modes should set competitiveAssistDisabled.
+ */
 export interface FlightCharacterHints {
   readonly selfLevelingAvailable?: boolean;
   readonly altitudeAssistAvailable?: boolean;
@@ -101,6 +122,7 @@ export interface FlightCharacterHints {
   readonly landingTolerance?: number;
   readonly collisionEnergyMultiplier?: number;
   readonly maxVelocityScale?: number;
+  readonly competitiveAssistDisabled?: boolean;
 }
 
 export function compiledToFlightProfile(
@@ -111,9 +133,10 @@ export function compiledToFlightProfile(
   const rt = spec.flightRuntime;
   const perf = spec.performance;
   const drag = rt.linearDrag;
+  const assist = hints.competitiveAssistDisabled ? {} : hints;
   const maxVelocity = clamp(
     (rt.maxThrustNewtons / Math.max(0.15, rt.massKg * (0.4 + drag))) *
-      (hints.maxVelocityScale ?? 1),
+      (assist.maxVelocityScale ?? 1),
     8,
     55,
   );
@@ -147,12 +170,22 @@ export function compiledToFlightProfile(
     maxRollRate: rt.maxRollRate,
     maxPitchRate: rt.maxPitchRate,
     maxYawRate: rt.maxYawRate,
-    stabilizationStrength: hints.stabilizationStrength ?? clamp(1.1 - perf.agilityRating, 0.25, 0.75),
-    selfLevelingAvailable: hints.selfLevelingAvailable ?? perf.suggestedSkillLevel !== 'expert',
+    stabilizationStrength:
+      assist.stabilizationStrength ?? clamp(1.1 - perf.agilityRating, 0.25, 0.75),
+    selfLevelingAvailable:
+      assist.selfLevelingAvailable ??
+      (hints.competitiveAssistDisabled
+        ? false
+        : perf.suggestedSkillLevel !== 'expert'),
     altitudeAssistAvailable:
-      hints.altitudeAssistAvailable ?? perf.suggestedSkillLevel === 'beginner',
-    brakingStrength: hints.brakingStrength ?? clamp(1 - perf.momentumRating * 0.5, 0.3, 0.95),
-    recoveryStrength: hints.recoveryStrength ?? clamp(1 - perf.agilityRating * 0.4, 0.35, 0.95),
+      assist.altitudeAssistAvailable ??
+      (hints.competitiveAssistDisabled
+        ? false
+        : perf.suggestedSkillLevel === 'beginner'),
+    brakingStrength:
+      assist.brakingStrength ?? clamp(1 - perf.momentumRating * 0.5, 0.3, 0.95),
+    recoveryStrength:
+      assist.recoveryStrength ?? clamp(1 - perf.agilityRating * 0.4, 0.35, 0.95),
     gravityScale: 1,
     groundEffectStrength: rt.groundEffectStrength,
     groundEffectHeight: rt.groundEffectHeight,
@@ -163,9 +196,11 @@ export function compiledToFlightProfile(
     maximumClimbSpeed: climb,
     maximumDescentSpeed: descent,
     maxVelocity,
-    landingTolerance: hints.landingTolerance ?? (perf.suggestedSkillLevel === 'beginner' ? 1.4 : 0.9),
+    landingTolerance:
+      assist.landingTolerance ??
+      (perf.suggestedSkillLevel === 'beginner' ? 1.4 : 0.9),
     collisionEnergyMultiplier:
-      hints.collisionEnergyMultiplier ?? (0.5 + perf.momentumRating * 0.9),
+      assist.collisionEnergyMultiplier ?? 0.5 + perf.momentumRating * 0.9,
     crashVerticalSpeed: 4 + rt.massKg * 2,
     crashHorizontalSpeed: 5 + rt.massKg * 3,
     crashTiltAngleRad: (55 * Math.PI) / 180,
@@ -210,6 +245,11 @@ export function compiledToPhysicsFields(
     rollInertia: rt.rollInertia,
     pitchInertia: rt.pitchInertia,
     yawInertia: rt.yawInertia,
+    physicalInertiaKgM2: {
+      roll: a.inertia.roll,
+      pitch: a.inertia.pitch,
+      yaw: a.inertia.yaw,
+    },
     angularAccelerationLimits: {
       x: rt.rollAcceleration,
       y: rt.yawAcceleration,

@@ -31,11 +31,10 @@ export function calculatePerformanceMetrics(
     hoverCurrent > 0 ? electrical.capacityAh / hoverCurrent : 0;
   const minutes = enduranceHours * 60;
 
-  const agility = clamp(
-    (authority.maxRollRate + authority.maxPitchRate) / 2 / 8,
-    0,
-    1,
-  );
+  // Ratings from physical SI authority (normalized, not solver clamps).
+  const meanRate =
+    (authority.maxRollRate + authority.maxPitchRate + authority.maxYawRate) / 3;
+  const agility = clamp(meanRate / 25, 0, 1);
   const momentum = clamp(mass.totalTakeoffMassKg / 1.2, 0, 1);
   const efficiency = clamp(1 - aero.linearDrag, 0, 1);
   const control = clamp(authority.authorityMargin / 3, 0, 1);

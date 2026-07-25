@@ -1,6 +1,6 @@
 /**
  * Golden fingerprint anchors for factory aircraft.
- * Update intentionally when engineering model changes.
+ * Full metrics live in factory-aircraft.golden.json — update intentionally.
  */
 export const FACTORY_GOLDEN_AIRCRAFT_IDS = [
   'aeroguard-2',

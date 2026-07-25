@@ -10,6 +10,8 @@ import type {
   CompiledArtifactRepository,
   DroneBuildRepository,
 } from '../ports/repositories';
+import { insertImmutableRevision } from '../ports/repositories';
+import type { DroneBuildRevision } from '@fpv/drone-build-domain';
 
 const IDB_NAME = 'fpv-drone-builder-v1';
 const IDB_VERSION = 1;
@@ -58,10 +60,7 @@ export async function openDroneBuilderDb(): Promise<IDBDatabase> {
   });
 }
 
-async function idbGet<T>(
-  storeName: string,
-  key: string,
-): Promise<T | null> {
+async function idbGet<T>(storeName: string, key: string): Promise<T | null> {
   const db = await openDroneBuilderDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readonly');
@@ -83,6 +82,24 @@ async function idbPut(storeName: string, value: unknown): Promise<void> {
   });
 }
 
+/** Create-only insert — fails if key already exists. */
+async function idbAdd(storeName: string, value: unknown): Promise<void> {
+  const db = await openDroneBuilderDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const req = tx.objectStore(storeName).add(value);
+    req.onsuccess = () => resolve();
+    req.onerror = () =>
+      reject(
+        infrastructureError(
+          'IDB_ADD_FAILED',
+          String(req.error?.message ?? 'add failed'),
+          { name: req.error?.name },
+        ),
+      );
+  });
+}
+
 /** Factory for IndexedDB build repository — call only in browser. */
 export function createIndexedDbBuildRepository(): DroneBuildRepository {
   return {
@@ -101,16 +118,30 @@ export function createIndexedDbBuildRepository(): DroneBuildRepository {
     async getRevision(id) {
       return idbGet('revisions', id);
     },
+    async revisionExists(id) {
+      return (await idbGet('revisions', id)) != null;
+    },
+    async insertRevision(revision) {
+      await insertImmutableRevision(
+        {
+          getRevision: (id) => idbGet<DroneBuildRevision>('revisions', id),
+          putNew: async (r) => {
+            await idbAdd('revisions', r);
+          },
+        },
+        revision,
+      );
+    },
     async saveRevision(revision) {
-      await idbPut('revisions', revision);
+      await this.insertRevision(revision);
     },
   };
 }
 
 export function createIndexedDbArtifactRepository(): CompiledArtifactRepository {
   return {
-    async get(bf, eng, comp) {
-      const cacheKey = `${bf}|${eng}|${comp}`;
+    async get(bf, ctx, runtime, eng, comp) {
+      const cacheKey = `${bf}|${ctx}|${runtime}|${eng}|${comp}`;
       const row = await idbGet<{
         cacheKey: string;
         record: import('../ports/repositories').CompiledArtifactRecord;
@@ -118,7 +149,7 @@ export function createIndexedDbArtifactRepository(): CompiledArtifactRepository 
       return row?.record ?? null;
     },
     async save(record) {
-      const cacheKey = `${record.buildFingerprint}|${record.engineeringModelVersion}|${record.compilerVersion}`;
+      const cacheKey = `${record.buildFingerprint}|${record.compilationContextFingerprint}|${record.runtimeCompatibilitySignature}|${record.engineeringModelVersion}|${record.compilerVersion}`;
       await idbPut('artifacts', { cacheKey, record });
     },
   };

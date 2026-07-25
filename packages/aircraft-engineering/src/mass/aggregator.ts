@@ -1,5 +1,4 @@
-import type { ComponentRevision } from '@fpv/component-catalog';
-import type { ComponentSelection } from '@fpv/drone-build-domain';
+import type { ResolvedAssembly } from '@fpv/drone-build-domain';
 import { sum } from '@fpv/engineering-kernel';
 
 export interface MassBreakdown {
@@ -11,18 +10,16 @@ export interface MassBreakdown {
   readonly totalTakeoffMassKg: number;
 }
 
-export function aggregateMass(
-  selections: readonly ComponentSelection[],
-  components: ReadonlyMap<string, ComponentRevision>,
-): MassBreakdown {
+/** Aggregate mass exclusively from the active resolved assembly. */
+export function aggregateMass(assembly: ResolvedAssembly): MassBreakdown {
   let dry = 0;
   let battery = 0;
   let payload = 0;
   let propulsion = 0;
   let electronics = 0;
 
-  for (const s of selections) {
-    const c = components.get(s.componentRevisionId);
+  for (const s of assembly.revision.selections) {
+    const c = assembly.componentBySelectionId.get(s.selectionId);
     if (!c) continue;
     const m = c.massKg * s.quantity;
     switch (c.componentType) {
@@ -53,24 +50,20 @@ export function aggregateMass(
     }
   }
 
-  const total = dry + battery + payload;
   return {
     dryMassKg: dry,
     batteryMassKg: battery,
     payloadMassKg: payload,
     propulsionMassKg: propulsion,
     electronicsMassKg: electronics,
-    totalTakeoffMassKg: total,
+    totalTakeoffMassKg: dry + battery + payload,
   };
 }
 
-export function sumSelectionMass(
-  selections: readonly ComponentSelection[],
-  components: ReadonlyMap<string, ComponentRevision>,
-): number {
+export function sumAssemblyMass(assembly: ResolvedAssembly): number {
   return sum(
-    selections.map((s) => {
-      const c = components.get(s.componentRevisionId);
+    assembly.revision.selections.map((s) => {
+      const c = assembly.componentBySelectionId.get(s.selectionId);
       return c ? c.massKg * s.quantity : 0;
     }),
   );

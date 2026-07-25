@@ -8,7 +8,13 @@ import {
   compiledToPhysicsFields,
   type AdaptedFlightProfile,
   type AdaptedPhysicsFields,
+  type FlightCharacterHints,
 } from '@fpv/aircraft-runtime-adapter';
+import {
+  FREE_FLIGHT_POLICY,
+  RANKED_RACING_POLICY,
+  type ValidationPolicy,
+} from '@fpv/compatibility-engine';
 import {
   FACTORY_BUILD_MANIFESTS,
   getFactoryManifest,
@@ -28,24 +34,35 @@ export interface CompiledFactoryAircraft {
 
 export function compileFactoryAircraft(
   aircraftId: FactoryAircraftId,
+  options: {
+    readonly policy?: ValidationPolicy;
+    readonly competitiveMode?: boolean;
+  } = {},
 ): CompiledFactoryAircraft {
   const manifest = getFactoryManifest(aircraftId);
   const revision = materializeFactoryRevision(manifest);
   const snapshot = buildOfficialCatalogSnapshot();
-  const compilation = compileAircraft(
-    revision,
-    [...snapshot.revisions.values()],
-  );
+  const policy = options.policy ?? FREE_FLIGHT_POLICY;
+  const compilation = compileAircraft(revision, [...snapshot.revisions.values()], {
+    policy,
+  });
   if (!compilation.ok || !compilation.specification) {
     const codes = compilation.validation.issues.map((i) => i.ruleCode).join(', ');
     throw new Error(
       `Factory aircraft ${aircraftId} failed compilation: ${codes || 'integrity'}`,
     );
   }
+
+  const competitive =
+    options.competitiveMode === true || policy.policyId === RANKED_RACING_POLICY.policyId;
+  const hints: FlightCharacterHints = competitive
+    ? { ...manifest.characterHints, competitiveAssistDisabled: true }
+    : manifest.characterHints;
+
   const flightProfile = compiledToFlightProfile(
     compilation.specification,
     `flt-${aircraftId}`,
-    manifest.characterHints,
+    hints,
   );
   const physics = compiledToPhysicsFields(
     compilation.specification,
@@ -80,7 +97,6 @@ export function validateAllFactoryManifests(): {
       );
     }
   }
-  // Ensure catalog revisions referenced exist
   const ids = new Set(OFFICIAL_COMPONENT_REVISIONS.map((r) => r.revisionId));
   for (const m of FACTORY_BUILD_MANIFESTS) {
     for (const rev of [
