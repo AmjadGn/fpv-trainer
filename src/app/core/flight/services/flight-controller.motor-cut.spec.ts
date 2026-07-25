@@ -92,25 +92,32 @@ describe('FlightControllerService motor cut', () => {
     step(steps);
 
     const freeFallSpeed = FLIGHT_CONFIG.gravity * coastSeconds;
-    // Brick drop: first half-second must track free-fall closely.
-    expect(-service.velocity().y).toBeGreaterThan(freeFallSpeed * 0.95);
-    expect(-service.velocity().y).toBeLessThan(freeFallSpeed * 1.02);
-    expect(service.position().y).toBeLessThan(
-      40 - 0.5 * freeFallSpeed * coastSeconds * 0.9,
-    );
+    expect(-service.velocity().y).toBeCloseTo(freeFallSpeed, 5);
+    // Semi-implicit Euler is slightly below the continuous ½gt² distance.
+    expect(service.position().y).toBeLessThan(40 - 0.5 * freeFallSpeed * coastSeconds * 0.98);
+    expect(service.position().y).toBeGreaterThan(40 - 0.5 * freeFallSpeed * coastSeconds * 1.05);
   });
 
-  it('does not soft-cap fall speed near armed maxVelocity (~17–20 m/s)', () => {
+  it('does not soft-cap fall speed near the old ~17 m/s viscous ceiling', () => {
     service.reset({ position: { x: 0, y: 200, z: 0 } });
     service.arm(0);
     service.disarm();
 
-    // ~2.5 s of freefall → well past the old ~17 m/s “speed limit” feel.
+    // ~2.5 s freefall → g*t ≈ 24.5 m/s, well past the old drag ceiling.
     step(Math.round(2.5 / dt));
 
+    expect(-service.velocity().y).toBeCloseTo(FLIGHT_CONFIG.gravity * 2.5, 4);
     expect(-service.velocity().y).toBeGreaterThan(22);
-    expect(-service.velocity().y).toBeGreaterThan(FLIGHT_CONFIG.maxVelocity * 0.7);
     expect(service.position().y).toBeGreaterThan(FLIGHT_CONFIG.groundEpsilon + 10);
+  });
+
+  it('armed zero-throttle descent is not soft-capped at ~17 m/s either', () => {
+    service.reset({ position: { x: 0, y: 200, z: 0 } });
+    service.arm(0);
+    step(Math.round(2.5 / dt), ZERO_INPUT);
+
+    expect(-service.velocity().y).toBeGreaterThan(22);
+    expect(-service.velocity().y).toBeCloseTo(FLIGHT_CONFIG.gravity * 2.5, 1);
   });
 
   it('accounts for upward momentum: climb then cut still gets downward acceleration', () => {

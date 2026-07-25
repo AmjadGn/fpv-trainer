@@ -462,10 +462,8 @@ export class FlightControllerService {
   }
 
   /**
-   * Passive disarmed flight: ballistic gravity + light quadratic aero drag.
-   * Does not reuse armed-flight viscous drag (that model is for powered handling
-   * feel and produces an unrealistically soft “float” after motor cut).
-   * Residual angular momentum is damped; orientation keeps integrating.
+   * Passive disarmed flight: pure gravity freefall + residual angular damping.
+   * No aero drag, no maxVelocity — dead motors must not soft-cap descent.
    * Does not increment armed flight time.
    */
   private integratePassiveMotorCut(dt: number): void {
@@ -474,38 +472,11 @@ export class FlightControllerService {
   }
 
   /**
-   * Dead-motor ballistic translation for a simulator (FPV “brick” drop):
-   * a = g_down − c |v_rel| v_rel
-   *
-   * Armed-flight `maxVelocity` / viscous drag intentionally do NOT apply here —
-   * those are powered handling limits and feel like a fake speed cap in freefall.
-   * Keep c tiny so practical FPV altitudes stay near free-fall (no ~17 m/s soft ceiling).
+   * Dead-motor translation: gravity and momentum only.
+   * Intentionally omits aero drag and armed `maxVelocity` so fall speed is uncapped.
    */
   private integratePassiveBallistic(dt: number): void {
-    const cfg = this.cfg;
-    const rel = this.scratchRel;
-    rel.x = this.vel.x - this.windVel.x;
-    rel.y = this.vel.y - this.windVel.y;
-    rel.z = this.vel.z - this.windVel.z;
-
-    const speed = Math.hypot(rel.x, rel.y, rel.z);
-    // c ≈ 0.002 → terminal ≫ 60 m/s; irrelevant for typical training altitudes.
-    const quadraticDrag = 0.002;
-
-    let ax = 0;
-    let ay = -cfg.gravity;
-    let az = 0;
-    if (speed > 1e-8) {
-      const dragAccel = quadraticDrag * speed;
-      ax -= dragAccel * rel.x;
-      ay -= dragAccel * rel.y;
-      az -= dragAccel * rel.z;
-    }
-
-    this.vel.x += ax * dt;
-    this.vel.y += ay * dt;
-    this.vel.z += az * dt;
-
+    this.vel.y -= this.cfg.gravity * dt;
     this.pos.x += this.vel.x * dt;
     this.pos.y += this.vel.y * dt;
     this.pos.z += this.vel.z * dt;
@@ -663,13 +634,19 @@ export class FlightControllerService {
   private integrateLinear(input: FlightInput, dt: number): void {
     const cfg = this.cfg;
     const throttle = clamp(input.throttle, 0, 1);
+    /** Near-zero throttle ≈ unpowered: do not soft-cap vertical fall. */
+    const unpowered = throttle <= 0.001;
 
     // Local up (0,1,0) → world via orientation.
     rotateVecByQuat(0, 1, 0, this.ori, this.scratchUp);
     let thrustAccel = (throttle * cfg.maxThrust) / cfg.mass;
 
     // Optional ground effect: mild extra lift near the surface.
-    if (cfg.groundEffectStrength > 0 && this.pos.y < cfg.groundEffectHeight) {
+    if (
+      !unpowered &&
+      cfg.groundEffectStrength > 0 &&
+      this.pos.y < cfg.groundEffectHeight
+    ) {
       const t =
         1 - clamp(this.pos.y / cfg.groundEffectHeight, 0, 1);
       thrustAccel *= 1 + cfg.groundEffectStrength * t * t;
@@ -685,17 +662,24 @@ export class FlightControllerService {
     rel.y = this.vel.y - this.windVel.y;
     rel.z = this.vel.z - this.windVel.z;
 
-    // Linear drag + optional velocity damping against relative air velocity.
     const drag = cfg.linearDrag + cfg.velocityDamping;
-    ax -= drag * rel.x;
-    ay -= drag * rel.y;
-    az -= drag * rel.z;
+    if (unpowered) {
+      // Horizontal air resistance only — vertical viscous drag created a fake
+      // ~g/drag ≈ 17 m/s soft ceiling that felt like a speed limit with motors idle.
+      ax -= drag * rel.x;
+      az -= drag * rel.z;
+    } else {
+      ax -= drag * rel.x;
+      ay -= drag * rel.y;
+      az -= drag * rel.z;
+    }
 
     this.vel.x += ax * dt;
     this.vel.y += ay * dt;
     this.vel.z += az * dt;
 
-    if (cfg.maxVelocity > 0) {
+    // Powered handling clamp only — never limit an unpowered descent/dive.
+    if (!unpowered && cfg.maxVelocity > 0) {
       const speed = Math.hypot(this.vel.x, this.vel.y, this.vel.z);
       if (speed > cfg.maxVelocity) {
         const s = cfg.maxVelocity / speed;
