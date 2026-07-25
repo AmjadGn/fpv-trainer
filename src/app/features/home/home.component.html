@@ -1,0 +1,81 @@
+<div class="home fpv-page-bg">
+  <div class="home__inner">
+    <header class="home__hero">
+      <p class="home__eyebrow">{{ isGuest() ? 'Guest session' : 'Pilot dashboard' }}</p>
+      <h1 class="home__brand">FPV Trainer</h1>
+      <p class="home__support">
+        Learn the sticks, fly freely, or compete when you are ready. No account required for basic flight.
+      </p>
+
+      @if (continuePrompt(); as cont) {
+        <section class="home__continue" aria-labelledby="continue-heading">
+          <h2 id="continue-heading" class="home__section-title">Continue?</h2>
+          <p>{{ cont.title }}</p>
+          <div class="home__continue-actions">
+            <button type="button" class="action action--primary" (click)="onContinue()">Continue</button>
+            <button type="button" class="action" (click)="onChangeSetup()">Change setup</button>
+            <button type="button" class="action action--ghost" (click)="dismissContinue()">Dismiss</button>
+          </div>
+        </section>
+      }
+    </header>
+
+    <section class="home__pillars" aria-labelledby="pillars-heading">
+      <h2 id="pillars-heading" class="home__section-title">What do you want to do?</h2>
+      <div class="home__mode-grid">
+        <button type="button" class="mode-card mode-card--primary" (click)="onLearn()">
+          <span class="mode-card__title">Learn</span>
+          <span class="mode-card__body">First flight, Academy, controller basics.</span>
+        </button>
+        <button type="button" class="mode-card mode-card--primary" (click)="onFly()">
+          <span class="mode-card__title">Fly</span>
+          <span class="mode-card__body">Free Flight, Hangar, environments, replays.</span>
+        </button>
+        <button type="button" class="mode-card mode-card--primary" (click)="onCompete()">
+          <span class="mode-card__title">Compete</span>
+          <span class="mode-card__body">Races, ghosts, seasons, tournaments.</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="home__status" aria-labelledby="status-heading">
+      <h2 id="status-heading" class="home__section-title">Status</h2>
+      <dl class="home__continue-meta">
+        <div>
+          <dt>Aircraft</dt>
+          <dd>{{ aircraftLabel() }}</dd>
+        </div>
+        <div>
+          <dt>Controller</dt>
+          <dd>{{ controllerStatus() }}</dd>
+        </div>
+        <div>
+          <dt>Environment</dt>
+          <dd>{{ environmentLabel() }}</dd>
+        </div>
+        <div>
+          <dt>Progress</dt>
+          <dd>Level {{ levelInfo().level }} · Academy {{ academyCompleted() }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <nav class="home__secondary" aria-label="Quick links">
+      <button type="button" class="link-btn" (click)="onHangar()">Hangar</button>
+      <button type="button" class="link-btn" (click)="onCalibration()">Controller</button>
+      <button type="button" class="link-btn" (click)="onSettings()">Settings</button>
+      <button type="button" class="link-btn" (click)="onFeedback()">Feedback</button>
+      <button
+        type="button"
+        class="link-btn"
+        (click)="onLatestReplay()"
+        [disabled]="!hasReplay()"
+      >
+        Replay
+      </button>
+      @if (needsOnboarding()) {
+        <button type="button" class="link-btn" (click)="onOnboarding()">Finish setup</button>
+      }
+    </nav>
+  </div>
+</div>

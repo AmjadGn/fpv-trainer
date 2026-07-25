@@ -1,0 +1,175 @@
+{
+  "catalogVersion": 1,
+  "weatherPresets": [
+    {
+      "id": "calm",
+      "version": 1,
+      "environmentId": null,
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "calm-v1",
+      "environments": "*"
+    },
+    {
+      "id": "light-breeze",
+      "version": 1,
+      "environmentId": null,
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "light-breeze-v1",
+      "environments": "*"
+    },
+    {
+      "id": "crosswind",
+      "version": 1,
+      "environmentId": null,
+      "category": "challenge",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "crosswind-v1",
+      "environments": "*"
+    },
+    {
+      "id": "gusty",
+      "version": 1,
+      "environmentId": null,
+      "category": "challenge",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "gusty-v1",
+      "environments": "*"
+    },
+    {
+      "id": "alpine-valley-morning",
+      "version": 1,
+      "environmentId": "alpine-training-valley",
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "alpine-valley-morning-v1",
+      "environments": ["alpine-training-valley"]
+    },
+    {
+      "id": "alpine-mountain-breeze",
+      "version": 1,
+      "environmentId": "alpine-training-valley",
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "alpine-mountain-breeze-v1",
+      "environments": ["alpine-training-valley"]
+    },
+    {
+      "id": "alpine-light-fog",
+      "version": 1,
+      "environmentId": "alpine-training-valley",
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "alpine-light-fog-v1",
+      "environments": ["alpine-training-valley"]
+    },
+    {
+      "id": "alpine-light-snow",
+      "version": 1,
+      "environmentId": "alpine-training-valley",
+      "category": "challenge",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "alpine-light-snow-v1",
+      "environments": ["alpine-training-valley"]
+    },
+    {
+      "id": "desert-calm",
+      "version": 1,
+      "environmentId": "desert-industrial-yard",
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "desert-calm-v1",
+      "environments": ["desert-industrial-yard"]
+    },
+    {
+      "id": "desert-dry-crosswind",
+      "version": 1,
+      "environmentId": "desert-industrial-yard",
+      "category": "challenge",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "desert-dry-crosswind-v1",
+      "environments": ["desert-industrial-yard"]
+    },
+    {
+      "id": "desert-gusty-yard",
+      "version": 1,
+      "environmentId": "desert-industrial-yard",
+      "category": "challenge",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "desert-gusty-yard-v1",
+      "environments": ["desert-industrial-yard"]
+    },
+    {
+      "id": "desert-dust-haze",
+      "version": 1,
+      "environmentId": "desert-industrial-yard",
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "desert-dust-haze-v1",
+      "environments": ["desert-industrial-yard"]
+    },
+    {
+      "id": "coastal-calm",
+      "version": 1,
+      "environmentId": "coastal-ruins",
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "coastal-calm-v1",
+      "environments": ["coastal-ruins"]
+    },
+    {
+      "id": "coastal-sea-breeze",
+      "version": 1,
+      "environmentId": "coastal-ruins",
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "coastal-sea-breeze-v1",
+      "environments": ["coastal-ruins"]
+    },
+    {
+      "id": "coastal-cloudy",
+      "version": 1,
+      "environmentId": "coastal-ruins",
+      "category": "standard",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "coastal-cloudy-v1",
+      "environments": ["coastal-ruins"]
+    },
+    {
+      "id": "coastal-light-rain",
+      "version": 1,
+      "environmentId": "coastal-ruins",
+      "category": "challenge",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "coastal-light-rain-v1",
+      "environments": ["coastal-ruins"]
+    },
+    {
+      "id": "coastal-sea-fog",
+      "version": 1,
+      "environmentId": "coastal-ruins",
+      "category": "challenge",
+      "competitive": true,
+      "enabled": true,
+      "deterministicConfigHash": "coastal-sea-fog-v1",
+      "environments": ["coastal-ruins"]
+    }
+  ]
+}

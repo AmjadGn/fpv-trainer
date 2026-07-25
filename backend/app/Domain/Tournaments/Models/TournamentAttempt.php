@@ -1,0 +1,3 @@
+<?php
+namespace App\Domain\Tournaments\Models; use App\Domain\Races\Models\RaceRun; use App\Models\User; use Illuminate\Database\Eloquent\Model; use Illuminate\Database\Eloquent\Relations\BelongsTo;
+class TournamentAttempt extends Model { protected $fillable=['tournament_id','user_id','race_run_id','submission_id','race_session_id','status','is_practice','duration_ms','crash_count','rank','accepted_at']; protected function casts(): array{return ['is_practice'=>'boolean','accepted_at'=>'datetime'];} public function tournament():BelongsTo{return $this->belongsTo(Tournament::class);} public function run():BelongsTo{return $this->belongsTo(RaceRun::class,'race_run_id');} public function user():BelongsTo{return $this->belongsTo(User::class);} }

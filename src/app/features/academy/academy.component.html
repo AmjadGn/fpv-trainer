@@ -1,0 +1,83 @@
+<div class="academy">
+  <header class="academy__header">
+    <div>
+      <p class="academy__eyebrow">Skill path</p>
+      <h1 class="academy__title">Training Academy</h1>
+      <p class="academy__support">
+        Short drills for hover, landing, gates, and flow — earn medals and unlock
+        sharper stick habits.
+      </p>
+    </div>
+    <button type="button" class="ghost-button" (click)="onBack()">
+      Back to Home
+    </button>
+  </header>
+
+  <section class="academy__summary" aria-labelledby="academy-progress-heading">
+    <h2 id="academy-progress-heading" class="academy__section-title">Progress</h2>
+    <dl class="summary-row">
+      <div>
+        <dt>Level</dt>
+        <dd>{{ levelInfo().level }}</dd>
+      </div>
+      <div>
+        <dt>Modules complete</dt>
+        <dd>{{ completedCount() }} / {{ modules().length }}</dd>
+      </div>
+      <div>
+        <dt>Medals</dt>
+        <dd>{{ medalSummary() }}</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="academy__modules" aria-labelledby="modules-heading">
+    <h2 id="modules-heading" class="academy__section-title">Modules</h2>
+    <ul class="module-grid">
+      @for (card of modules(); track card.module.id) {
+        <li
+          class="module-card"
+          [class.module-card--locked]="!card.unlocked"
+        >
+          <div class="module-card__top">
+            <h3 class="module-card__title">{{ card.module.title }}</h3>
+            <span
+              class="module-card__badge"
+              [class.module-card__badge--locked]="!card.unlocked"
+            >
+              {{ card.unlocked ? card.module.difficulty : 'Locked' }}
+            </span>
+          </div>
+          <p class="module-card__desc">{{ card.module.description }}</p>
+          <dl class="module-card__meta">
+            <div>
+              <dt>Duration</dt>
+              <dd>{{ durationLabel(card.module.estimatedDurationSeconds) }}</dd>
+            </div>
+            <div>
+              <dt>Best score</dt>
+              <dd>{{ card.bestScore > 0 ? card.bestScore : '—' }}</dd>
+            </div>
+            <div>
+              <dt>Medal</dt>
+              <dd
+                class="module-card__medal"
+                [attr.data-medal]="card.medal"
+              >
+                {{ medalLabel(card.medal) }}
+              </dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            class="primary-button"
+            (click)="onStart(card.module.id)"
+            [disabled]="!card.unlocked"
+          >
+            Start Training
+          </button>
+        </li>
+      }
+    </ul>
+  </section>
+</div>

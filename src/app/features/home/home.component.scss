@@ -1,0 +1,321 @@
+:host {
+  display: block;
+  min-height: 100%;
+  color: var(--fpv-text);
+  font-family: var(--fpv-font-sans);
+}
+
+.home {
+  min-height: 100%;
+}
+
+.home__inner {
+  width: min(880px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: clamp(2rem, 6vh, 3.5rem) 0 3rem;
+  display: grid;
+  gap: var(--fpv-space-32);
+}
+
+.home__hero {
+  display: grid;
+  gap: var(--fpv-space-12);
+}
+
+.home__eyebrow {
+  margin: 0;
+  font-family: var(--fpv-font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fpv-accent);
+}
+
+.home__brand {
+  margin: 0;
+  font-family: var(--fpv-font-display);
+  font-size: clamp(2.75rem, 8vw, 4.5rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 0.95;
+  color: var(--fpv-text);
+}
+
+.home__support {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--fpv-muted);
+  font-size: 1.05rem;
+  line-height: 1.45;
+}
+
+.home__continue {
+  display: grid;
+  gap: var(--fpv-space-16);
+  margin-top: var(--fpv-space-8);
+  padding: var(--fpv-space-16);
+  border: 1px solid var(--fpv-border);
+  border-radius: var(--fpv-radius-lg);
+  background: color-mix(in srgb, var(--fpv-panel) 88%, transparent);
+  box-shadow: var(--fpv-shadow-subtle);
+}
+
+.home__continue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.home__continue-meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--fpv-space-12);
+}
+
+.action--ghost {
+  background: transparent;
+  border-color: transparent;
+  text-decoration: underline;
+}
+
+.home__continue-meta dt {
+  font-size: var(--fpv-text-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fpv-text-muted);
+}
+
+.home__continue-meta dd {
+  margin: 0.15rem 0 0;
+  font-family: var(--fpv-font-mono);
+  font-size: var(--fpv-text-body-sm);
+}
+
+.home__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+
+.action {
+  appearance: none;
+  border: 1px solid var(--fpv-border);
+  border-radius: var(--fpv-radius-md);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--fpv-text);
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.7rem 1.05rem;
+  cursor: pointer;
+}
+
+.action--primary {
+  border-color: var(--fpv-accent);
+  background: color-mix(in srgb, var(--fpv-accent) 18%, transparent);
+  color: var(--fpv-accent);
+}
+
+.action--lg {
+  justify-self: start;
+  padding: 0.85rem 1.35rem;
+}
+
+.action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--fpv-accent) 55%, transparent);
+  color: var(--fpv-text);
+}
+
+.action--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fpv-accent) 30%, transparent);
+  color: var(--fpv-accent);
+}
+
+.action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.action:focus-visible,
+.link-btn:focus-visible,
+.mode-card:focus-visible {
+  outline: 2px solid var(--fpv-accent);
+  outline-offset: 3px;
+}
+
+.home__section-title {
+  margin: 0 0 0.75rem;
+  font-family: var(--fpv-font-display);
+  font-size: 0.9rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fpv-muted);
+}
+
+.pilot-summary {
+  display: grid;
+  gap: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--fpv-border);
+}
+
+.pilot-summary__level {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+
+.pilot-summary__label {
+  font-family: var(--fpv-font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fpv-muted);
+  font-size: 0.85rem;
+}
+
+.pilot-summary__value {
+  font-family: var(--fpv-font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fpv-accent);
+  line-height: 1;
+}
+
+.pilot-summary__xp-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+  font-family: var(--fpv-font-mono);
+  font-size: 0.78rem;
+  color: var(--fpv-mono-text);
+}
+
+.pilot-summary__bar {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--fpv-border);
+  overflow: hidden;
+}
+
+.pilot-summary__bar-fill {
+  height: 100%;
+  background: var(--fpv-accent);
+  border-radius: inherit;
+  transition: width 0.25s ease;
+}
+
+.pilot-summary__stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.25rem;
+}
+
+.pilot-summary__stats div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.pilot-summary__stats dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fpv-muted);
+}
+
+.pilot-summary__stats dd {
+  margin: 0;
+  font-family: var(--fpv-font-mono);
+  font-size: 0.9rem;
+  color: var(--fpv-text);
+}
+
+.pilot-summary__ghost {
+  color: var(--fpv-accent);
+}
+
+.home__mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--fpv-space-12);
+}
+
+.mode-card {
+  appearance: none;
+  display: grid;
+  gap: var(--fpv-space-4);
+  text-align: left;
+  padding: var(--fpv-space-16);
+  border: 1px solid var(--fpv-border);
+  border-radius: var(--fpv-radius-lg);
+  background: color-mix(in srgb, var(--fpv-panel) 80%, transparent);
+  color: var(--fpv-text);
+  cursor: pointer;
+}
+
+.mode-card:hover {
+  border-color: var(--fpv-border-strong);
+}
+
+.mode-card__title {
+  font-family: var(--fpv-font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: var(--fpv-text-body-sm);
+}
+
+.mode-card__body {
+  color: var(--fpv-text-muted);
+  font-size: var(--fpv-text-caption);
+}
+
+.home__secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.25rem;
+  padding-top: 0.25rem;
+}
+
+.link-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--fpv-muted);
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in srgb, var(--fpv-muted) 45%, transparent);
+}
+
+.link-btn:hover {
+  color: var(--fpv-accent);
+  text-decoration-color: var(--fpv-accent);
+}
+
+@media (max-width: 560px) {
+  .home__continue-meta,
+  .pilot-summary__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .action {
+    flex: 1 1 calc(50% - 0.65rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pilot-summary__bar-fill {
+    transition: none;
+  }
+}

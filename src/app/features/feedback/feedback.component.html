@@ -1,0 +1,87 @@
+<div class="fpv-page-bg">
+  <main class="fpv-page feedback">
+    <fpv-page-header
+      eyebrow="Alpha"
+      title="Send feedback"
+      support="Bug reports and suggestions help stabilize the alpha. Replays are never attached automatically."
+    />
+
+    @if (status() === 'submitted') {
+      <div class="feedback__success" role="status">
+        <p>Thanks — your feedback was saved.</p>
+        @if (diagnosticId(); as id) {
+          <p>Issue ID: <code>{{ id }}</code></p>
+        }
+        <button type="button" fpvButton variant="secondary" (click)="back()">Back to dashboard</button>
+      </div>
+    } @else {
+      <form class="feedback__form" (submit)="$event.preventDefault(); submit()">
+        <label>
+          Category
+          <select [value]="draft().category" (change)="onCategory($event)">
+            <option value="bug">Bug</option>
+            <option value="controls">Controls</option>
+            <option value="performance">Performance</option>
+            <option value="aircraft-handling">Aircraft handling</option>
+            <option value="visual">Visual issue</option>
+            <option value="training">Training issue</option>
+            <option value="feature">Feature suggestion</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+
+        <label>
+          Short title
+          <input type="text" required [value]="draft().title" (input)="onTitle($event)" maxlength="120" />
+        </label>
+
+        <label>
+          Description
+          <textarea required rows="5" [value]="draft().description" (input)="onDescription($event)"></textarea>
+        </label>
+
+        <label>
+          Severity
+          <select [value]="draft().severity" (change)="onSeverity($event)">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="blocker">Blocker</option>
+          </select>
+        </label>
+
+        <label>
+          Email (optional)
+          <input type="email" [value]="draft().email" (input)="onEmail($event)" />
+        </label>
+
+        <label class="feedback__check">
+          <input
+            type="checkbox"
+            [checked]="draft().includeDiagnostics"
+            (change)="onDiagnostics($event)"
+          />
+          Include diagnostic data (route, aircraft, environment, browser summary, performance snapshot)
+        </label>
+
+        @if (status() === 'failed') {
+          <p class="feedback__error" role="alert">
+            Submission failed. Your draft is still saved on this device — try again.
+          </p>
+        }
+
+        <div class="feedback__actions">
+          <button type="button" fpvButton variant="ghost" (click)="back()">Cancel</button>
+          <button
+            type="submit"
+            fpvButton
+            variant="primary"
+            [disabled]="status() === 'submitting' || !draft().title || !draft().description"
+          >
+            {{ status() === 'submitting' ? 'Submitting…' : 'Submit feedback' }}
+          </button>
+        </div>
+      </form>
+    }
+  </main>
+</div>

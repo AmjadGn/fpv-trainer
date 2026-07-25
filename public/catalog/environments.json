@@ -1,0 +1,26 @@
+{
+  "catalogVersion": 1,
+  "environments": [
+    {
+      "id": "alpine-training-valley",
+      "version": 1,
+      "name": "Alpine Training Valley",
+      "enabled": true,
+      "theme": "alpine"
+    },
+    {
+      "id": "desert-industrial-yard",
+      "version": 1,
+      "name": "Desert Industrial Yard",
+      "enabled": true,
+      "theme": "desert-industrial"
+    },
+    {
+      "id": "coastal-ruins",
+      "version": 1,
+      "name": "Coastal Ruins",
+      "enabled": true,
+      "theme": "coastal"
+    }
+  ]
+}

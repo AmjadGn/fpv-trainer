@@ -1,0 +1,117 @@
+<div class="environments">
+  <header class="environments__header">
+    <div>
+      <p class="environments__eyebrow">World select</p>
+      <h1 class="environments__title">Environments</h1>
+      <p class="environments__support">
+        Choose a training world. Current:
+        <strong class="environments__current">{{ selectedEnvironmentId() }}</strong>
+      </p>
+    </div>
+    <button type="button" class="ghost-button" (click)="onBack()">
+      Back to Home
+    </button>
+  </header>
+
+  <ul class="env-grid">
+    @for (card of environments(); track card.meta.id) {
+      <li
+        class="env-card"
+        [class.env-card--selected]="card.selected"
+      >
+        <svg
+          class="env-card__thumb"
+          viewBox="0 0 160 90"
+          role="img"
+          [attr.aria-label]="card.meta.name + ' preview'"
+        >
+          <rect
+            width="160"
+            height="90"
+            [attr.fill]="card.meta.thumbnail.secondaryColor"
+          />
+          <polygon
+            points="0,70 40,35 80,55 120,28 160,50 160,90 0,90"
+            [attr.fill]="card.meta.thumbnail.primaryColor"
+            opacity="0.92"
+          />
+          <circle
+            cx="128"
+            cy="22"
+            r="10"
+            [attr.fill]="card.meta.thumbnail.accentColor"
+            opacity="0.85"
+          />
+          <rect
+            x="18"
+            y="62"
+            width="28"
+            height="10"
+            rx="1"
+            [attr.fill]="card.meta.thumbnail.accentColor"
+            opacity="0.55"
+          />
+        </svg>
+
+        <div class="env-card__top">
+          <h2 class="env-card__name">{{ card.meta.name }}</h2>
+          <span class="env-card__badge">{{ card.meta.difficulty }}</span>
+        </div>
+
+        @if (card.selected) {
+          <p class="env-card__selected-label">Selected</p>
+        }
+
+        <p class="env-card__desc">{{ card.meta.description }}</p>
+
+        <dl class="env-card__meta">
+          <div>
+            <dt>Theme</dt>
+            <dd>{{ card.meta.theme }}</dd>
+          </div>
+          <div>
+            <dt>Quality</dt>
+            <dd>{{ card.meta.recommendedQuality }}</dd>
+          </div>
+          <div>
+            <dt>Courses</dt>
+            <dd>
+              {{
+                card.courseNames.length > 0
+                  ? card.courseNames.join(', ')
+                  : '—'
+              }}
+            </dd>
+          </div>
+          <div>
+            <dt>Weather</dt>
+            <dd>
+              {{
+                card.weatherFlags.length > 0
+                  ? card.weatherFlags.join(' · ')
+                  : '—'
+              }}
+            </dd>
+          </div>
+        </dl>
+
+        <div class="env-card__actions">
+          <button
+            type="button"
+            class="primary-button"
+            (click)="onSelect(card.meta.id, 'free')"
+          >
+            Select &amp; Free Fly
+          </button>
+          <button
+            type="button"
+            class="ghost-button"
+            (click)="onSelect(card.meta.id, 'courses')"
+          >
+            Select &amp; Race
+          </button>
+        </div>
+      </li>
+    }
+  </ul>
+</div>

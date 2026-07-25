@@ -1,0 +1,3 @@
+<?php
+namespace App\Domain\Beta; use App\Support\ApiException; use Illuminate\Support\Facades\DB;
+class BetaInviteService { public function validateAndConsume(string $code,string $email):BetaInvite{return DB::transaction(function()use($code,$email){$i=BetaInvite::where('code',$code)->lockForUpdate()->first();if(!$i||!$i->enabled||($i->expires_at&&$i->expires_at->isPast())||$i->usage_count>=$i->usage_limit||($i->email_binding&&strcasecmp($i->email_binding,$email)!==0))throw ApiException::make('invalid_beta_invite','This beta invite is invalid or exhausted.',422);$i->increment('usage_count');return $i->refresh();});} public function registrationAllowed():bool{return config('fpv.beta.mode','closed')==='open_registration';} }

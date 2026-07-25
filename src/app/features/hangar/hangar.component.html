@@ -1,0 +1,227 @@
+<div
+  class="hangar fpv-page-bg"
+  (keydown)="onKeyNav($event)"
+  tabindex="0"
+  role="main"
+  aria-label="Drone Hangar"
+>
+  <header class="hangar__header">
+    <div>
+      <p class="hangar__eyebrow">Aircraft platform</p>
+      <h1 class="hangar__title">Drone Hangar</h1>
+      <p class="hangar__support">
+        Choose an original aircraft. Each craft has unique handling, scale, and camera setup.
+      </p>
+    </div>
+    <div class="hangar__header-actions">
+      <button type="button" class="action" (click)="toggleAutoRotate()" [attr.aria-pressed]="autoRotate()">
+        {{ autoRotate() ? 'Pause rotation' : 'Auto-rotate' }}
+      </button>
+      <button type="button" class="action" (click)="resetCamera()">Reset view</button>
+    </div>
+  </header>
+
+  <div class="hangar__layout">
+    <aside class="hangar__list" aria-label="Aircraft list">
+      <label class="hangar__search">
+        <span class="fpv-sr-only">Search aircraft</span>
+        <input
+          type="search"
+          placeholder="Search aircraft"
+          [value]="query()"
+          (input)="onSearch(($any($event.target)).value)"
+        />
+      </label>
+
+      <div class="hangar__filters" role="group" aria-label="Filters">
+        <select
+          [value]="categoryFilter()"
+          (change)="onCategory(($any($event.target)).value)"
+          aria-label="Category filter"
+        >
+          <option value="all">All classes</option>
+          @for (cat of categories(); track cat) {
+            <option [value]="cat">{{ categoryLabel(cat) }}</option>
+          }
+        </select>
+        <button
+          type="button"
+          class="action action--sm"
+          [class.action--primary]="favoritesOnly()"
+          (click)="favoritesOnly.set(!favoritesOnly())"
+          [attr.aria-pressed]="favoritesOnly()"
+        >
+          Favorites
+        </button>
+      </div>
+
+      <ul class="hangar__craft-list" role="listbox" [attr.aria-activedescendant]="previewDef().id">
+        @for (craft of filtered(); track craft.id; let i = $index) {
+          <li>
+            <button
+              type="button"
+              class="hangar__craft"
+              role="option"
+              [id]="craft.id"
+              [class.hangar__craft--active]="craft.id === previewDef().id"
+              [attr.aria-selected]="craft.id === previewDef().id"
+              (click)="selectAircraft(craft); focusIndex.set(i)"
+            >
+              <span class="hangar__craft-name">{{ craft.displayName }}</span>
+              <span class="hangar__craft-meta">{{ categoryLabel(craft.category) }}</span>
+              <span class="hangar__craft-actions">
+                <button
+                  type="button"
+                  class="hangar__icon-btn"
+                  [attr.aria-label]="isFavorite(craft.id) ? 'Remove favorite' : 'Add favorite'"
+                  (click)="toggleFavorite(craft.id, $event)"
+                >
+                  {{ isFavorite(craft.id) ? '★' : '☆' }}
+                </button>
+                <button
+                  type="button"
+                  class="hangar__icon-btn"
+                  [attr.aria-pressed]="compareIds().includes(craft.id)"
+                  aria-label="Toggle compare"
+                  (click)="toggleCompare(craft.id); $event.stopPropagation()"
+                >
+                  ⊕
+                </button>
+              </span>
+            </button>
+          </li>
+        }
+      </ul>
+    </aside>
+
+    <section class="hangar__stage" aria-label="Aircraft showcase">
+      <div
+        #hangarCanvas
+        class="hangar__canvas"
+        (pointerdown)="onPointerDown($event)"
+        (pointermove)="onPointerMove($event)"
+        (pointerup)="onPointerUp()"
+        (pointercancel)="onPointerUp()"
+        (wheel)="onWheel($event)"
+        role="img"
+        [attr.aria-label]="previewDef().displayName + ' 3D preview. Drag to rotate, scroll to zoom.'"
+      ></div>
+      @if (loadingModel()) {
+        <p class="hangar__loading" role="status">Loading aircraft…</p>
+      }
+      <div class="hangar__nameplate">
+        <span class="hangar__badge">{{ categoryLabel(previewDef().category) }}</span>
+        <h2>{{ previewDef().displayName }}</h2>
+        <p>{{ previewDef().shortDescription }}</p>
+      </div>
+    </section>
+
+    <aside class="hangar__details" aria-label="Aircraft details">
+      <h2 class="hangar__details-title">{{ previewDef().displayName }}</h2>
+      <p class="hangar__desc">{{ previewDef().description }}</p>
+
+      <dl class="hangar__facts">
+        <div>
+          <dt>Difficulty</dt>
+          <dd>{{ previewDef().recommendedSkillLevel }} ({{ previewDef().difficulty }}/5)</dd>
+        </div>
+        <div>
+          <dt>Mass</dt>
+          <dd>{{ previewDef().takeoffMassKg }} kg</dd>
+        </div>
+        <div>
+          <dt>Frame</dt>
+          <dd>{{ previewDef().wheelbaseMeters }} m wheelbase</dd>
+        </div>
+        <div>
+          <dt>Recommended</dt>
+          <dd>{{ previewDef().recommendedModes.join(', ') }}</dd>
+        </div>
+      </dl>
+
+      <div class="hangar__stats" aria-label="Normalized flight statistics">
+        @for (stat of statEntries(); track stat.key) {
+          <div class="hangar__stat">
+            <div class="hangar__stat-meta">
+              <span>{{ stat.label }}</span>
+              <span>{{ stat.value | number: '1.0-0' }}</span>
+            </div>
+            <div
+              class="hangar__stat-bar"
+              role="meter"
+              [attr.aria-valuenow]="stat.value | number: '1.0-0'"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-label]="stat.label + ' ' + (stat.value | number: '1.0-0') + ' of 100'"
+            >
+              <div class="hangar__stat-fill" [style.width.%]="stat.value"></div>
+            </div>
+          </div>
+        }
+      </div>
+      <p class="hangar__disclaimer">{{ disclaimer }}</p>
+
+      <div class="hangar__liveries" role="group" aria-label="Livery">
+        @for (livery of previewDef().visualProfile.supportedLiveries; track livery.id) {
+          <button
+            type="button"
+            class="hangar__livery"
+            [class.hangar__livery--active]="livery.id === selected.preferredLiveryId()"
+            (click)="setLivery(livery.id)"
+          >
+            <span
+              class="hangar__swatch"
+              [style.background]="'#' + livery.accentColor.toString(16).padStart(6, '0')"
+            ></span>
+            {{ livery.displayName }}
+          </button>
+        }
+      </div>
+
+      <div class="hangar__cta">
+        <button type="button" class="action" (click)="openCompare()">Compare</button>
+        <button type="button" class="action" (click)="startTestFlight()">Test Flight</button>
+        <button type="button" class="action action--primary" (click)="startFullFlight()">
+          Select &amp; Fly
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  @if (showCompare()) {
+    <div class="hangar__compare" role="dialog" aria-modal="true" aria-label="Aircraft comparison">
+      <div class="hangar__compare-panel">
+        <header>
+          <h2>Compare aircraft</h2>
+          <button type="button" class="action" (click)="closeCompare()">Close</button>
+        </header>
+        <p class="hangar__disclaimer">{{ comparisonResult().notice }}</p>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Attribute</th>
+              @for (craft of comparisonResult().aircraft; track craft.id) {
+                <th scope="col">{{ craft.displayName }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of comparisonResult().rows; track row.key) {
+              <tr [class.hangar__diff]="row.majorDifference">
+                <th scope="row">{{ row.label }}</th>
+                @for (value of row.values; track $index) {
+                  <td
+                    [class.hangar__hi]="$index === row.higherIndex"
+                    [class.hangar__lo]="$index === row.lowerIndex"
+                  >
+                    {{ value }}
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,41 @@
+.feedback__form {
+  display: grid;
+  gap: 1rem;
+  max-width: 36rem;
+}
+
+.feedback__form label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.feedback__form input,
+.feedback__form textarea,
+.feedback__form select {
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--fpv-radius-md, 8px);
+  border: 1px solid var(--fpv-border, #333);
+  background: var(--fpv-surface, #151515);
+  color: inherit;
+  font: inherit;
+}
+
+.feedback__check {
+  display: flex !important;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.feedback__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.feedback__error {
+  color: #e07070;
+}
+
+.feedback__success code {
+  font-family: ui-monospace, monospace;
+}

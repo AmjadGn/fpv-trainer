@@ -1,0 +1,6 @@
+import { Component, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { AuthApiService } from '../../core/auth/services/auth-api.service';
+@Component({standalone:true,imports:[FormsModule,RouterLink],template:`<main class="online-panel"><h1>Reset password</h1><p>Enter your email and we’ll send reset instructions.</p><form (ngSubmit)="submit()"><input name="email" [(ngModel)]="email" type="email" required><button>Send link</button></form><p>{{message()}}</p><a routerLink="/login">Back to sign in</a></main>`,styles:[`.online-panel{width:min(520px,calc(100% - 2rem));margin:4rem auto;padding:2rem;border:1px solid var(--fpv-border);background:var(--fpv-panel)}input,button{padding:.7rem;margin:.3rem;background:#0b1118;color:white;border:1px solid var(--fpv-border)}button{background:var(--fpv-accent);color:#081214}a{color:var(--fpv-accent)}`]})
+export class ForgotPasswordComponent { private api=inject(AuthApiService); email=''; message=signal(''); submit(){this.api.forgotPassword(this.email).subscribe({next:()=>this.message.set('If that account exists, reset instructions are on the way.'),error:()=>this.message.set('Could not contact the account service.')});} }

@@ -1,0 +1,124 @@
+<div class="onboarding">
+  <header class="onboarding__header">
+    <p class="onboarding__progress">Step {{ stepIndex() }} of 10</p>
+    <button type="button" class="onboarding__skip" (click)="skipAll()">Skip for now</button>
+  </header>
+
+  <main class="onboarding__main" [attr.data-step]="step()">
+    @switch (step()) {
+      @case ('welcome') {
+        <h1>Welcome to FPV Trainer</h1>
+        <p>
+          FPV means flying from the drone’s camera view. This simulator uses manual-style controls —
+          you fly the sticks yourself. Crashing is expected. You can start with training assistance,
+          and you do not need an account for basic flight.
+        </p>
+      }
+      @case ('experience') {
+        <h1>How much flying have you done?</h1>
+        <p>We only use this for recommendations. Nothing is locked.</p>
+        <div class="onboarding__choices">
+          <button type="button" fpvButton variant="secondary" (click)="setExperience('first-time')">
+            First time flying
+          </button>
+          <button type="button" fpvButton variant="secondary" (click)="setExperience('some-experience')">
+            Some drone experience
+          </button>
+          <button type="button" fpvButton variant="secondary" (click)="setExperience('experienced-fpv')">
+            Experienced FPV pilot
+          </button>
+        </div>
+        @if (state().experienceLevel; as level) {
+          <p class="onboarding__selected">Selected: {{ level }}</p>
+        }
+      }
+      @case ('control-method') {
+        <h1>How will you fly?</h1>
+        <div class="onboarding__choices">
+          <button type="button" fpvButton variant="secondary" (click)="setControlMethod('gamepad')">
+            Gamepad / FPV controller
+          </button>
+          <button type="button" fpvButton variant="secondary" (click)="setControlMethod('keyboard')">
+            Keyboard
+          </button>
+        </div>
+        <p class="onboarding__note">You can change this later in Settings.</p>
+      }
+      @case ('controller-test') {
+        <h1>Controller check</h1>
+        <p>
+          Status:
+          <strong>{{ controllerConnected() ? 'Connected' : 'Not detected' }}</strong>
+        </p>
+        <p>{{ controllerLabel() }}</p>
+        <p class="onboarding__note">
+          If nothing appears, reconnect USB, use Chrome or Edge for best Gamepad support, or continue with keyboard.
+        </p>
+      }
+      @case ('calibration') {
+        <h1>Calibrate your controller</h1>
+        <p>Center sticks, map axes, and confirm direction. You can recalibrate anytime.</p>
+        <button type="button" fpvButton variant="secondary" (click)="openCalibration()">
+          Open calibration
+        </button>
+        <p class="onboarding__note">We do not claim every controller works.</p>
+      }
+      @case ('aircraft') {
+        <h1>Choose a beginner aircraft</h1>
+        <div class="onboarding__choices">
+          @for (id of beginnerAircraft; track id) {
+            <button type="button" fpvButton variant="secondary" (click)="selectAircraft(id)">
+              {{ nameFor(id) }}
+            </button>
+          }
+        </div>
+        @if (state().selectedAircraftId; as id) {
+          <p class="onboarding__selected">Selected: {{ nameFor(id) }}</p>
+        }
+      }
+      @case ('indicators') {
+        <h1>What you will see in flight</h1>
+        <ul>
+          <li>Throttle and stick activity</li>
+          <li>Altitude and speed</li>
+          <li>Arm status</li>
+          <li>Training assistance label when help is on</li>
+        </ul>
+        <p>Full manual mode is always available — assistance is labeled clearly.</p>
+      }
+      @case ('guided-flight') {
+        <h1>Short guided flight</h1>
+        <p>
+          About 3–7 minutes: arm, hover, yaw, roll, pitch, pass one large gate, then finish.
+          Training assistance stays on for this lesson.
+        </p>
+        <button type="button" fpvButton variant="primary" (click)="startGuidedFlight()">
+          Start guided flight
+        </button>
+        <button type="button" fpvButton variant="ghost" (click)="next()">Skip flight for now</button>
+      }
+      @case ('paths') {
+        <h1>Learn · Fly · Compete</h1>
+        <p>These are the three paths on your dashboard.</p>
+        <div class="onboarding__choices">
+          <button type="button" fpvButton variant="secondary" (click)="goLearn()">Open Learn</button>
+          <button type="button" fpvButton variant="secondary" (click)="goFly()">Open Fly</button>
+          <button type="button" fpvButton variant="secondary" (click)="goCompete()">Back to dashboard</button>
+        </div>
+      }
+      @case ('finish') {
+        <h1>You’re ready</h1>
+        <p>Preferences are saved on this device. Create an account later if you want sync and leaderboards.</p>
+      }
+    }
+  </main>
+
+  <footer class="onboarding__footer">
+    <button type="button" fpvButton variant="ghost" (click)="back()" [disabled]="step() === 'welcome'">
+      Back
+    </button>
+    <button type="button" fpvButton variant="primary" (click)="next()">
+      {{ step() === 'finish' ? 'Enter dashboard' : 'Continue' }}
+    </button>
+  </footer>
+</div>

@@ -1,0 +1,3 @@
+<?php
+namespace App\Domain\Rewards\Services; use App\Domain\Rewards\Models\UserEntitlement; use App\Models\User; use Illuminate\Support\Facades\DB;
+class EntitlementService { public function grantOnce(User $u,string $type,string $key,string $sourceType,string $sourceId,array $metadata=[]):UserEntitlement{return DB::transaction(fn()=>UserEntitlement::firstOrCreate(['user_id'=>$u->id,'entitlement_type'=>$type,'entitlement_key'=>$key],['source_type'=>$sourceType,'source_id'=>$sourceId,'granted_at'=>now(),'metadata_json'=>$metadata]));} public function revoke(UserEntitlement $e):UserEntitlement{$e->update(['revoked_at'=>now()]);return $e->refresh();} public function listFor(User $u){return UserEntitlement::where('user_id',$u->id)->whereNull('revoked_at')->get();} }

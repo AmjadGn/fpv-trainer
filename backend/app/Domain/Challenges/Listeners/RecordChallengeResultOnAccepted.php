@@ -1,0 +1,3 @@
+<?php
+namespace App\Domain\Challenges\Listeners; use App\Domain\Challenges\Models\ChallengeInstance; use App\Domain\Challenges\Services\ChallengeSubmissionService; use App\Domain\Races\Events\RankedRunAccepted;
+class RecordChallengeResultOnAccepted { public function __construct(private readonly ChallengeSubmissionService $challenges){} public function handle(RankedRunAccepted $event):void{$s=$event->run->raceSession;$id=$s?->context_metadata['challenge_instance_id']??null;if($event->run->context_type==='challenge')$id=$event->run->context_id;if($id&&($instance=ChallengeInstance::with('definition')->find($id)))$this->challenges->recordResult($instance,$event->run);} }

@@ -1,0 +1,3 @@
+<?php
+namespace App\Domain\Integrity\Services; use App\Domain\Integrity\Models\ReviewQueueItem; use App\Domain\Races\Models\RaceRun;
+class ReviewQueueService { public function enqueue(RaceRun $run,string $reason='suspicious'):ReviewQueueItem{$tournament=$run->context_type==='tournament';$season=(bool)$run->context_id;$priority=(int)$run->suspicion_score+($tournament?25:0)+($season?10:0);return ReviewQueueItem::updateOrCreate(['race_run_id'=>$run->id],['user_id'=>$run->user_id,'reason'=>$reason,'priority'=>$priority,'anomaly_score'=>$run->suspicion_score,'leaderboard_impact'=>true,'tournament_impact'=>$tournament,'season_impact'=>$season,'status'=>'open','metadata_json'=>['notes'=>$run->verification_notes]]);} }

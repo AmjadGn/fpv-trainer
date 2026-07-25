@@ -1,0 +1,117 @@
+{
+  "catalogVersion": 1,
+  "achievements": [
+    {
+      "id": "first-takeoff",
+      "title": "First Takeoff",
+      "description": "Arm and leave the ground for the first time.",
+      "category": "flight",
+      "xpReward": 25,
+      "serverAwarded": false
+    },
+    {
+      "id": "first-gate",
+      "title": "First Gate",
+      "description": "Pass through your first racing gate.",
+      "category": "racing",
+      "xpReward": 25,
+      "serverAwarded": false
+    },
+    {
+      "id": "first-finish",
+      "title": "First Finish",
+      "description": "Complete the Starter Circuit.",
+      "category": "racing",
+      "xpReward": 40,
+      "serverAwarded": false
+    },
+    {
+      "id": "clean-run",
+      "title": "Clean Run",
+      "description": "Finish a race without crashes or invalid passes.",
+      "category": "racing",
+      "xpReward": 50,
+      "serverAwarded": false
+    },
+    {
+      "id": "ghost-hunter",
+      "title": "Ghost Hunter",
+      "description": "Beat your saved ghost on a course.",
+      "category": "racing",
+      "xpReward": 60,
+      "serverAwarded": false
+    },
+    {
+      "id": "hover-student",
+      "title": "Hover Student",
+      "description": "Complete the Hover Control training module.",
+      "category": "training",
+      "xpReward": 35,
+      "serverAwarded": false
+    },
+    {
+      "id": "precision-pilot",
+      "title": "Precision Pilot",
+      "description": "Earn gold on Precision Landing.",
+      "category": "training",
+      "xpReward": 75,
+      "serverAwarded": false
+    },
+    {
+      "id": "gate-graduate",
+      "title": "Gate Graduate",
+      "description": "Complete Gate Basics.",
+      "category": "training",
+      "xpReward": 35,
+      "serverAwarded": false
+    },
+    {
+      "id": "figure-eight",
+      "title": "Figure Eight",
+      "description": "Complete the Figure Eight training module.",
+      "category": "training",
+      "xpReward": 40,
+      "serverAwarded": false
+    },
+    {
+      "id": "speed-improvement",
+      "title": "Speed Improvement",
+      "description": "Beat your previous best time on any course.",
+      "category": "racing",
+      "xpReward": 40,
+      "serverAwarded": false
+    },
+    {
+      "id": "persistent-pilot",
+      "title": "Persistent Pilot",
+      "description": "Complete 25 races.",
+      "category": "racing",
+      "xpReward": 50,
+      "serverAwarded": false
+    },
+    {
+      "id": "air-time",
+      "title": "Air Time",
+      "description": "Accumulate one hour of flight time.",
+      "category": "flight",
+      "xpReward": 50,
+      "serverAwarded": false
+    },
+    {
+      "id": "weekly-champion",
+      "title": "Weekly Champion",
+      "description": "Finish first on a weekly challenge leaderboard.",
+      "category": "competitive",
+      "xpReward": 100,
+      "serverAwarded": true
+    },
+    {
+      "id": "verified-racer",
+      "title": "Verified Racer",
+      "description": "Have a verified online race accepted.",
+      "category": "competitive",
+      "xpReward": 50,
+      "serverAwarded": true
+    }
+  ]
+}
