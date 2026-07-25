@@ -2,9 +2,7 @@
 
 ## Status
 
-**Engineering foundation stabilized for v1.1.1** (ResolvedAssembly, topology propulsion, policy-aware cache, SI/runtime split, immutable revisions).
-
-This does **not** claim commercial physical fidelity. Propulsion and aero remain approximations pending measured datasets.
+**Engineering foundation stabilized for v1.1.1**; **v1.1.2 adds propulsion performance dataset architecture** (separate `@fpv/propulsion-data`, matching, interpolation, explicit legacy fallback). Measured commercial physical fidelity remains unclaimed.
 
 Implementation lives under `packages/` and is consumed by the Angular app via path aliases (`@fpv/*`).
 
@@ -86,8 +84,8 @@ Marketplace/community components are data-only; no user-supplied executable code
 ### ADR-014: Build fingerprint versus compilation-context fingerprint
 
 - **BuildFingerprint**: normalized build identity (selections with component revision IDs, quantities, slots/mounts, transforms, topology, propeller rotations, physics-affecting tuning, schema, catalog release). Excludes display name, description, notes, owner identity, timestamps, presentation metadata, and validation policy.
-- **CompilationContextFingerprint**: validation policy id/version, every policy limit that affects eligibility (`maxTakeoffMassKg`, `minThrustToWeight`, `maxCellCount`, `maxPropDiameterM`, `allowedComponentSources`, `requireOfficialCatalog`), plus `validationRulesVersion`, `engineeringModelVersion`, `propulsionModelVersion`, `aerodynamicModelVersion`, and `compilerVersion`. There is no separate numeric-policy version — `policyVersion` covers numeric limits. Property order cannot affect the hash (canonical sorted-key serialization).
-- **ArtifactFingerprint**: **physical engineering output only** (identity, physicalAssembly, propulsion SI fields, electrical, aerodynamics, control authority, engineering/compiler/propulsion model versions). Intentionally excludes `flightRuntime` / runtime-adapter outputs so adapter tuning does not rewrite physical goldens. Must not be used alone where runtime compatibility is required.
+- **CompilationContextFingerprint**: validation policy id/version, every policy limit that affects eligibility (`maxTakeoffMassKg`, `minThrustToWeight`, `maxCellCount`, `maxPropDiameterM`, `allowedComponentSources`, `requireOfficialCatalog`), **propulsion `datasetPolicy` eligibility fields**, plus `validationRulesVersion`, `engineeringModelVersion`, `propulsionModelVersion`, `aerodynamicModelVersion`, and `compilerVersion`. There is no separate numeric-policy version — `policyVersion` covers numeric limits. Property order cannot affect the hash (canonical sorted-key serialization).
+- **ArtifactFingerprint**: **physical engineering output only** (identity, physicalAssembly, propulsion SI fields including per-unit dataset source metadata, electrical, aerodynamics, control authority, engineering/compiler/propulsion model versions). Intentionally excludes `flightRuntime` / runtime-adapter outputs so adapter tuning does not rewrite physical goldens. Must not be used alone where runtime compatibility is required.
 - **RuntimeCompatibilitySignature**: `runtimeAdapterVersion` + `flightModelCompatibilityVersion` only. Required alongside ArtifactFingerprint whenever solver-facing mapping must stay compatible.
 
 ### ADR-015: Policy-aware cache keys
@@ -132,7 +130,7 @@ Rules requiring engineering outputs (minimum thrust-to-weight, max takeoff mass 
 
 ### ADR-021: Approximation and confidence reporting
 
-Propulsion currently uses `peakThrustHintNewtons` fallback with explicit provenance `peak-thrust-hint-fallback` and low confidence. Aerodynamics are approximate/curated. Measured motor/prop tables may replace the approximation without changing the build domain. Do not fabricate manufacturer curves.
+Propulsion resolves through `@fpv/propulsion-data` when a compatible dataset exists. Otherwise Free Flight uses explicit `peakThrustHintNewtons` fallback with provenance `peak-thrust-hint-fallback` and low confidence (ADR-031). Aerodynamics remain approximate/curated. Do not fabricate manufacturer curves or claim commercial physical fidelity from synthetic fixtures.
 
 ### ADR-022: Factory aircraft golden regression policy
 
@@ -148,7 +146,8 @@ Goldens live in `packages/engineering-testing/src/golden-files/factory-aircraft.
 | `artifactFingerprint` | Physical engineering output identity |
 | `runtimeCompatibilitySignature` | Adapter/flight-model compatibility identity |
 | `totalMassKg`, `centerOfMass`, `inertiaKgM2` | SI mass properties |
-| `maxThrustNewtons`, `thrustToWeight` | Propulsion approximation anchors |
+| `maxThrustNewtons`, `thrustToWeight` | Propulsion anchors |
+| `propulsionSourceMode`, `propulsionConfidence`, `propulsionDatasetRevisionId`, `propulsionDatasetFingerprint`, `propulsionFallbackWarningPresent` | Dataset vs legacy fallback honesty |
 | `runtimeRollInertia`, `runtimeMaxRollRate` | Runtime-mapping feel anchors (not SI) |
 
 Goldens must not contain timestamps, absolute paths, machine-local data, durations, random values, or environment-specific values. Object-key order is normalized by JSON pretty-print of a deterministic capture array.
@@ -175,6 +174,46 @@ Solver-scaled inertia and rate clamps occur only in `@fpv/aircraft-compiler` run
 ### ADR-024: Catalog battery mount-zone provenance
 
 `frame-racing-5in@1` and `frame-freestyle-5in@1` battery mount zones were widened in v1.1.1 to fit curated battery envelope dimensions already in the official catalog (e.g. `batt-6s-1500@1` 40×110×35 mm, `batt-6s-1800@1` 42×120×38 mm). Dimensions are **curated estimates** (`dataQuality: curated`), not measured CAD envelopes — confidence is medium. Widening is geometry-supported by those catalog batteries, not an empty validation bypass.
+
+### ADR-025: Propulsion datasets as separately versioned engineering data
+
+Propulsion performance tables live in `@fpv/propulsion-data`, not inside motor/propeller component revisions. Component revisions remain stable; new bench datasets publish as immutable dataset revisions referenced by ID. Policies may approve specific dataset releases without rewriting motor history. Factory builds stay deterministic via the default fixture catalog. Server-side compilation can later resolve the same dataset fingerprints. Large tables are not embedded in every motor revision.
+
+### ADR-026: Dataset identity, fingerprinting, and immutable revisions
+
+Datasets use branded `PropulsionDatasetId` / `PropulsionDatasetRevisionId` / optional release IDs. Physical fingerprints include every field capable of affecting interpolation or engineering output and exclude presentation-only notes. Published revisions are deeply frozen, create-only (memory repository), support parent revision references, detect revision-ID content conflicts, and serialize canonically via `hashCanonical`. Not coupled to IndexedDB or Laravel in v1.1.2 (memory ports only).
+
+### ADR-027: Dataset matching and deterministic tie-breaking
+
+Selection order: exact measured → voltage-compatible measured → curated estimate → legacy `peakThrustHint` fallback. Match never uses catalog insertion order. Tie-break: quality rank, then `|ΔV|`, then `revisionId` lexicographic. Ambiguous equal-rank distinct fingerprints emit `PROP_MATCH_AMBIGUOUS_TIE_BROKEN_BY_REVISION_ID`. Unused datasets must not change output.
+
+### ADR-028: Interpolation and extrapolation policy
+
+v1.1.2 uses piecewise-linear interpolation on `normalizedDriveCommand` only (`1.1.2-piecewise-linear`). Extrapolation is disabled by default. Out-of-envelope queries clamp with reduced confidence and a stable warning. No hidden smoothing inside the solver. Preprocessing/normalization is a separate versioned operation (not implemented here).
+
+### ADR-029: Voltage compatibility and interpolation behavior
+
+Distinguish battery nominal, fully charged, sagged, dataset test, and interpolated operating voltages. v1.1.2 presets use exact-voltage matching within `exactVoltageToleranceV` (0.05 V). Voltage interpolation between datasets is policy-gated and disabled in Free Flight / Ranked presets. Legacy fallback retains documented `nominalVoltage / 14.8` factor with explicit low confidence — not a measured voltage model. Model version: `1.1.2-exact-voltage`.
+
+### ADR-030: Provenance and confidence model
+
+Provenance categories: manufacturer-published, independent-bench-measurement, community-measurement, internally-measured, curated-estimate, synthetic-fallback. Curated/synthetic must never be labeled measured. Missing provenance reduces confidence / competitive eligibility. Synthetic fixtures for architecture validation are explicitly `curated-estimate` with `competitiveEligible: false`.
+
+### ADR-031: Explicit legacy peakThrustHint fallback
+
+When no compatible dataset matches and policy allows, the solver uses `peakThrustHintNewtons * (0.85 + Ct) * legacyVoltageFactor`. Source mode `peak-thrust-hint-fallback`, confidence `low`, stable warning `PROP_LEGACY_PEAK_THRUST_HINT_FALLBACK`. RPM/current/efficiency are not claimed as measured; electricalDemandA / rpm range remain null under fallback.
+
+### ADR-032: Calibration profile architecture
+
+Versioned calibration profiles apply explicit thrust/current/RPM/response/spool/density/bench-to-flight scales on top of a dataset without mutating it. Profiles are fingerprinted and alter ArtifactFingerprint when applied. Identity calibration documents the architecture without changing output. Do not calibrate merely to force golden passes.
+
+### ADR-033: Dataset eligibility in competitive policies
+
+`ValidationPolicy.datasetPolicy` carries min confidence, allowed provenance, measured-data-required, synthetic/legacy fallback flags, voltage tolerances, interpolation distance, and calibration allowlist. Changes hash into `CompilationContextFingerprint` only. Ranked policy is stricter on provenance/confidence but keeps `measuredDataRequired: false` and `legacyPeakThrustHintAllowed: true` until qualifying measured datasets exist for factory content.
+
+### ADR-034: Factory-aircraft migration and golden policy
+
+Do not fabricate measured data for all factory aircraft. Fixtures: Apex R5 and Velocity X use clearly labeled synthetic curated datasets approximating prior hint continuity for architecture validation — not commercial calibration. Remaining four crafts stay on explicit legacy fallback. Goldens gain propulsion source mode, dataset revision/fingerprint, confidence, and fallback warning anchors. Refresh only with `UPDATE_GOLDENS=1`. Measured commercial physical fidelity remains unclaimed.
 
 ## Workspace decision
 

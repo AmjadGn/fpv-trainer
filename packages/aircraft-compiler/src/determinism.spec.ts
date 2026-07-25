@@ -273,7 +273,10 @@ describe('@fpv package engineering foundation', () => {
     expect(props.size).toBe(units.length);
     for (const u of units) {
       expect(Number.isFinite(u.maxThrustNewtons)).toBe(true);
-      expect(u.dataProvenance).toBe('peak-thrust-hint-fallback');
+      expect(['peak-thrust-hint-fallback', 'curated-estimate-table', 'measured-table']).toContain(
+        u.dataProvenance,
+      );
+      expect(u.source.dataSourceMode).toBeTruthy();
     }
     const a = craft.compilation.specification!.physicalAssembly;
     expect(Number.isFinite(a.inertia.roll)).toBe(true);

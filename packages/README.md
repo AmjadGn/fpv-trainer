@@ -6,6 +6,7 @@ engineering-kernel
 component-catalog
 drone-build-domain   (+ ResolvedAssembly joins selected catalog revisions)
 compatibility-engine
+propulsion-data      (datasets, matching, interpolation, calibration)
 aircraft-engineering
         ↑
 aircraft-compiler

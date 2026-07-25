@@ -35,7 +35,11 @@ describe('engineering-kernel', () => {
   it('exposes SI helpers and version manifest', () => {
     expect(kg(1)).toBe(1);
     expect(m(2)).toBe(2);
-    expect(V1_1_VERSION_MANIFEST.compilerVersion).toBe('1.1.1');
-    expect(V1_1_VERSION_MANIFEST.engineeringModelVersion).toBe('1.1.1');
+    expect(V1_1_VERSION_MANIFEST.compilerVersion).toBe('1.1.2');
+    expect(V1_1_VERSION_MANIFEST.engineeringModelVersion).toBe('1.1.2');
+    expect(V1_1_VERSION_MANIFEST.propulsionModelVersion).toBe('1.1.2');
+    expect(V1_1_VERSION_MANIFEST.validationRulesVersion).toBe('1.1.2');
+    expect(V1_1_VERSION_MANIFEST.runtimeAdapterVersion).toBe('1.1.1');
+    expect(V1_1_VERSION_MANIFEST.flightModelCompatibilityVersion).toBe('1.0.0');
   });
 });

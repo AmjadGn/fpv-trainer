@@ -27,6 +27,7 @@ export default defineConfig({
       '@fpv/drone-build-domain': resolve(root, 'packages/drone-build-domain/src/index.ts'),
       '@fpv/compatibility-engine': resolve(root, 'packages/compatibility-engine/src/index.ts'),
       '@fpv/aircraft-engineering': resolve(root, 'packages/aircraft-engineering/src/index.ts'),
+      '@fpv/propulsion-data': resolve(root, 'packages/propulsion-data/src/index.ts'),
       '@fpv/aircraft-compiler': resolve(root, 'packages/aircraft-compiler/src/index.ts'),
       '@fpv/aircraft-runtime-adapter': resolve(
         root,

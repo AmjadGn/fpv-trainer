@@ -9,6 +9,7 @@ import {
 } from '@fpv/engineering-kernel';
 import type { DroneBuildRevision } from '@fpv/drone-build-domain';
 import type { ValidationPolicy } from '@fpv/compatibility-engine';
+import { datasetPolicyFingerprintPayload } from '@fpv/propulsion-data';
 import type { CompiledAircraftSpecification } from '../outputs/specification';
 
 /**
@@ -61,6 +62,7 @@ export function fingerprintCompilationContext(
     minThrustToWeight: policy.minThrustToWeight,
     maxCellCount: policy.maxCellCount,
     maxPropDiameterM: policy.maxPropDiameterM,
+    datasetPolicy: datasetPolicyFingerprintPayload(policy.datasetPolicy),
     validationRulesVersion: manifest.validationRulesVersion,
     engineeringModelVersion: manifest.engineeringModelVersion,
     propulsionModelVersion: manifest.propulsionModelVersion,
@@ -117,6 +119,19 @@ export function fingerprintCompiledArtifact(
         rotation: u.rotation,
         thrustCurve: u.thrustCurve,
         dataProvenance: u.dataProvenance,
+        source: {
+          dataSourceMode: u.source.dataSourceMode,
+          datasetRevisionId: u.source.datasetRevisionId,
+          datasetFingerprint: u.source.datasetFingerprint,
+          matchQuality: u.source.matchQuality,
+          confidence: u.source.confidence,
+          fallbackReason: u.source.fallbackReason,
+          maximumTestedThrustN: u.source.maximumTestedThrustN,
+          estimatedOperatingThrustN: u.source.estimatedOperatingThrustN,
+          calibrationRevisionId: u.source.calibrationRevisionId,
+          calibrationFingerprint: u.source.calibrationFingerprint,
+          modelVersion: u.source.modelVersion,
+        },
       })),
     },
     electrical: spec.electrical,

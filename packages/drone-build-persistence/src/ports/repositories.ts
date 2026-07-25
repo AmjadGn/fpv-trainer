@@ -18,6 +18,16 @@ import type {
 import { revisionCanonicalContent } from '@fpv/drone-build-domain';
 import type { CompiledAircraftSpecification } from '@fpv/aircraft-compiler';
 
+export type {
+  PropulsionDatasetRepository,
+  PropulsionCalibrationRepository,
+} from '@fpv/propulsion-data';
+
+export {
+  createMemoryPropulsionDatasetRepository,
+  createMemoryPropulsionCalibrationRepository,
+} from '@fpv/propulsion-data';
+
 export interface ComponentCatalogRepository {
   getRelease(id: CatalogReleaseId): Promise<CatalogRelease | null>;
   getRevision(id: ComponentRevisionId): Promise<ComponentRevision | null>;

@@ -3,6 +3,11 @@ import type {
   DroneBuildRevision,
 } from '@fpv/drone-build-domain';
 import type { ComponentRevision } from '@fpv/component-catalog';
+import {
+  FREE_FLIGHT_DATASET_POLICY,
+  RANKED_DATASET_POLICY,
+  type PropulsionDatasetEligibilityPolicy,
+} from '@fpv/propulsion-data';
 
 export type ValidationSeverity = 'info' | 'warning' | 'error' | 'fatal';
 
@@ -60,28 +65,35 @@ export interface ValidationPolicy {
   readonly minThrustToWeight: number;
   readonly maxCellCount: number | null;
   readonly maxPropDiameterM: number | null;
+  /**
+   * Propulsion dataset eligibility — hashed into CompilationContextFingerprint.
+   * Does not affect BuildFingerprint.
+   */
+  readonly datasetPolicy: PropulsionDatasetEligibilityPolicy;
 }
 
 export const FREE_FLIGHT_POLICY: ValidationPolicy = {
   policyId: 'free-flight',
-  policyVersion: '1.1.1',
+  policyVersion: '1.1.2',
   maxTakeoffMassKg: null,
   allowedComponentSources: ['official', 'community', 'marketplace', 'private-local'],
   requireOfficialCatalog: false,
   minThrustToWeight: 1.2,
   maxCellCount: null,
   maxPropDiameterM: null,
+  datasetPolicy: FREE_FLIGHT_DATASET_POLICY,
 };
 
 export const RANKED_RACING_POLICY: ValidationPolicy = {
   policyId: 'ranked-racing',
-  policyVersion: '1.1.1',
+  policyVersion: '1.1.2',
   maxTakeoffMassKg: 0.85,
   allowedComponentSources: ['official'],
   requireOfficialCatalog: true,
   minThrustToWeight: 2.0,
   maxCellCount: 6,
   maxPropDiameterM: 0.132,
+  datasetPolicy: RANKED_DATASET_POLICY,
 };
 
 export type ValidationRule = {
