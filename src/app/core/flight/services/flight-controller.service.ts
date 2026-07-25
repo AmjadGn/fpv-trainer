@@ -106,6 +106,14 @@ export class FlightControllerService {
   private tumbleTimeRemaining = 0;
   private lastCrashReason: CrashReason | null = null;
   private readonly _crashReason = signal<CrashReason | null>(null);
+  /**
+   * Passive ballistic coast after an airborne motor cut / disarm.
+   *
+   * Staging/reset drones stay frozen while disarmed so a craft parked above
+   * terrain before arming does not fall. Once the pilot disarms while airborne,
+   * this flag enables zero-thrust gravity + drag integration until reset/arm.
+   */
+  private motorCutCoastActive = false;
 
   /** Smoothed stick state for angular channels (and throttle). */
   private smoothed: FlightInput = { ...ZERO_FLIGHT_INPUT };
@@ -161,11 +169,15 @@ export class FlightControllerService {
     }
 
     this.armedFlag = true;
+    this.motorCutCoastActive = false;
     this._armed.set(true);
     return true;
   }
 
   disarm(): void {
+    if (this.armedFlag && this.isAirborneForMotorCut()) {
+      this.motorCutCoastActive = true;
+    }
     this.armedFlag = false;
     this._armed.set(false);
     this._armWarning.set(null);
@@ -234,6 +246,7 @@ export class FlightControllerService {
     this.crashedFlag = false;
     this.tumbleActive = false;
     this.tumbleTimeRemaining = 0;
+    this.motorCutCoastActive = false;
     this.lastCrashReason = null;
     this._crashReason.set(null);
     this.time = 0;
@@ -319,6 +332,7 @@ export class FlightControllerService {
   ): void {
     this.crashedFlag = true;
     this.armedFlag = false;
+    this.motorCutCoastActive = false;
     this.lastCrashReason = reason;
     this._crashReason.set(reason);
     if (opts?.enableTumble !== false) {
@@ -389,7 +403,11 @@ export class FlightControllerService {
   /**
    * Advance simulation by one fixed timestep.
    * Callers must use a fixed delta (typically FLIGHT_CONFIG.physicsStep).
-   * Disarmed crafts are frozen. Crashed crafts may briefly tumble.
+   *
+   * - Armed: full thrust / attitude integration.
+   * - Disarmed after airborne motor cut: zero-thrust ballistic coast (gravity + drag).
+   * - Disarmed staging/reset (never motor-cut airborne): frozen in place.
+   * - Crashed: optional brief tumble, otherwise frozen.
    */
   update(input: FlightInput, fixedDeltaSeconds: number): void {
     const dt = fixedDeltaSeconds;
@@ -403,7 +421,19 @@ export class FlightControllerService {
       return;
     }
 
-    if (!this.armedFlag || this.crashedFlag) {
+    if (this.crashedFlag) {
+      return;
+    }
+
+    if (!this.armedFlag) {
+      if (this.motorCutCoastActive) {
+        // Zero thrust / ignore sticks — preserve momentum under gravity + drag.
+        this.integratePassiveMotorCut(dt);
+        if (this.legacyGroundEnabled) {
+          this.resolveGround();
+        }
+        this.publish();
+      }
       return;
     }
 
@@ -416,6 +446,52 @@ export class FlightControllerService {
       this.resolveGround();
     }
     this.publish();
+  }
+
+  /**
+   * True when the craft is clear of the ground plane or still carrying momentum.
+   * Used only to distinguish airborne motor cut from pre-arm staging/reset.
+   */
+  private isAirborneForMotorCut(): boolean {
+    const groundClearance = FLIGHT_CONFIG.groundEpsilon + 0.05;
+    if (this.pos.y > groundClearance) {
+      return true;
+    }
+    const speed = Math.hypot(this.vel.x, this.vel.y, this.vel.z);
+    return speed > 0.05;
+  }
+
+  /**
+   * Passive disarmed flight: gravity + aerodynamic drag, no thrust, no stick rates.
+   * Residual angular momentum is damped and continues to advance orientation.
+   * Does not increment armed flight time.
+   */
+  private integratePassiveMotorCut(dt: number): void {
+    this.integratePassiveAngular(dt);
+    this.integrateLinear(ZERO_FLIGHT_INPUT, dt);
+  }
+
+  private integratePassiveAngular(dt: number): void {
+    const damping = Math.max(0.8, this.cfg.angularDamping);
+    this.ang.pitch *= Math.exp(-damping * dt);
+    this.ang.yaw *= Math.exp(-damping * dt);
+    this.ang.roll *= Math.exp(-damping * dt);
+
+    const wx = this.ang.pitch;
+    const wy = this.ang.yaw;
+    const wz = -this.ang.roll;
+    const q = this.ori;
+    const halfDt = 0.5 * dt;
+    const dq = this.scratchDq;
+    dq.x = halfDt * (wy * q.z - wz * q.y + wx * q.w);
+    dq.y = halfDt * (wz * q.x - wx * q.z + wy * q.w);
+    dq.z = halfDt * (wx * q.y - wy * q.x + wz * q.w);
+    dq.w = halfDt * (-wx * q.x - wy * q.y - wz * q.z);
+    q.x += dq.x;
+    q.y += dq.y;
+    q.z += dq.z;
+    q.w += dq.w;
+    normalizeQuat(q);
   }
 
   private integrateTumble(dt: number): void {
