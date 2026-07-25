@@ -128,6 +128,7 @@ export class DroneBuilderFacadeService {
   private draft: DroneBuildDraft | null = null;
   private lastPublishedRevision: DroneBuildRevision | null = null;
   private lastCompilation: CompilationResult | null = null;
+  private lastEngineeringPreview: CompilationResult | null = null;
   private buildRepo: DroneBuildRepository = createMemoryBuildRepository();
   private readonly policy: ValidationPolicy = FREE_FLIGHT_POLICY;
   private pendingIntentId: BuildIntentId | null = null;
@@ -166,6 +167,12 @@ export class DroneBuilderFacadeService {
       (i) =>
         i.issueClass === 'recommendation' || i.issueClass === 'information',
     ),
+  );
+  readonly recommendationIssues = computed(() =>
+    this._validationIssues().filter((i) => i.issueClass === 'recommendation'),
+  );
+  readonly informationIssues = computed(() =>
+    this._validationIssues().filter((i) => i.issueClass === 'information'),
   );
 
   readonly categoryProgress = computed<BuilderCategoryProgressView[]>(() =>
@@ -326,6 +333,7 @@ export class DroneBuilderFacadeService {
     this.draft = null;
     this.lastPublishedRevision = null;
     this.lastCompilation = null;
+    this.lastEngineeringPreview = null;
     this.baselineSlots = {};
     this.pendingIntentId = null;
     this._validationIssues.set([]);
@@ -388,6 +396,51 @@ export class DroneBuilderFacadeService {
         compatibilityStatus: 'compatible',
       }),
     );
+  }
+
+  mappedAdvancedDetailsForActiveCategory() {
+    const recommended = this.recommendedSlotsForCurrentIntent();
+    const selected = this.session.selectedRevisionIdsBySlot() as SlotMap;
+    const active = this.session.activeCategory();
+    const slot = TYPE_TO_SLOT[active];
+    return this.optionsForActiveCategory().map((r) =>
+      this.mapper.mapAdvancedComponentDetail(r, {
+        selected: slot ? selected[slot] === r.revisionId : false,
+        isRecommended: slot ? recommended[slot] === r.revisionId : false,
+        compatibilityStatus: 'compatible',
+      }),
+    );
+  }
+
+  currentTuningInfo() {
+    return this.mapper.mapTuningInfo(this.draft?.tuning ?? null);
+  }
+
+  currentProvenanceInfo() {
+    const spec =
+      this.lastEngineeringPreview?.specification ??
+      this.lastCompilation?.specification;
+    const thrustStat = this._engineeringStats().find((s) => s.id === 'thrust');
+    return this.mapper.mapProvenanceInfo(
+      spec?.propulsion.dataProvenance ??
+        (thrustStat?.source === 'Curated synthetic'
+          ? 'curated-estimate-table'
+          : thrustStat?.source === 'Legacy fallback'
+            ? 'peak-thrust-hint-fallback'
+            : thrustStat?.source === 'Estimated'
+              ? 'estimated'
+              : thrustStat?.source === 'Measured'
+                ? 'measured-table'
+                : undefined),
+      spec?.propulsion.confidence ?? thrustStat?.confidence,
+    );
+  }
+
+  navigateToAffectedCategory(
+    category: ComponentType | 'build' | 'unknown',
+  ): void {
+    if (category === 'build' || category === 'unknown') return;
+    this.setActiveCategory(category);
   }
 
   selectedOptionName(category: ComponentType): string | null {
@@ -770,10 +823,12 @@ export class DroneBuilderFacadeService {
       { policy: this.policy },
     );
     if (result.ok && result.specification) {
+      this.lastEngineeringPreview = result;
       this._engineeringStats.set(
         this.mapper.mapEngineeringStats(result.specification),
       );
     } else {
+      this.lastEngineeringPreview = null;
       this._engineeringStats.set([]);
     }
   }

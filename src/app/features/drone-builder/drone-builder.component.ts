@@ -46,13 +46,46 @@ export class DroneBuilderComponent implements OnInit {
   protected readonly blocking = this.facade.blockingIssues;
   protected readonly warnings = this.facade.warningIssues;
   protected readonly infoIssues = this.facade.infoIssues;
+  protected readonly recommendationIssues = this.facade.recommendationIssues;
+  protected readonly informationIssues = this.facade.informationIssues;
   protected readonly simpleStats = this.facade.simpleStats;
+  protected readonly advancedStats = this.facade.advancedStats;
   protected readonly categoryProgress = this.facade.categoryProgress;
   protected readonly readinessLines = this.facade.readinessSummaryLines;
   protected readonly canLaunch = this.facade.canLaunchCompiled;
   protected readonly pendingIntent = this.facade.pendingIntent;
   protected readonly options = computed(() =>
     this.facade.mappedOptionsForActiveCategory(),
+  );
+  protected readonly advancedDetails = computed(() =>
+    this.facade.mappedAdvancedDetailsForActiveCategory(),
+  );
+  protected readonly tuningInfo = computed(() => this.facade.currentTuningInfo());
+  protected readonly provenanceInfo = computed(() =>
+    this.facade.currentProvenanceInfo(),
+  );
+  protected readonly massStats = computed(() =>
+    this.advancedStats().filter((s) =>
+      ['total-mass', 'dry-mass', 'battery-mass', 'payload-mass'].includes(s.id),
+    ),
+  );
+  protected readonly propulsionStats = computed(() =>
+    this.advancedStats().filter((s) =>
+      ['twr', 'thrust', 'hover-throttle', 'power-confidence'].includes(s.id),
+    ),
+  );
+  protected readonly electricalStats = computed(() =>
+    this.advancedStats().filter((s) =>
+      ['battery-config', 'estimated-current', 'esc-headroom'].includes(s.id),
+    ),
+  );
+  protected readonly enduranceStats = computed(() =>
+    this.advancedStats().filter((s) => s.id === 'flight-time'),
+  );
+  protected readonly runtimeStats = computed(() =>
+    this.advancedStats().filter((s) =>
+      ['runtime-mass', 'runtime-thrust'].includes(s.id),
+    ),
   );
 
   protected readonly intentDialogOpen = signal(false);
@@ -237,5 +270,26 @@ export class DroneBuilderComponent implements OnInit {
 
   protected onMediaError(event: Event, category: ComponentType): void {
     this.mediaService.onImageError(event, category);
+  }
+
+  protected goToIssueCategory(
+    category: ComponentType | 'build' | 'unknown',
+  ): void {
+    this.facade.navigateToAffectedCategory(category);
+  }
+
+  protected issueClassLabel(
+    issueClass: 'blocking-error' | 'warning' | 'recommendation' | 'information',
+  ): string {
+    switch (issueClass) {
+      case 'blocking-error':
+        return 'Blocking';
+      case 'warning':
+        return 'Warning';
+      case 'recommendation':
+        return 'Recommendation';
+      case 'information':
+        return 'Information';
+    }
   }
 }

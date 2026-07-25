@@ -17,6 +17,10 @@ import type {
   BuilderCompileResultView,
   BuilderComponentOptionView,
   BuilderEngineeringStatView,
+  BuilderAdvancedComponentDetailView,
+  BuilderProvenanceInfoView,
+  BuilderSpecFieldView,
+  BuilderTuningInfoView,
   CompatibilityIssueClass,
   CompatibilitySummaryLevel,
   EngineeringStatConfidenceLabel,
@@ -24,6 +28,7 @@ import type {
 } from '../models/drone-builder-view.models';
 import type { ResolvedComponentMedia } from '../models/component-presentation-media.models';
 import { ComponentPresentationMediaService } from './component-presentation-media.service';
+import type { UserTuningValues } from '@fpv/drone-build-domain';
 
 const ISSUE_COPY: Record<
   string,
@@ -327,6 +332,115 @@ export class BuilderPresentationMapperService {
           propulsion.warnings[0] ?? 'Depends on propulsion data quality.',
         advancedOnly: true,
       }),
+      this.stat({
+        id: 'dry-mass',
+        label: 'Dry mass',
+        simpleLabel: 'Dry mass',
+        value: Number.isFinite(spec.physicalAssembly.dryMassKg)
+          ? round(spec.physicalAssembly.dryMassKg, 3)
+          : null,
+        unit: 'kg',
+        confidence: 'medium',
+        source: 'Estimated',
+        interpretation: 'Airframe and components without the battery pack.',
+        limitations: 'From catalog component masses.',
+        advancedOnly: true,
+      }),
+      this.stat({
+        id: 'battery-mass',
+        label: 'Battery mass',
+        simpleLabel: 'Battery mass',
+        value: Number.isFinite(spec.physicalAssembly.batteryMassKg)
+          ? round(spec.physicalAssembly.batteryMassKg, 3)
+          : null,
+        unit: 'kg',
+        confidence: 'medium',
+        source: 'Estimated',
+        interpretation: 'Selected pack mass contribution.',
+        limitations: 'Catalog mass; real packs vary.',
+        advancedOnly: true,
+      }),
+      this.stat({
+        id: 'payload-mass',
+        label: 'Payload mass',
+        simpleLabel: 'Payload mass',
+        value:
+          Number.isFinite(spec.diagnostics.mass.payloadMassKg) &&
+          spec.diagnostics.mass.payloadMassKg > 0
+            ? round(spec.diagnostics.mass.payloadMassKg, 3)
+            : Number.isFinite(spec.diagnostics.mass.payloadMassKg)
+              ? 'None'
+              : null,
+        unit:
+          Number.isFinite(spec.diagnostics.mass.payloadMassKg) &&
+          spec.diagnostics.mass.payloadMassKg > 0
+            ? 'kg'
+            : '',
+        confidence: 'medium',
+        source: 'Estimated',
+        interpretation:
+          spec.diagnostics.mass.payloadMassKg > 0
+            ? 'Configured payload contribution.'
+            : 'No payload selected in this build.',
+        limitations: 'Only stocked categories are available in this milestone.',
+        advancedOnly: true,
+      }),
+      this.stat({
+        id: 'esc-headroom',
+        label: 'ESC continuous headroom',
+        simpleLabel: 'ESC headroom',
+        value: Number.isFinite(electrical.escContinuousMarginA)
+          ? round(electrical.escContinuousMarginA, 1)
+          : null,
+        unit: 'A',
+        confidence: 'medium',
+        source: 'Estimated',
+        interpretation: 'Estimated continuous current margin on the ESC.',
+        limitations: 'Derived from catalog ratings and estimated load.',
+        advancedOnly: true,
+      }),
+      this.stat({
+        id: 'estimated-current',
+        label: 'Estimated continuous current',
+        simpleLabel: 'Estimated current',
+        value: Number.isFinite(electrical.continuousCurrentA)
+          ? round(electrical.continuousCurrentA, 1)
+          : null,
+        unit: 'A',
+        confidence,
+        source,
+        interpretation: 'Estimated continuous electrical load.',
+        limitations: 'Depends on propulsion and electrical models.',
+        advancedOnly: true,
+      }),
+      this.stat({
+        id: 'runtime-mass',
+        label: 'Runtime mass mapping',
+        simpleLabel: 'Runtime mass',
+        value: Number.isFinite(spec.flightRuntime.massKg)
+          ? round(spec.flightRuntime.massKg, 3)
+          : null,
+        unit: 'kg',
+        confidence: 'medium',
+        source: 'Estimated',
+        interpretation: 'Mass value mapped into the fixed-timestep runtime adapter.',
+        limitations: 'Runtime mapping may clamp or scale for solver compatibility.',
+        advancedOnly: true,
+      }),
+      this.stat({
+        id: 'runtime-thrust',
+        label: 'Runtime max thrust',
+        simpleLabel: 'Runtime thrust',
+        value: Number.isFinite(spec.flightRuntime.maxThrustNewtons)
+          ? round(spec.flightRuntime.maxThrustNewtons, 1)
+          : null,
+        unit: 'N',
+        confidence,
+        source,
+        interpretation: 'Peak thrust mapped for the simulator runtime.',
+        limitations: 'Adapter output — not a separate physical model.',
+        advancedOnly: true,
+      }),
     ];
   }
 
@@ -339,19 +453,113 @@ export class BuilderPresentationMapperService {
     const blocking = issues.filter((i) => i.issueClass === 'blocking-error');
     const warnings = issues.filter((i) => i.issueClass === 'warning');
     const ok = result.ok && !!result.specification;
+    const spec = result.specification;
+    const failedStage =
+      !ok && result.trace.length > 0
+        ? result.trace[result.trace.length - 1]?.stage ?? null
+        : null;
+    const confidenceSummary = ok
+      ? this.mapPropulsionProvenance(spec!.propulsion.dataProvenance)
+      : null;
     return {
       ok,
       aircraftId: ok ? aircraftId : null,
       aircraftDisplayName: ok ? aircraftDisplayName : null,
-      buildFingerprint: result.specification?.buildFingerprint ?? null,
-      artifactFingerprint: result.specification?.artifactFingerprint ?? null,
+      buildFingerprint: spec?.buildFingerprint ?? null,
+      artifactFingerprint: spec?.artifactFingerprint ?? null,
       blockingIssues: blocking,
       warnings,
       message: ok
         ? `Ready to fly: ${aircraftDisplayName ?? 'aircraft'}`
         : (blocking[0]?.suggestedAction ??
           'Compilation failed. Resolve blocking issues and try again.'),
+      sourceBuildRevisionId: spec?.identity.buildRevisionId ?? null,
+      catalogReleaseId: spec?.identity.catalogReleaseId ?? null,
+      validationCanCompile: result.validation?.canCompile ?? null,
+      confidenceSummary,
+      failedStage,
+      developmentDiagnosticCode: !ok
+        ? (blocking[0]?.domainCode ??
+          result.integrityIssues[0]?.code ??
+          'COMPILE_FAILED')
+        : null,
     };
+  }
+
+  mapAdvancedComponentDetail(
+    revision: ComponentRevision,
+    opts: {
+      compatibilityStatus?: BuilderComponentOptionView['compatibilityStatus'];
+      selected?: boolean;
+      isRecommended?: boolean;
+    } = {},
+  ): BuilderAdvancedComponentDetailView {
+    const option = this.mapComponentOption(revision, opts);
+    return {
+      option,
+      revisionDisplay: revision.revisionId,
+      manufacturerLabel: revision.display.manufacturerLabel || 'Not available',
+      tags: revision.display.tags,
+      physicalSpecs: this.physicalSpecs(revision),
+      electricalSpecs: this.electricalSpecs(revision),
+      dataAvailability: this.dataAvailabilityLabel(revision),
+    };
+  }
+
+  mapTuningInfo(tuning: UserTuningValues | null | undefined): BuilderTuningInfoView {
+    if (!tuning) {
+      return {
+        editable: false,
+        summary:
+          'No tuning profile is loaded yet. Choose a flying style to start from a factory preset.',
+        fields: [],
+      };
+    }
+    return {
+      editable: false,
+      summary:
+        'This build uses the factory/intent default tuning profile. A validated tuning editor is not available in this milestone — values are shown read-only and cannot be edited here.',
+      fields: [
+        field('Thrust curve exponent', formatNumber(tuning.thrustCurveExponent, 2)),
+        field('Throttle expo', formatNumber(tuning.throttleExpo, 2)),
+        field('Stabilization bias', formatNumber(tuning.stabilizationBias, 2)),
+        field('Rate profile hint', tuning.rateProfileHint || null),
+      ],
+    };
+  }
+
+  mapProvenanceInfo(
+    provenance: PropulsionDataProvenance | string | undefined,
+    confidence: EngineeringStatConfidenceLabel | string | undefined,
+  ): BuilderProvenanceInfoView {
+    const label = this.mapPropulsionProvenance(provenance);
+    const conf = this.mapDataConfidence(
+      typeof confidence === 'string' ? confidence : undefined,
+    );
+    return {
+      label,
+      description: this.provenanceDescription(label),
+      confidence: conf,
+      datasetHint: null,
+      limitations: this.provenanceLimitation(
+        typeof provenance === 'string' ? provenance : undefined,
+      ),
+    };
+  }
+
+  provenanceDescription(source: EngineeringStatSourceLabel): string {
+    switch (source) {
+      case 'Measured':
+        return 'Based on measured propulsion data from a matched dataset.';
+      case 'Curated synthetic':
+        return 'Based on a controlled project dataset created for development. It is not a measured commercial benchmark.';
+      case 'Estimated':
+        return 'Derived from component specifications and engineering formulas.';
+      case 'Legacy fallback':
+        return 'Calculated from the aircraft fallback thrust hint because no matching propulsion dataset was available.';
+      default:
+        return 'Propulsion data is not available for this combination.';
+    }
   }
 
   classifySeverity(severity: ValidationSeverity): CompatibilityIssueClass {
@@ -562,9 +770,173 @@ export class BuilderPresentationMapperService {
         return `Affects ${this.categoryLabel(revision.componentType).toLowerCase()}`;
     }
   }
+
+  private physicalSpecs(revision: ComponentRevision): BuilderSpecFieldView[] {
+    const eng = revision.engineering;
+    const dims = revision.dimensions;
+    const common: BuilderSpecFieldView[] = [
+      field('Mass', Number.isFinite(revision.massKg) ? `${round(revision.massKg, 3)} kg` : null),
+      field(
+        'Dimensions',
+        Number.isFinite(dims.widthMeters) &&
+          Number.isFinite(dims.lengthMeters) &&
+          Number.isFinite(dims.heightMeters)
+          ? `${round(dims.widthMeters * 1000, 0)} × ${round(dims.lengthMeters * 1000, 0)} × ${round(dims.heightMeters * 1000, 0)} mm`
+          : null,
+      ),
+      field(
+        'Mounting patterns',
+        revision.mountingPatterns.length > 0
+          ? revision.mountingPatterns.join(', ')
+          : null,
+      ),
+    ];
+
+    if (eng.type === 'frame') {
+      return [
+        ...common,
+        field(
+          'Wheelbase',
+          `${round(eng.frame.wheelbaseMeters * 1000, 0)} mm`,
+        ),
+        field(
+          'Supported prop size',
+          `${round(eng.frame.supportedPropDiameterMinM * 1000, 0)}–${round(eng.frame.supportedPropDiameterMaxM * 1000, 0)} mm`,
+        ),
+        field('Motor mount pattern', eng.frame.motorMountPattern || null),
+        field(
+          'Max recommended takeoff mass',
+          `${round(eng.frame.maxRecommendedTakeoffMassKg, 3)} kg`,
+        ),
+      ];
+    }
+    if (eng.type === 'motor') {
+      return [
+        ...common,
+        field('KV', `${eng.motor.kv}`),
+        field(
+          'Stator',
+          `${eng.motor.statorWidthMm}×${eng.motor.statorHeightMm} mm`,
+        ),
+        field(
+          'Supported voltage',
+          `${round(eng.motor.voltageMin, 1)}–${round(eng.motor.voltageMax, 1)} V`,
+        ),
+        field(
+          'Max continuous current',
+          `${round(eng.motor.maxContinuousCurrentA, 1)} A`,
+        ),
+        field(
+          'Max continuous power',
+          `${round(eng.motor.maxContinuousPowerW, 0)} W`,
+        ),
+      ];
+    }
+    if (eng.type === 'propeller') {
+      return [
+        ...common,
+        field('Diameter', `${round(eng.propeller.diameterMeters * 1000, 0)} mm`),
+        field('Pitch', `${round(eng.propeller.pitchMeters * 1000, 0)} mm`),
+        field('Blade count', `${eng.propeller.bladeCount}`),
+      ];
+    }
+    if (eng.type === 'esc') {
+      return [
+        ...common,
+        field('Topology', eng.esc.topology || null),
+        field('Protocols', eng.esc.protocols.join(', ') || null),
+      ];
+    }
+    if (eng.type === 'battery') {
+      return common;
+    }
+    if (eng.type === 'camera') {
+      return [
+        ...common,
+        field(
+          'Format / size',
+          Number.isFinite(dims.widthMeters)
+            ? `${round(dims.widthMeters * 1000, 0)} mm class`
+            : null,
+        ),
+      ];
+    }
+    return common;
+  }
+
+  private electricalSpecs(revision: ComponentRevision): BuilderSpecFieldView[] {
+    const eng = revision.engineering;
+    if (eng.type === 'battery') {
+      return [
+        field('Cell count', `${eng.battery.cellCount}S`),
+        field('Nominal voltage', `${round(eng.battery.nominalVoltage, 1)} V`),
+        field('Capacity', `${round(eng.battery.capacityAh * 1000, 0)} mAh`),
+        field('Discharge rating', `${eng.battery.dischargeCRating}C`),
+        field('Connector', eng.battery.connectorType || null),
+      ];
+    }
+    if (eng.type === 'esc') {
+      return [
+        field(
+          'Continuous current',
+          `${round(eng.esc.continuousCurrentA, 1)} A`,
+        ),
+        field('Burst current', `${round(eng.esc.burstCurrentA, 1)} A`),
+        field(
+          'Supported voltage',
+          `${round(eng.esc.voltageMin, 1)}–${round(eng.esc.voltageMax, 1)} V`,
+        ),
+      ];
+    }
+    if (eng.type === 'motor') {
+      return [
+        field(
+          'Supported voltage',
+          `${round(eng.motor.voltageMin, 1)}–${round(eng.motor.voltageMax, 1)} V`,
+        ),
+        field(
+          'Max continuous current',
+          `${round(eng.motor.maxContinuousCurrentA, 1)} A`,
+        ),
+      ];
+    }
+    if (
+      eng.type === 'flight-controller' ||
+      eng.type === 'camera' ||
+      eng.type === 'video-transmitter' ||
+      eng.type === 'receiver'
+    ) {
+      return [
+        field(
+          'Power draw',
+          `${round(eng.electronics.powerDrawWatts, 2)} W`,
+        ),
+      ];
+    }
+    return [];
+  }
+
+  private dataAvailabilityLabel(revision: ComponentRevision): string {
+    const { provenance, confidence } = revision.dataQuality;
+    return `${provenance.replace(/-/g, ' ')} · ${confidence} confidence`;
+  }
 }
 
 function round(value: number, digits: number): number {
   const f = 10 ** digits;
   return Math.round(value * f) / f;
+}
+
+function formatNumber(value: number, digits: number): string | null {
+  if (!Number.isFinite(value)) return null;
+  return String(round(value, digits));
+}
+
+function field(label: string, value: string | null | undefined): BuilderSpecFieldView {
+  const available = value != null && value !== '' && value !== 'NaN';
+  return {
+    label,
+    value: available ? value! : 'Not available',
+    available,
+  };
 }

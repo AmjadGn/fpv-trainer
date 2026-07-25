@@ -159,6 +159,42 @@ export interface BuilderCompileResultView {
   readonly blockingIssues: readonly BuilderCompatibilityIssueView[];
   readonly warnings: readonly BuilderCompatibilityIssueView[];
   readonly message: string;
+  readonly sourceBuildRevisionId: string | null;
+  readonly catalogReleaseId: string | null;
+  readonly validationCanCompile: boolean | null;
+  readonly confidenceSummary: string | null;
+  readonly failedStage: string | null;
+  readonly developmentDiagnosticCode: string | null;
+}
+
+export interface BuilderSpecFieldView {
+  readonly label: string;
+  readonly value: string;
+  readonly available: boolean;
+}
+
+export interface BuilderAdvancedComponentDetailView {
+  readonly option: BuilderComponentOptionView;
+  readonly revisionDisplay: string;
+  readonly manufacturerLabel: string;
+  readonly tags: readonly string[];
+  readonly physicalSpecs: readonly BuilderSpecFieldView[];
+  readonly electricalSpecs: readonly BuilderSpecFieldView[];
+  readonly dataAvailability: string;
+}
+
+export interface BuilderTuningInfoView {
+  readonly editable: boolean;
+  readonly summary: string;
+  readonly fields: readonly BuilderSpecFieldView[];
+}
+
+export interface BuilderProvenanceInfoView {
+  readonly label: EngineeringStatSourceLabel;
+  readonly description: string;
+  readonly confidence: EngineeringStatConfidenceLabel;
+  readonly datasetHint: string | null;
+  readonly limitations: string;
 }
 
 export interface BuilderSessionSnapshot {
