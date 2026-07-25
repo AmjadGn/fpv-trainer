@@ -98,5 +98,12 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      # CI checkouts have no .env; without it APP_KEY is null and phpdotenv
+      # emits file_get_contents warnings on every test bootstrap.
+      - name: Prepare Laravel test environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+
       - name: Run PHPUnit / Artisan tests
         run: php artisan test
