@@ -24,12 +24,46 @@ export type BuildIntentId =
   | 'cinematic'
   | 'long-range';
 
+/** Stocked official-catalog categories for the playable Simple Builder. */
+export const SIMPLE_STOCKED_CATEGORIES: readonly ComponentType[] = [
+  'frame',
+  'motor',
+  'propeller',
+  'esc',
+  'battery',
+  'flight-controller',
+  'camera',
+  'video-transmitter',
+  'receiver',
+] as const;
+
+export type CategoryCompletionStatus =
+  | 'selected'
+  | 'missing'
+  | 'needs-attention'
+  | 'recommended';
+
+export type BuildReadinessState =
+  | 'incomplete'
+  | 'has-blocking-issues'
+  | 'ready-to-compile'
+  | 'compiled';
+
+export type CompatibilitySummaryLevel =
+  | 'cannot-compile'
+  | 'needs-attention'
+  | 'recommendation'
+  | 'all-compatible';
+
 /** Product guidance only — never bypasses validation or engineering. */
 export interface BuildIntentProfile {
   readonly id: BuildIntentId;
   readonly title: string;
   readonly shortDescription: string;
   readonly plainLanguageGoal: string;
+  readonly expectedFeel: string;
+  readonly mainTradeOff: string;
+  readonly factoryRecommendationLabel: string;
   /** Factory aircraft used as the recommended starting point. */
   readonly recommendedFactoryAircraftId: string;
   readonly recommendedCategoryOrder: readonly ComponentType[];
@@ -46,6 +80,7 @@ export interface BuilderCompatibilityIssueView {
   readonly title: string;
   readonly explanation: string;
   readonly suggestedAction: string;
+  readonly affectedPartLabel: string;
   readonly affectedCategory: ComponentType | 'build' | 'unknown';
   readonly relatedSelectionIds: readonly string[];
   /** Advanced diagnostics only. */
@@ -60,17 +95,25 @@ export type EngineeringStatSourceLabel =
   | 'Legacy fallback'
   | 'Unavailable';
 
-export type EngineeringStatConfidenceLabel = 'high' | 'medium' | 'low' | 'unavailable';
+export type EngineeringStatConfidenceLabel =
+  | 'high'
+  | 'medium'
+  | 'low'
+  | 'unavailable';
 
 export interface BuilderEngineeringStatView {
   readonly id: string;
   readonly label: string;
   readonly simpleLabel: string;
   readonly value: number | string | null;
+  readonly displayValue: string;
+  readonly interpretation: string;
   readonly unit: string;
   readonly confidence: EngineeringStatConfidenceLabel;
   readonly source: EngineeringStatSourceLabel;
+  readonly sourceBrief: string;
   readonly limitations: string;
+  readonly available: boolean;
   /** Advanced mode only. */
   readonly advancedOnly: boolean;
 }
@@ -79,16 +122,27 @@ export interface BuilderComponentOptionView {
   readonly revisionId: string;
   readonly name: string;
   readonly category: ComponentType;
+  readonly categoryLabel: string;
+  readonly mainSpec: string;
   readonly recommendedUse: string;
-  readonly compatibilityStatus: 'compatible' | 'warning' | 'incompatible' | 'unknown';
+  readonly compatibilityStatus:
+    | 'compatible'
+    | 'warning'
+    | 'incompatible'
+    | 'unknown';
   readonly simplePerformanceEffect: string;
   readonly massKg: number | null;
-  readonly revision: string;
-  readonly physicalSummary: string;
-  readonly electricalSummary: string;
-  readonly dataConfidence: EngineeringStatConfidenceLabel;
-  readonly dataSource: EngineeringStatSourceLabel;
-  readonly warnings: readonly string[];
+  readonly massLabel: string;
+  readonly isRecommended: boolean;
+  readonly selected: boolean;
+}
+
+export interface BuilderCategoryProgressView {
+  readonly category: ComponentType;
+  readonly label: string;
+  readonly status: CategoryCompletionStatus;
+  readonly selectedName: string | null;
+  readonly active: boolean;
 }
 
 export interface BuilderCompileResultView {
@@ -108,11 +162,16 @@ export interface BuilderSessionSnapshot {
   readonly intentId: BuildIntentId | null;
   readonly buildId: string | null;
   readonly buildName: string;
+  readonly nameManuallySet: boolean;
   readonly dirty: boolean;
+  readonly sessionSaved: boolean;
   readonly activeCategory: ComponentType;
   readonly selectedRevisionIdsBySlot: Readonly<Record<string, string>>;
   readonly canCompile: boolean;
   readonly compileBlockedReason: string | null;
+  readonly compileStale: boolean;
   readonly lastCompile: BuilderCompileResultView | null;
   readonly launchAircraftName: string | null;
+  readonly readiness: BuildReadinessState;
+  readonly compatibilityLevel: CompatibilitySummaryLevel;
 }

@@ -1,18 +1,7 @@
 import type { ComponentType } from '@fpv/component-catalog';
 
 import type { BuildIntentProfile } from './drone-builder-view.models';
-
-const CORE_CATEGORY_ORDER: readonly ComponentType[] = [
-  'frame',
-  'motor',
-  'propeller',
-  'esc',
-  'battery',
-  'flight-controller',
-  'camera',
-  'video-transmitter',
-  'receiver',
-];
+import { SIMPLE_STOCKED_CATEGORIES } from './drone-builder-view.models';
 
 /**
  * Intent profiles are product guidance layered on factory presets.
@@ -22,38 +11,50 @@ export const BUILD_INTENT_PROFILES: readonly BuildIntentProfile[] = [
   {
     id: 'racing',
     title: 'Racing',
-    shortDescription: 'Fast, agile 5-inch track flying',
+    shortDescription: 'Fast and responsive track flying',
     plainLanguageGoal:
-      'Build a light, responsive racer for gates and timed laps.',
+      'A light, sharp craft for gates and timed laps.',
+    expectedFeel: 'Quick to turn and accelerate, with less emphasis on flight time.',
+    mainTradeOff: 'Speed and agility over endurance and forgiveness.',
+    factoryRecommendationLabel: 'Inspired by Apex R5',
     recommendedFactoryAircraftId: 'apex-r5',
-    recommendedCategoryOrder: CORE_CATEGORY_ORDER,
+    recommendedCategoryOrder: SIMPLE_STOCKED_CATEGORIES,
   },
   {
     id: 'freestyle',
     title: 'Freestyle',
-    shortDescription: 'Durable tricks and creative flying',
+    shortDescription: 'Powerful tricks and creative flying',
     plainLanguageGoal:
-      'Build a tough freestyle craft with room for power and control.',
+      'A tough freestyle craft with room for power and control.',
+    expectedFeel: 'Strong pull and durable handling for flips and freestyle lines.',
+    mainTradeOff: 'Power and toughness over maximum efficiency.',
+    factoryRecommendationLabel: 'Inspired by Flux F5',
     recommendedFactoryAircraftId: 'flux-f5',
-    recommendedCategoryOrder: CORE_CATEGORY_ORDER,
+    recommendedCategoryOrder: SIMPLE_STOCKED_CATEGORIES,
   },
   {
     id: 'cinematic',
     title: 'Cinematic',
-    shortDescription: 'Smooth protected camera flying',
+    shortDescription: 'Smooth, stable camera flying',
     plainLanguageGoal:
-      'Build a stable, forgiving craft for smooth indoor and cinematic shots.',
+      'A forgiving craft for smooth indoor and cinematic shots.',
+    expectedFeel: 'Smoother and more stable, with room for camera weight.',
+    mainTradeOff: 'Stability and ease of use over raw racing speed.',
+    factoryRecommendationLabel: 'Inspired by AeroGuard 2',
     recommendedFactoryAircraftId: 'aeroguard-2',
-    recommendedCategoryOrder: CORE_CATEGORY_ORDER,
+    recommendedCategoryOrder: SIMPLE_STOCKED_CATEGORIES,
   },
   {
     id: 'long-range',
     title: 'Long Range',
     shortDescription: 'Efficient longer flights',
     plainLanguageGoal:
-      'Build an efficient craft that prioritizes flight time and stability.',
+      'An efficient craft that prioritizes flight time and calm handling.',
+    expectedFeel: 'Steady cruise feel with longer estimated flight time.',
+    mainTradeOff: 'Endurance and efficiency over snap-turn racing agility.',
+    factoryRecommendationLabel: 'Inspired by Horizon L7',
     recommendedFactoryAircraftId: 'horizon-l7',
-    recommendedCategoryOrder: CORE_CATEGORY_ORDER,
+    recommendedCategoryOrder: SIMPLE_STOCKED_CATEGORIES,
   },
 ];
 
@@ -62,4 +63,33 @@ export function getBuildIntentProfile(
 ): BuildIntentProfile | undefined {
   if (!id) return undefined;
   return BUILD_INTENT_PROFILES.find((p) => p.id === id);
+}
+
+export function defaultBuildNameForIntent(title: string): string {
+  return `My ${title} Build`;
+}
+
+export function stockedCategoryLabel(category: ComponentType): string {
+  switch (category) {
+    case 'frame':
+      return 'Frame';
+    case 'motor':
+      return 'Motors';
+    case 'propeller':
+      return 'Propellers';
+    case 'esc':
+      return 'ESC';
+    case 'battery':
+      return 'Battery';
+    case 'flight-controller':
+      return 'Flight Controller';
+    case 'camera':
+      return 'FPV Camera';
+    case 'video-transmitter':
+      return 'VTX';
+    case 'receiver':
+      return 'Receiver';
+    default:
+      return category;
+  }
 }
