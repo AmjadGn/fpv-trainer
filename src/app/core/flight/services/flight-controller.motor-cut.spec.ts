@@ -100,6 +100,19 @@ describe('FlightControllerService motor cut', () => {
     );
   });
 
+  it('does not soft-cap fall speed near armed maxVelocity (~17–20 m/s)', () => {
+    service.reset({ position: { x: 0, y: 200, z: 0 } });
+    service.arm(0);
+    service.disarm();
+
+    // ~2.5 s of freefall → well past the old ~17 m/s “speed limit” feel.
+    step(Math.round(2.5 / dt));
+
+    expect(-service.velocity().y).toBeGreaterThan(22);
+    expect(-service.velocity().y).toBeGreaterThan(FLIGHT_CONFIG.maxVelocity * 0.7);
+    expect(service.position().y).toBeGreaterThan(FLIGHT_CONFIG.groundEpsilon + 10);
+  });
+
   it('accounts for upward momentum: climb then cut still gets downward acceleration', () => {
     service.arm(0);
     step(90, { throttle: 1, yaw: 0, pitch: 0, roll: 0 });
