@@ -18,6 +18,7 @@ import type {
 } from './models/drone-builder-view.models';
 import type { ComponentType } from '@fpv/component-catalog';
 import { DroneBuilderFacadeService } from './services/drone-builder-facade.service';
+import { ComponentPresentationMediaService } from './services/component-presentation-media.service';
 
 /**
  * Simple Builder product experience over the shared builder facade/session.
@@ -38,6 +39,7 @@ import { DroneBuilderFacadeService } from './services/drone-builder-facade.servi
 export class DroneBuilderComponent implements OnInit {
   private readonly shell = inject(AppShellService);
   protected readonly facade = inject(DroneBuilderFacadeService);
+  private readonly mediaService = inject(ComponentPresentationMediaService);
 
   protected readonly snapshot = this.facade.sessionSnapshot;
   protected readonly intents = this.facade.intents;
@@ -216,5 +218,24 @@ export class DroneBuilderComponent implements OnInit {
       case 'recommended':
         return 'Recommended';
     }
+  }
+
+  protected compatibilityStatusLabel(
+    status: 'compatible' | 'warning' | 'incompatible' | 'unknown',
+  ): string {
+    switch (status) {
+      case 'compatible':
+        return 'Looks compatible';
+      case 'warning':
+        return 'Needs attention';
+      case 'incompatible':
+        return 'Not compatible';
+      case 'unknown':
+        return 'Compatibility unchecked';
+    }
+  }
+
+  protected onMediaError(event: Event, category: ComponentType): void {
+    this.mediaService.onImageError(event, category);
   }
 }

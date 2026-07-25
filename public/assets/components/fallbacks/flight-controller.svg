@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Generic flight controller silhouette">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="44" y="30" width="72" height="60" rx="4" fill="#2a4034" stroke="#6fbf8a" stroke-width="3"/>
+  <circle cx="54" cy="40" r="3.5" fill="#8fd6a8"/><circle cx="106" cy="40" r="3.5" fill="#8fd6a8"/>
+  <circle cx="54" cy="80" r="3.5" fill="#8fd6a8"/><circle cx="106" cy="80" r="3.5" fill="#8fd6a8"/>
+  <rect x="64" y="48" width="32" height="24" rx="2" fill="#1a2a22"/>
+  <circle cx="80" cy="60" r="6" fill="#6fbf8a"/>
+</svg>

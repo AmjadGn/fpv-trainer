@@ -9,6 +9,7 @@ import {
 import { SelectedAircraftService } from '../../../core/aircraft/services/selected-aircraft.service';
 import { AppShellService } from '../../../core/shell/app-shell.service';
 import { BuilderPresentationMapperService } from './builder-presentation-mapper.service';
+import { ComponentPresentationMediaService } from './component-presentation-media.service';
 import { DroneBuilderFacadeService } from './drone-builder-facade.service';
 import { DroneBuilderSessionService } from './drone-builder-session.service';
 
@@ -32,6 +33,7 @@ describe('DroneBuilderFacadeService Simple Builder (CP2)', () => {
         DroneBuilderFacadeService,
         DroneBuilderSessionService,
         BuilderPresentationMapperService,
+        ComponentPresentationMediaService,
         AircraftCatalogService,
         AircraftPersistenceService,
         SelectedAircraftService,
@@ -273,7 +275,10 @@ describe('DroneBuilderFacadeService Simple Builder (CP2)', () => {
 
 describe('BuilderPresentationMapperService Simple copy', () => {
   it('maps propulsion provenance labels honestly', () => {
-    const mapper = new BuilderPresentationMapperService();
+    TestBed.configureTestingModule({
+      providers: [BuilderPresentationMapperService, ComponentPresentationMediaService],
+    });
+    const mapper = TestBed.inject(BuilderPresentationMapperService);
     expect(mapper.mapPropulsionProvenance('measured-table')).toBe('Measured');
     expect(mapper.mapPropulsionProvenance('curated-estimate-table')).toBe(
       'Curated synthetic',

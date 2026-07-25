@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import type { ComponentRevision, ComponentType } from '@fpv/component-catalog';
 import type {
   ValidationIssue,
@@ -22,6 +22,8 @@ import type {
   EngineeringStatConfidenceLabel,
   EngineeringStatSourceLabel,
 } from '../models/drone-builder-view.models';
+import type { ResolvedComponentMedia } from '../models/component-presentation-media.models';
+import { ComponentPresentationMediaService } from './component-presentation-media.service';
 
 const ISSUE_COPY: Record<
   string,
@@ -103,8 +105,18 @@ const ISSUE_COPY: Record<
  */
 @Injectable({ providedIn: 'root' })
 export class BuilderPresentationMapperService {
+  private readonly media = inject(ComponentPresentationMediaService);
+
   categoryLabel(type: ComponentType): string {
     return stockedCategoryLabel(type);
+  }
+
+  resolveMedia(
+    revisionId: string,
+    category: ComponentType,
+    displayName?: string | null,
+  ): ResolvedComponentMedia {
+    return this.media.resolve(revisionId, category, displayName);
   }
 
   mapIssue(issue: ValidationIssue): BuilderCompatibilityIssueView {
@@ -196,6 +208,11 @@ export class BuilderPresentationMapperService {
         massKg == null ? 'Weight not listed' : `${round(massKg, 3)} kg`,
       isRecommended: opts.isRecommended ?? false,
       selected: opts.selected ?? false,
+      media: this.media.resolve(
+        revision.revisionId,
+        revision.componentType,
+        revision.display.displayName,
+      ),
     };
   }
 

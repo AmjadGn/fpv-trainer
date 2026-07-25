@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Generic motor silhouette">
+  <rect width="160" height="120" fill="#142018"/>
+  <circle cx="80" cy="60" r="34" fill="#2a4034" stroke="#6fbf8a" stroke-width="3"/>
+  <circle cx="80" cy="60" r="14" fill="#1a2a22"/>
+  <path d="M80 26 V40 M80 80 V94 M46 60 H60 M100 60 H114" stroke="#8fd6a8" stroke-width="3"/>
+</svg>

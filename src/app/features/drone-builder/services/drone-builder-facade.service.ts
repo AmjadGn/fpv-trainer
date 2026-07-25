@@ -63,6 +63,7 @@ import {
   createAircraftDefinitionFromCompilation,
   userAircraftIdForRevision,
 } from './compiled-aircraft-definition.factory';
+import { ComponentPresentationMediaService } from './component-presentation-media.service';
 import { DroneBuilderSessionService } from './drone-builder-session.service';
 
 const SLOT_KEYS = [
@@ -118,6 +119,7 @@ export type IntentChangeDecision =
 export class DroneBuilderFacadeService {
   private readonly session = inject(DroneBuilderSessionService);
   private readonly mapper = inject(BuilderPresentationMapperService);
+  private readonly media = inject(ComponentPresentationMediaService);
   private readonly aircraftCatalog = inject(AircraftCatalogService);
   private readonly selectedAircraft = inject(SelectedAircraftService);
   private readonly shell = inject(AppShellService);
@@ -832,11 +834,16 @@ export class DroneBuilderFacadeService {
           status = 'selected';
         }
       }
+      const selectedName = this.selectedOptionName(category);
       return {
         category,
         label: stockedCategoryLabel(category),
         status,
-        selectedName: this.selectedOptionName(category),
+        selectedName,
+        selectedRevisionId: selectedId ?? null,
+        media: selectedId
+          ? this.media.resolve(selectedId, category, selectedName)
+          : this.media.resolveForCategory(category),
         active: active === category,
       };
     });

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Generic FPV camera silhouette">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="48" y="36" width="64" height="48" rx="8" fill="#2a4034" stroke="#6fbf8a" stroke-width="3"/>
+  <circle cx="80" cy="60" r="16" fill="#1a2a22" stroke="#8fd6a8" stroke-width="3"/>
+  <circle cx="80" cy="60" r="6" fill="#6fbf8a"/>
+</svg>

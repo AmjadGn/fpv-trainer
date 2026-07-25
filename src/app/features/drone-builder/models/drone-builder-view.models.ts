@@ -1,6 +1,8 @@
 import type { ComponentType } from '@fpv/component-catalog';
 import type { ValidationSeverity } from '@fpv/compatibility-engine';
 
+import type { ResolvedComponentMedia } from './component-presentation-media.models';
+
 /** Explicit builder lifecycle — avoid independent boolean flags. */
 export type BuilderPhase =
   | 'idle'
@@ -135,6 +137,8 @@ export interface BuilderComponentOptionView {
   readonly massLabel: string;
   readonly isRecommended: boolean;
   readonly selected: boolean;
+  /** Presentation-only; never used for engineering or fingerprints. */
+  readonly media: ResolvedComponentMedia;
 }
 
 export interface BuilderCategoryProgressView {
@@ -142,9 +146,10 @@ export interface BuilderCategoryProgressView {
   readonly label: string;
   readonly status: CategoryCompletionStatus;
   readonly selectedName: string | null;
+  readonly selectedRevisionId: string | null;
+  readonly media: ResolvedComponentMedia | null;
   readonly active: boolean;
 }
-
 export interface BuilderCompileResultView {
   readonly ok: boolean;
   readonly aircraftId: string | null;

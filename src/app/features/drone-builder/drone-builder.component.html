@@ -148,6 +148,19 @@
                 [class.builder__progress-item--recommended]="cat.status === 'recommended'"
                 (click)="setCategory(cat.category)"
               >
+                @if (cat.media; as media) {
+                  <span class="builder__progress-thumb" aria-hidden="true">
+                    <img
+                      [src]="media.thumbnailUrl"
+                      [alt]="''"
+                      width="40"
+                      height="30"
+                      loading="lazy"
+                      decoding="async"
+                      (error)="onMediaError($event, cat.category)"
+                    />
+                  </span>
+                }
                 <span class="builder__progress-label">{{ cat.label }}</span>
                 <span class="builder__progress-status">{{ statusLabel(cat.status) }}</span>
                 <span class="builder__progress-name">{{ cat.selectedName ?? 'Not selected' }}</span>
@@ -171,19 +184,36 @@
                     [class.builder__option--recommended]="opt.isRecommended"
                     (click)="selectOption(opt.revisionId)"
                   >
-                    <span class="builder__option-top">
-                      <strong>{{ opt.name }}</strong>
-                      @if (opt.isRecommended) {
-                        <span class="builder__pill">Recommended</span>
-                      }
-                      @if (opt.selected) {
-                        <span class="builder__pill builder__pill--selected">Selected</span>
+                    <span class="builder__option-media">
+                      <img
+                        [src]="opt.media.thumbnailUrl"
+                        [alt]="opt.media.altText"
+                        width="96"
+                        height="72"
+                        loading="lazy"
+                        decoding="async"
+                        (error)="onMediaError($event, opt.category)"
+                      />
+                      @if (opt.media.isFallback) {
+                        <span class="builder__option-fallback-label">Category illustration</span>
                       }
                     </span>
-                    <span>{{ opt.categoryLabel }} · {{ opt.mainSpec }}</span>
-                    <span>{{ opt.massLabel }}</span>
-                    <span>{{ opt.recommendedUse }}</span>
-                    <span class="builder__option-effect">{{ opt.simplePerformanceEffect }}</span>
+                    <span class="builder__option-body">
+                      <span class="builder__option-top">
+                        <strong>{{ opt.name }}</strong>
+                        @if (opt.isRecommended) {
+                          <span class="builder__pill">Recommended</span>
+                        }
+                        @if (opt.selected) {
+                          <span class="builder__pill builder__pill--selected">Selected</span>
+                        }
+                      </span>
+                      <span>{{ opt.mainSpec }}</span>
+                      <span class="builder__option-compat">
+                        {{ compatibilityStatusLabel(opt.compatibilityStatus) }}
+                      </span>
+                      <span class="builder__option-effect">{{ opt.simplePerformanceEffect }}</span>
+                    </span>
                   </button>
                 </li>
               } @empty {
