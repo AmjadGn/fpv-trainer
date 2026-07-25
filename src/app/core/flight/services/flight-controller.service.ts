@@ -474,11 +474,13 @@ export class FlightControllerService {
   }
 
   /**
-   * Dead-motor ballistic translation for a simulator:
+   * Dead-motor ballistic translation for a simulator (FPV “brick” drop):
    * a = g_down − c |v_rel| v_rel
    *
-   * c is kept small and only lightly scaled by the aircraft linearDrag so
-   * factory craft still differ without parachute-like descent.
+   * Real quads fall hard immediately after motor cut — not a soft float.
+   * c stays very small so the first seconds track near free-fall; only a
+   * high terminal speed (~25–35 m/s) eventually limits the dive.
+   * Aircraft linearDrag scales c lightly for factory differentiation.
    */
   private integratePassiveBallistic(dt: number): void {
     const cfg = this.cfg;
@@ -488,9 +490,9 @@ export class FlightControllerService {
     rel.z = this.vel.z - this.windVel.z;
 
     const speed = Math.hypot(rel.x, rel.y, rel.z);
-    // ~0.02–0.08 range for catalog linearDrag values → terminal ≈ 11–22 m/s.
+    // ~0.005–0.015 → terminal ≈ 25–44 m/s (brick-like, not parachute).
     const quadraticDrag =
-      0.02 + 0.05 * clamp(cfg.linearDrag, 0, 1.2);
+      0.005 + 0.008 * clamp(cfg.linearDrag, 0, 1.2);
 
     let ax = 0;
     let ay = -cfg.gravity;

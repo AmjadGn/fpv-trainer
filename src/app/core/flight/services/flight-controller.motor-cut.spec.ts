@@ -68,17 +68,18 @@ describe('FlightControllerService motor cut', () => {
   });
 
   it('continues falling after motor cut (altitude decreases, vy negative)', () => {
+    service.reset({ position: { x: 0, y: 50, z: 0 } });
     service.arm(0);
-    step(1);
     service.disarm();
 
     const altitudeAtCut = service.position().y;
-    step(180);
+    // 0.5s — still airborne from 50m with brick-drop speeds.
+    step(60);
 
     expect(service.armed()).toBe(false);
     expect(service.position().y).toBeLessThan(altitudeAtCut);
+    expect(service.position().y).toBeGreaterThan(FLIGHT_CONFIG.groundEpsilon + 1);
     expect(service.velocity().y).toBeLessThan(0);
-    expect(service.position()).not.toEqual({ x: 0, y: altitudeAtCut, z: 0 });
   });
 
   it('falls near free-fall after motor cut (simulator ballistic, not soft float)', () => {
@@ -91,11 +92,12 @@ describe('FlightControllerService motor cut', () => {
     step(steps);
 
     const freeFallSpeed = FLIGHT_CONFIG.gravity * coastSeconds;
-    // Quadratic aero drag may shave a little, but must stay simulator-real —
-    // not the old viscous armed-flight float (~half free-fall).
-    expect(-service.velocity().y).toBeGreaterThan(freeFallSpeed * 0.85);
-    expect(-service.velocity().y).toBeLessThan(freeFallSpeed * 1.05);
-    expect(service.position().y).toBeLessThan(40 - 0.5 * freeFallSpeed * coastSeconds * 0.7);
+    // Brick drop: first half-second must track free-fall closely.
+    expect(-service.velocity().y).toBeGreaterThan(freeFallSpeed * 0.95);
+    expect(-service.velocity().y).toBeLessThan(freeFallSpeed * 1.02);
+    expect(service.position().y).toBeLessThan(
+      40 - 0.5 * freeFallSpeed * coastSeconds * 0.9,
+    );
   });
 
   it('accounts for upward momentum: climb then cut still gets downward acceleration', () => {
