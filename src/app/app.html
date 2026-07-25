@@ -1,0 +1,272 @@
+<div
+  class="shell"
+  [class.shell--flight]="flightMode()"
+  [class.shell--sidebar-collapsed]="!layout.sidebarExpanded()"
+  [class.shell--online]="onlineRoute()"
+  [class.shell--landing]="shellChromeHidden()"
+>
+  @if (!flightMode() && !shellChromeHidden()) {
+    <aside class="shell__sidebar" [attr.aria-label]="'Primary navigation'">
+      <div class="shell__brand-block">
+        <button
+          type="button"
+          class="shell__brand"
+          (click)="showHome()"
+          aria-label="FPV Trainer home"
+        >
+          <span class="shell__brand-mark">FPV</span>
+          @if (layout.sidebarExpanded()) {
+            <span class="shell__brand-text">Trainer</span>
+          }
+        </button>
+        <button
+          type="button"
+          class="shell__collapse"
+          (click)="layout.toggleSidebar()"
+          [attr.aria-label]="layout.sidebarExpanded() ? 'Collapse navigation' : 'Expand navigation'"
+          [attr.title]="layout.sidebarExpanded() ? 'Collapse' : 'Expand'"
+        >
+          <fpv-icon [name]="layout.sidebarExpanded() ? 'menu' : 'chevron-right'" [size]="18" />
+        </button>
+      </div>
+
+      <nav class="shell__nav-desktop" aria-label="Primary">
+        <ul class="shell__nav-list">
+          @for (item of primaryNav; track item.id) {
+            <li>
+              <button
+                type="button"
+                class="shell__link"
+                [class.shell__link--active]="isNavActive(item)"
+                [attr.title]="!layout.sidebarExpanded() ? item.label : null"
+                (click)="onNav(item)"
+              >
+                <fpv-icon [name]="item.icon" [size]="18" />
+                @if (layout.sidebarExpanded()) {
+                  <span>{{ item.label }}</span>
+                }
+              </button>
+              @if (item.id === 'compete' && layout.sidebarExpanded() && competeOpen()) {
+                <ul class="shell__subnav">
+                  @for (child of competeChildren; track child.id) {
+                    @if (isFeatureVisible(child)) {
+                      <li>
+                        <button
+                          type="button"
+                          class="shell__sublink"
+                          [class.shell__link--active]="isNavActive(child)"
+                          (click)="onNav(child)"
+                        >
+                          <fpv-icon [name]="child.icon" [size]="14" />
+                          <span>{{ child.label }}</span>
+                        </button>
+                      </li>
+                    }
+                  }
+                </ul>
+              }
+            </li>
+          }
+        </ul>
+
+        <p class="shell__nav-label" [class.shell__nav-label--hidden]="!layout.sidebarExpanded()">More</p>
+        <ul class="shell__nav-list">
+          @for (item of secondaryNav; track item.id) {
+            @if (isFeatureVisible(item)) {
+              <li>
+                <button
+                  type="button"
+                  class="shell__link"
+                  [class.shell__link--active]="isNavActive(item)"
+                  [attr.title]="!layout.sidebarExpanded() ? item.label : null"
+                  (click)="onNav(item)"
+                >
+                  <fpv-icon [name]="item.icon" [size]="18" />
+                  @if (layout.sidebarExpanded()) {
+                    <span>{{ item.label }}</span>
+                  }
+                </button>
+              </li>
+            }
+          }
+        </ul>
+      </nav>
+
+      <div class="shell__sidebar-foot">
+        <fpv-network-status />
+        @if (auth.isAuthenticated()) {
+          <button type="button" class="shell__link shell__link--notify" (click)="openNotifications()" [attr.title]="'Notifications'">
+            <fpv-icon name="notification" [size]="18" />
+            @if (layout.sidebarExpanded()) {
+              <span>Notifications</span>
+            }
+            @if (notifications.unreadCount()) {
+              <span class="shell__badge" aria-label="{{ notifications.unreadCount() }} unread">{{ notifications.unreadCount() }}</span>
+            }
+          </button>
+        }
+        <button type="button" class="shell__link" (click)="openAccount()" [attr.title]="auth.isAuthenticated() ? 'Account' : 'Sign in'">
+          <fpv-icon name="profile" [size]="18" />
+          @if (layout.sidebarExpanded()) {
+            <span>{{ auth.isAuthenticated() ? 'Account' : 'Sign in' }}</span>
+          }
+        </button>
+      </div>
+    </aside>
+
+    <header class="shell__topbar">
+      <div class="shell__topbar-main">
+        <p class="shell__topbar-title">FPV Trainer</p>
+        <fpv-network-status class="shell__topbar-status" />
+      </div>
+      <div class="shell__topbar-actions">
+        @if (auth.isAuthenticated()) {
+          <button type="button" class="shell__icon-btn" (click)="openNotifications()" aria-label="Notifications">
+            <fpv-icon name="notification" [size]="18" />
+            @if (notifications.unreadCount()) {
+              <span class="shell__badge">{{ notifications.unreadCount() }}</span>
+            }
+          </button>
+        }
+        <button type="button" class="shell__icon-btn" (click)="openAccount()" [attr.aria-label]="auth.isAuthenticated() ? 'Account' : 'Sign in'">
+          <fpv-icon name="profile" [size]="18" />
+        </button>
+      </div>
+    </header>
+  } @else if (flightMode()) {
+    <div class="shell__flight-bar">
+      <button type="button" class="shell__icon-btn" (click)="exitFlight()" aria-label="Exit flight">
+        <fpv-icon name="close" [size]="18" />
+        <span>Exit</span>
+      </button>
+      <fpv-network-status />
+    </div>
+  }
+
+  <div class="shell__main">
+    @if (features.maintenanceMode()) {
+      <p class="shell__maintenance" role="status">
+        Online competition is under maintenance. Local flying remains available.
+      </p>
+    }
+
+    @if (onlineRoute()) {
+      <div class="shell__route fpv-route-enter">
+        <router-outlet />
+      </div>
+    } @else {
+      @if (shell.view() !== 'flight') {
+        <app-account-invite-banner />
+      }
+      @if (shell.view() === 'home') {
+        <app-home />
+      } @else if (shell.view() === 'learn') {
+        <app-learn-hub />
+      } @else if (shell.view() === 'fly') {
+        <app-fly-hub />
+      } @else if (shell.view() === 'onboarding') {
+        <app-onboarding />
+      } @else if (shell.view() === 'feedback') {
+        <app-feedback />
+      } @else if (shell.view() === 'privacy') {
+        <app-privacy-center />
+      } @else if (shell.view() === 'hangar') {
+        <app-hangar />
+      } @else if (shell.view() === 'courses') {
+        <app-courses />
+      } @else if (shell.view() === 'environments') {
+        <app-environments />
+      } @else if (shell.view() === 'challenges') {
+        <app-weather-challenges />
+      } @else if (shell.view() === 'academy') {
+        <app-academy />
+      } @else if (shell.view() === 'diagnostics') {
+        <app-diagnostics-panel />
+      } @else if (shell.view() === 'calibration') {
+        <app-controller-calibration />
+      } @else if (shell.view() === 'settings') {
+        <app-settings-hub />
+      } @else {
+        @defer {
+          <app-flight />
+        } @placeholder {
+          <p class="shell__loading">Loading flight view…</p>
+        }
+      }
+
+      <app-achievement-toast />
+    }
+  </div>
+
+  @if (!flightMode() && !shellChromeHidden()) {
+    <nav class="shell__bottom" aria-label="Mobile primary">
+      @for (item of primaryNav; track item.id) {
+        <button
+          type="button"
+          class="shell__bottom-item"
+          [class.shell__bottom-item--active]="isNavActive(item)"
+          (click)="onNav(item)"
+        >
+          <fpv-icon [name]="item.icon" [size]="20" />
+          <span>{{ item.label }}</span>
+        </button>
+      }
+      <button
+        type="button"
+        class="shell__bottom-item"
+        [class.shell__bottom-item--active]="layout.mobileMoreOpen()"
+        (click)="layout.toggleMobileMore()"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="layout.mobileMoreOpen()"
+      >
+        <fpv-icon name="more" [size]="20" />
+        <span>More</span>
+      </button>
+    </nav>
+  }
+
+  <fpv-dialog
+    [open]="layout.mobileMoreOpen()"
+    title="More"
+    (close)="layout.closeMobileMore()"
+  >
+    <div class="shell__more-list">
+      @for (item of secondaryNav; track item.id) {
+        @if (isFeatureVisible(item)) {
+          <button type="button" class="shell__more-item" (click)="onNav(item)">
+            <fpv-icon [name]="item.icon" [size]="18" />
+            <span>{{ item.label }}</span>
+          </button>
+        }
+      }
+      @for (child of competeChildren; track child.id) {
+        @if (isFeatureVisible(child)) {
+          <button type="button" class="shell__more-item" (click)="onNav(child)">
+            <fpv-icon [name]="child.icon" [size]="18" />
+            <span>{{ child.label }}</span>
+          </button>
+        }
+      }
+      <button type="button" class="shell__more-item" (click)="showCalibration()">
+        <fpv-icon name="controller" [size]="18" />
+        <span>Calibration</span>
+      </button>
+      <button type="button" class="shell__more-item" (click)="showDiagnostics()">
+        <fpv-icon name="info" [size]="18" />
+        <span>Diagnostics</span>
+      </button>
+      <button type="button" class="shell__more-item" (click)="showFeedback()">
+        <fpv-icon name="info" [size]="18" />
+        <span>Feedback</span>
+      </button>
+      <button type="button" class="shell__more-item" (click)="showEnvironments()">
+        <fpv-icon name="weather" [size]="18" />
+        <span>Environments</span>
+      </button>
+      <button type="button" class="shell__more-item" (click)="openAccount()">
+        <fpv-icon name="profile" [size]="18" />
+        <span>{{ auth.isAuthenticated() ? 'Account' : 'Sign in' }}</span>
+      </button>
+    </div>
+  </fpv-dialog>
+</div>

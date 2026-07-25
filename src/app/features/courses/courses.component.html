@@ -1,0 +1,95 @@
+<div class="courses">
+  <header class="courses__header">
+    <div>
+      <p class="courses__eyebrow">Time attack</p>
+      <h1 class="courses__title">Courses</h1>
+      <p class="courses__support">
+        Pick a track, chase your ghost, and lock in cleaner gate lines.
+        Local races always work offline; ranked attempts need an account.
+      </p>
+      @if (rankedError()) {
+        <p class="courses__ranked-error" role="status">{{ rankedError() }}</p>
+      }
+    </div>
+    <div class="courses__header-actions">
+      <button type="button" class="ghost-button" (click)="onEnvironments()">
+        Environments
+      </button>
+      <button type="button" class="ghost-button" (click)="onBack()">
+        Back to Home
+      </button>
+    </div>
+  </header>
+
+  <ul class="course-grid">
+    @for (card of courses(); track card.entry.id) {
+      <li
+        class="course-card"
+        [class.course-card--soon]="card.entry.comingSoon"
+      >
+        <div class="course-card__top">
+          <h2 class="course-card__name">{{ card.entry.name }}</h2>
+          @if (card.entry.comingSoon) {
+            <span class="course-card__badge course-card__badge--soon">
+              Coming Soon
+            </span>
+          } @else {
+            <span class="course-card__badge">{{ card.entry.difficulty }}</span>
+          }
+        </div>
+
+        <p class="course-card__desc">{{ card.entry.description }}</p>
+
+        <dl class="course-card__meta">
+          <div>
+            <dt>Environment</dt>
+            <dd>{{ environmentLabel(card.entry.environmentId) }}</dd>
+          </div>
+          <div>
+            <dt>Gates</dt>
+            <dd>{{ card.entry.gateCount > 0 ? card.entry.gateCount : '—' }}</dd>
+          </div>
+          <div>
+            <dt>Best time</dt>
+            <dd>{{ card.entry.playable ? card.bestTimeLabel : '—' }}</dd>
+          </div>
+          <div>
+            <dt>Ghost</dt>
+            <dd>
+              @if (!card.entry.playable) {
+                —
+              } @else if (card.hasGhost) {
+                Saved
+              } @else {
+                None
+              }
+            </dd>
+          </div>
+        </dl>
+
+        @if (card.entry.playable) {
+          <div class="course-card__actions">
+            <button
+              type="button"
+              class="primary-button"
+              (click)="onStartRace(card.entry.id)"
+            >
+              Start Local Race
+            </button>
+            <button
+              type="button"
+              class="ghost-button"
+              [disabled]="rankedBusy()"
+              [attr.title]="canRank() ? 'Submit a verified time' : 'Sign in while online to race ranked'"
+              (click)="onStartRanked(card.entry.id)"
+            >
+              {{ canRank() ? 'Start Ranked Attempt' : 'Ranked (sign in)' }}
+            </button>
+          </div>
+        } @else {
+          <p class="course-card__soon-note">Not playable yet</p>
+        }
+      </li>
+    }
+  </ul>
+</div>

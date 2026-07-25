@@ -1,0 +1,163 @@
+<section class="env-settings" aria-label="Environment settings">
+  <h3 class="env-settings__title">Environment</h3>
+
+  <div class="env-settings__row">
+    <label class="env-settings__label" for="env-select">World</label>
+    <select
+      id="env-select"
+      class="env-settings__select"
+      [disabled]="disabled()"
+      [value]="settings().selectedEnvironmentId"
+      (change)="onEnvironmentSelect($event)"
+    >
+      @for (env of environments(); track env.id) {
+        <option [value]="env.id">{{ env.name }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="env-settings__row">
+    <span class="env-settings__label">Quality</span>
+    <div class="env-settings__seg" role="group" aria-label="Environment quality">
+      @for (q of qualities; track q) {
+        <button
+          type="button"
+          class="env-settings__chip"
+          [class.env-settings__chip--active]="settings().quality === q"
+          [disabled]="disabled()"
+          (click)="qualityChange.emit(q)"
+        >
+          {{ labelQuality(q) }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="env-settings__row">
+    <span class="env-settings__label">Time of day</span>
+    <div class="env-settings__seg" role="group" aria-label="Time of day">
+      @for (t of times; track t) {
+        <button
+          type="button"
+          class="env-settings__chip"
+          [class.env-settings__chip--active]="settings().timeOfDay === t"
+          [disabled]="disabled()"
+          (click)="timeOfDayChange.emit(t)"
+        >
+          {{ labelTime(t) }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="env-settings__toggles">
+    <label class="env-settings__toggle">
+      <input
+        type="checkbox"
+        [checked]="settings().vegetation"
+        [disabled]="disabled()"
+        (change)="vegetationChange.emit($any($event.target).checked)"
+      />
+      <span>Vegetation</span>
+    </label>
+    <label class="env-settings__toggle">
+      <input
+        type="checkbox"
+        [checked]="settings().shadows"
+        [disabled]="disabled()"
+        (change)="shadowsChange.emit($any($event.target).checked)"
+      />
+      <span>Shadows</span>
+    </label>
+    <label class="env-settings__toggle">
+      <input
+        type="checkbox"
+        [checked]="settings().fog"
+        [disabled]="disabled()"
+        (change)="fogChange.emit($any($event.target).checked)"
+      />
+      <span>Atmospheric fog</span>
+    </label>
+  </div>
+
+  @if (weather(); as wx) {
+    <h3 class="env-settings__title env-settings__title--spaced">Weather</h3>
+
+    <div class="env-settings__row">
+      <label class="env-settings__label" for="weather-preset-select">Preset</label>
+      <select
+        id="weather-preset-select"
+        class="env-settings__select"
+        [disabled]="disabled()"
+        [value]="wx.selectedFreeFlightWeatherPreset"
+        (change)="onWeatherPresetSelect($event)"
+      >
+        @for (preset of weatherPresets(); track preset.id) {
+          <option [value]="preset.id">{{ preset.name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="env-settings__toggles">
+      <label class="env-settings__toggle">
+        <input
+          type="checkbox"
+          [checked]="wx.windHudEnabled"
+          [disabled]="disabled()"
+          (change)="windHudChange.emit($any($event.target).checked)"
+        />
+        <span>Wind HUD</span>
+      </label>
+      <label class="env-settings__toggle">
+        <input
+          type="checkbox"
+          [checked]="wx.windPhysicsEnabled"
+          [disabled]="disabled()"
+          (change)="windPhysicsChange.emit($any($event.target).checked)"
+        />
+        <span>Wind physics</span>
+      </label>
+      <label class="env-settings__toggle">
+        <input
+          type="checkbox"
+          [checked]="wx.precipitationEnabled"
+          [disabled]="disabled()"
+          (change)="precipitationChange.emit($any($event.target).checked)"
+        />
+        <span>Precipitation</span>
+      </label>
+    </div>
+
+    <div class="env-settings__row">
+      <label class="env-settings__label" for="ambience-vol">
+        Ambience {{ wx.environmentAmbienceVolume }}
+      </label>
+      <input
+        id="ambience-vol"
+        class="env-settings__range"
+        type="range"
+        min="0"
+        max="100"
+        [value]="wx.environmentAmbienceVolume"
+        [disabled]="disabled()"
+        (input)="onAmbienceVolume($event)"
+      />
+    </div>
+
+    <div class="env-settings__row">
+      <label class="env-settings__label" for="weather-audio-vol">
+        Weather audio {{ wx.weatherAudioVolume }}
+      </label>
+      <input
+        id="weather-audio-vol"
+        class="env-settings__range"
+        type="range"
+        min="0"
+        max="100"
+        [value]="wx.weatherAudioVolume"
+        [disabled]="disabled()"
+        (input)="onWeatherAudioVolume($event)"
+      />
+    </div>
+  }
+</section>

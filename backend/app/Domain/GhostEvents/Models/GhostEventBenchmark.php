@@ -1,0 +1,3 @@
+<?php
+namespace App\Domain\GhostEvents\Models; use App\Domain\Replays\Models\ReplayRecord; use App\Domain\Races\Models\RaceRun; use Illuminate\Database\Eloquent\Model; use Illuminate\Database\Eloquent\Relations\BelongsTo;
+class GhostEventBenchmark extends Model { protected $fillable=['ghost_event_id','slot','replay_record_id','race_run_id','label','duration_ms','digest','compatibility_version','metadata_json']; protected function casts():array{return ['metadata_json'=>'array'];} public function event():BelongsTo{return $this->belongsTo(GhostEvent::class,'ghost_event_id');} public function replay():BelongsTo{return $this->belongsTo(ReplayRecord::class,'replay_record_id');} public function run():BelongsTo{return $this->belongsTo(RaceRun::class,'race_run_id');} }

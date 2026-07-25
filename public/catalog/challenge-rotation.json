@@ -1,0 +1,117 @@
+{
+  "catalogVersion": 1,
+  "dailyPool": [
+    {
+      "slug": "starter-circuit-calm",
+      "title": "Starter Circuit Calm",
+      "description": "Clean alpine laps in calm air.",
+      "environmentId": "alpine-training-valley",
+      "courseId": "starter-circuit",
+      "weatherPresetId": "calm",
+      "scoringType": "fastest_time",
+      "xpReward": 40,
+      "medalThresholdsMs": { "gold": 45000, "silver": 60000, "bronze": 90000 }
+    },
+    {
+      "slug": "starter-circuit-light-breeze",
+      "title": "Starter Circuit Light Breeze",
+      "description": "Handle a gentle alpine breeze.",
+      "environmentId": "alpine-training-valley",
+      "courseId": "starter-circuit",
+      "weatherPresetId": "light-breeze",
+      "scoringType": "fastest_time",
+      "xpReward": 45,
+      "medalThresholdsMs": { "gold": 48000, "silver": 65000, "bronze": 95000 }
+    },
+    {
+      "slug": "industrial-sprint-calm",
+      "title": "Industrial Sprint Calm",
+      "description": "Desert yard sprint in calm conditions.",
+      "environmentId": "desert-industrial-yard",
+      "courseId": "industrial-sprint",
+      "weatherPresetId": "desert-calm",
+      "scoringType": "fastest_time",
+      "xpReward": 45,
+      "medalThresholdsMs": { "gold": 50000, "silver": 70000, "bronze": 100000 }
+    },
+    {
+      "slug": "coastal-run-sea-breeze",
+      "title": "Coastal Run Sea Breeze",
+      "description": "Ride the coastal sea breeze.",
+      "environmentId": "coastal-ruins",
+      "courseId": "coastal-run",
+      "weatherPresetId": "coastal-sea-breeze",
+      "scoringType": "fastest_time",
+      "xpReward": 50,
+      "medalThresholdsMs": { "gold": 55000, "silver": 75000, "bronze": 110000 }
+    },
+    {
+      "slug": "gate-basics-speed-trial",
+      "title": "Gate Basics Speed Trial",
+      "description": "Speed-focused starter circuit run.",
+      "environmentId": "alpine-training-valley",
+      "courseId": "starter-circuit",
+      "weatherPresetId": "alpine-valley-morning",
+      "scoringType": "fastest_time",
+      "xpReward": 40,
+      "medalThresholdsMs": { "gold": 42000, "silver": 58000, "bronze": 85000 }
+    }
+  ],
+  "weeklyPool": [
+    {
+      "slug": "alpine-crosswind",
+      "title": "Alpine Crosswind",
+      "description": "Crosswind control on the starter circuit.",
+      "environmentId": "alpine-training-valley",
+      "courseId": "starter-circuit",
+      "weatherPresetId": "crosswind",
+      "scoringType": "fastest_time",
+      "xpReward": 100,
+      "medalThresholdsMs": { "gold": 55000, "silver": 75000, "bronze": 110000 }
+    },
+    {
+      "slug": "industrial-gust-run",
+      "title": "Industrial Gust Run",
+      "description": "Gusty desert yard challenge.",
+      "environmentId": "desert-industrial-yard",
+      "courseId": "industrial-sprint",
+      "weatherPresetId": "desert-gusty-yard",
+      "scoringType": "fastest_time",
+      "xpReward": 110,
+      "medalThresholdsMs": { "gold": 60000, "silver": 80000, "bronze": 120000 }
+    },
+    {
+      "slug": "coastal-rain-flight",
+      "title": "Coastal Rain Flight",
+      "description": "Coastal run in light rain.",
+      "environmentId": "coastal-ruins",
+      "courseId": "coastal-run",
+      "weatherPresetId": "coastal-light-rain",
+      "scoringType": "fastest_time",
+      "xpReward": 120,
+      "medalThresholdsMs": { "gold": 65000, "silver": 85000, "bronze": 130000 }
+    },
+    {
+      "slug": "clean-run-challenge",
+      "title": "Clean Run Challenge",
+      "description": "Finish with zero crashes preferred.",
+      "environmentId": "alpine-training-valley",
+      "courseId": "starter-circuit",
+      "weatherPresetId": "calm",
+      "scoringType": "fastest_time",
+      "xpReward": 100,
+      "medalThresholdsMs": { "gold": 50000, "silver": 70000, "bronze": 100000 }
+    },
+    {
+      "slug": "no-crash-technical",
+      "title": "No-Crash Technical Challenge",
+      "description": "Technical coastal flying under cloudy skies.",
+      "environmentId": "coastal-ruins",
+      "courseId": "coastal-run",
+      "weatherPresetId": "coastal-cloudy",
+      "scoringType": "fastest_time",
+      "xpReward": 115,
+      "medalThresholdsMs": { "gold": 60000, "silver": 80000, "bronze": 120000 }
+    }
+  ]
+}

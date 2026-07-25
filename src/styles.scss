@@ -1,0 +1,274 @@
+/* =============================================================================
+   FPV Trainer Design Tokens — dark-first control-room visual system
+   See docs/ui-design-system.md
+   ============================================================================= */
+
+:root {
+  /* —— Colors: surfaces —— */
+  --fpv-bg: #0a0f14;
+  --fpv-bg-top: #0b1118;
+  --fpv-bg-bottom: #121a22;
+  --fpv-surface: #101820;
+  --fpv-surface-elevated: #152029;
+  --fpv-panel: #152029;
+  --fpv-panel-glass: color-mix(in srgb, #152029 78%, transparent);
+  --fpv-border: rgba(148, 176, 196, 0.22);
+  --fpv-border-strong: rgba(168, 196, 214, 0.38);
+
+  /* —— Colors: text —— */
+  --fpv-text: #e7eef4;
+  --fpv-text-secondary: #b7c6d4;
+  --fpv-text-muted: #8fa3b5;
+  --fpv-muted: var(--fpv-text-muted);
+  --fpv-mono-text: #c5d6e4;
+
+  /* —— Colors: brand & semantic —— */
+  --fpv-accent: #2ec4b6;
+  --fpv-accent-strong: #1fa89c;
+  --fpv-accent-soft: color-mix(in srgb, var(--fpv-accent) 18%, transparent);
+  --fpv-on-accent: #041014;
+  --fpv-success: #3ddc97;
+  --fpv-ok: var(--fpv-success);
+  --fpv-warning: #f0b429;
+  --fpv-warn: var(--fpv-warning);
+  --fpv-danger: #ff6b6b;
+  --fpv-info: #5eb3f0;
+  --fpv-ghost: #7ec8ff;
+  --fpv-ranked: #f0b429;
+  --fpv-offline: #c9a227;
+  --fpv-focus-ring: var(--fpv-accent);
+
+  /* —— Spacing scale (px) —— */
+  --fpv-space-4: 4px;
+  --fpv-space-8: 8px;
+  --fpv-space-12: 12px;
+  --fpv-space-16: 16px;
+  --fpv-space-20: 20px;
+  --fpv-space-24: 24px;
+  --fpv-space-32: 32px;
+  --fpv-space-40: 40px;
+  --fpv-space-48: 48px;
+  --fpv-space-64: 64px;
+
+  /* —— Radii —— */
+  --fpv-radius-sm: 4px;
+  --fpv-radius-md: 6px;
+  --fpv-radius-lg: 10px;
+  --fpv-radius-xl: 14px;
+  --fpv-radius-pill: 999px;
+
+  /* —— Shadows —— */
+  --fpv-shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --fpv-shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --fpv-shadow-floating: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --fpv-shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.55);
+
+  /* —— Typography —— */
+  --fpv-font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --fpv-font-sans: 'Barlow', 'Segoe UI', sans-serif;
+  --fpv-font-mono: 'IBM Plex Mono', 'Consolas', monospace;
+
+  --fpv-text-display: clamp(2.5rem, 6vw, 3.75rem);
+  --fpv-text-h1: clamp(1.75rem, 3.5vw, 2.25rem);
+  --fpv-text-h2: 1.35rem;
+  --fpv-text-h3: 1.1rem;
+  --fpv-text-body: 1rem;
+  --fpv-text-body-sm: 0.9rem;
+  --fpv-text-label: 0.75rem;
+  --fpv-text-caption: 0.7rem;
+  --fpv-text-telem: 0.85rem;
+
+  --fpv-leading-tight: 1.15;
+  --fpv-leading-normal: 1.45;
+  --fpv-tracking-label: 0.1em;
+  --fpv-tracking-display: 0.04em;
+
+  /* —— Motion —— */
+  --fpv-motion-fast: 120ms;
+  --fpv-motion-normal: 200ms;
+  --fpv-motion-slow: 320ms;
+  --fpv-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --fpv-ease-emphasized: cubic-bezier(0.2, 0, 0, 1.1);
+
+  /* —— Z-index —— */
+  --fpv-z-base: 0;
+  --fpv-z-sticky: 100;
+  --fpv-z-hud: 200;
+  --fpv-z-dropdown: 300;
+  --fpv-z-overlay: 400;
+  --fpv-z-modal: 500;
+  --fpv-z-toast: 600;
+
+  /* —— Layout —— */
+  --fpv-shell-rail: 64px;
+  --fpv-shell-sidebar: 240px;
+  --fpv-shell-topbar: 52px;
+  --fpv-shell-bottom-nav: 64px;
+  --fpv-content-max: 1120px;
+  --fpv-content-narrow: 720px;
+  --fpv-page-gutter: var(--fpv-space-16);
+
+  /* —— Breakpoints (reference; use in media queries) —— */
+  --fpv-bp-sm: 560px;
+  --fpv-bp-md: 768px;
+  --fpv-bp-lg: 1024px;
+  --fpv-bp-xl: 1280px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fpv-motion-fast: 0ms;
+    --fpv-motion-normal: 0ms;
+    --fpv-motion-slow: 0ms;
+  }
+}
+
+/* —— Light mode (preserved for future / system preference) —— */
+@media (prefers-color-scheme: light) {
+  html[data-theme='system'] {
+    --fpv-bg: #e8eef3;
+    --fpv-bg-top: #f2f6f9;
+    --fpv-bg-bottom: #dfe7ee;
+    --fpv-surface: #ffffff;
+    --fpv-surface-elevated: #ffffff;
+    --fpv-panel: #ffffff;
+    --fpv-panel-glass: color-mix(in srgb, #ffffff 86%, transparent);
+    --fpv-border: rgba(40, 64, 84, 0.16);
+    --fpv-border-strong: rgba(40, 64, 84, 0.28);
+    --fpv-text: #13202b;
+    --fpv-text-secondary: #3a5164;
+    --fpv-text-muted: #5a7184;
+    --fpv-mono-text: #2a4052;
+    --fpv-on-accent: #041014;
+  }
+}
+
+html[data-theme='light'] {
+  --fpv-bg: #e8eef3;
+  --fpv-bg-top: #f2f6f9;
+  --fpv-bg-bottom: #dfe7ee;
+  --fpv-surface: #ffffff;
+  --fpv-surface-elevated: #ffffff;
+  --fpv-panel: #ffffff;
+  --fpv-panel-glass: color-mix(in srgb, #ffffff 86%, transparent);
+  --fpv-border: rgba(40, 64, 84, 0.16);
+  --fpv-border-strong: rgba(40, 64, 84, 0.28);
+  --fpv-text: #13202b;
+  --fpv-text-secondary: #3a5164;
+  --fpv-text-muted: #5a7184;
+  --fpv-mono-text: #2a4052;
+  --fpv-on-accent: #041014;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--fpv-bg);
+  color: var(--fpv-text);
+  font-family: var(--fpv-font-sans);
+  font-size: var(--fpv-text-body);
+  line-height: var(--fpv-leading-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--fpv-focus-ring);
+  outline-offset: 2px;
+}
+
+/* —— Shared page chrome helpers —— */
+.fpv-page {
+  width: min(var(--fpv-content-max), calc(100% - 2 * var(--fpv-page-gutter)));
+  margin: 0 auto;
+  padding: var(--fpv-space-24) 0 var(--fpv-space-48);
+}
+
+.fpv-page--narrow {
+  width: min(var(--fpv-content-narrow), calc(100% - 2 * var(--fpv-page-gutter)));
+}
+
+.fpv-page-bg {
+  min-height: 100%;
+  background:
+    radial-gradient(1200px 600px at 12% -12%, color-mix(in srgb, var(--fpv-accent) 14%, transparent), transparent 55%),
+    radial-gradient(900px 520px at 100% 8%, rgba(220, 90, 40, 0.06), transparent 50%),
+    linear-gradient(180deg, var(--fpv-bg-top), var(--fpv-bg-bottom));
+}
+
+.fpv-eyebrow {
+  margin: 0;
+  font-family: var(--fpv-font-display);
+  font-size: var(--fpv-text-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fpv-accent);
+}
+
+.fpv-title {
+  margin: 0;
+  font-family: var(--fpv-font-display);
+  font-size: var(--fpv-text-h1);
+  font-weight: 700;
+  letter-spacing: var(--fpv-tracking-display);
+  text-transform: uppercase;
+  line-height: var(--fpv-leading-tight);
+  color: var(--fpv-text);
+}
+
+.fpv-support {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--fpv-text-muted);
+  font-size: var(--fpv-text-body-sm);
+  line-height: var(--fpv-leading-normal);
+}
+
+.fpv-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Route transition (lightweight) */
+@keyframes fpv-route-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fpv-route-enter {
+  animation: fpv-route-in var(--fpv-motion-normal) var(--fpv-ease-standard) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fpv-route-enter {
+    animation: none;
+  }
+}

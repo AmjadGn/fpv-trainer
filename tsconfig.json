@@ -1,0 +1,47 @@
+/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
+/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@fpv/engineering-kernel": ["packages/engineering-kernel/src/index.ts"],
+      "@fpv/component-catalog": ["packages/component-catalog/src/index.ts"],
+      "@fpv/drone-build-domain": ["packages/drone-build-domain/src/index.ts"],
+      "@fpv/compatibility-engine": ["packages/compatibility-engine/src/index.ts"],
+      "@fpv/aircraft-engineering": ["packages/aircraft-engineering/src/index.ts"],
+      "@fpv/aircraft-compiler": ["packages/aircraft-compiler/src/index.ts"],
+      "@fpv/aircraft-runtime-adapter": ["packages/aircraft-runtime-adapter/src/index.ts"],
+      "@fpv/drone-build-persistence": ["packages/drone-build-persistence/src/index.ts"],
+      "@fpv/factory-aircraft": ["packages/factory-aircraft/src/index.ts"],
+      "@fpv/engineering-testing": ["packages/engineering-testing/src/index.ts"]
+    },
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "ignoreDeprecations": "6.0"
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
+  ]
+}

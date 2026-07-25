@@ -1,0 +1,449 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+}
+
+.shell {
+  --shell-sidebar-width: var(--fpv-shell-sidebar);
+  display: grid;
+  grid-template-columns: var(--shell-sidebar-width) 1fr;
+  /* Single content row on desktop — topbar is mobile-only and must not steal height. */
+  grid-template-rows: 1fr;
+  min-height: 100dvh;
+  background: var(--fpv-bg);
+}
+
+.shell--sidebar-collapsed {
+  --shell-sidebar-width: var(--fpv-shell-rail);
+}
+
+.shell--flight {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+}
+
+.shell--landing {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  background: transparent;
+}
+
+.shell--landing .shell__main {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 100dvh;
+  overflow: auto;
+}
+
+.shell--landing .shell__maintenance {
+  display: none;
+}
+
+.shell__sidebar {
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fpv-space-12);
+  padding: var(--fpv-space-12);
+  border-right: 1px solid var(--fpv-border);
+  background: var(--fpv-surface);
+  z-index: var(--fpv-z-sticky);
+}
+
+.shell__brand-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fpv-space-8);
+  min-height: 2.5rem;
+}
+
+.shell__brand {
+  appearance: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  border: 0;
+  background: transparent;
+  color: var(--fpv-text);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+
+.shell__brand-mark {
+  font-family: var(--fpv-font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--fpv-accent);
+  text-transform: uppercase;
+}
+
+.shell__brand-text {
+  font-family: var(--fpv-font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fpv-text-muted);
+}
+
+.shell__collapse {
+  appearance: none;
+  border: 1px solid var(--fpv-border);
+  border-radius: var(--fpv-radius-md);
+  background: transparent;
+  color: var(--fpv-text-muted);
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.shell__nav-desktop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fpv-space-8);
+  flex: 1;
+  overflow: auto;
+}
+
+.shell__nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.shell__nav-label {
+  margin: var(--fpv-space-12) 0 var(--fpv-space-4);
+  padding-left: var(--fpv-space-12);
+  font-size: var(--fpv-text-caption);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fpv-text-muted);
+}
+
+.shell__nav-label--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.shell__link,
+.shell__sublink {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--fpv-space-12);
+  border: 0;
+  border-radius: var(--fpv-radius-md);
+  background: transparent;
+  color: var(--fpv-text-muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--fpv-text-body-sm);
+  letter-spacing: 0.03em;
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  position: relative;
+}
+
+.shell__link:hover,
+.shell__sublink:hover {
+  color: var(--fpv-text);
+  background: color-mix(in srgb, var(--fpv-text) 5%, transparent);
+}
+
+.shell__link--active {
+  color: var(--fpv-accent);
+  background: var(--fpv-accent-soft);
+}
+
+.shell__subnav {
+  list-style: none;
+  margin: 0 0 0.25rem;
+  padding: 0 0 0 1.35rem;
+  display: grid;
+  gap: 2px;
+}
+
+.shell__sublink {
+  font-size: var(--fpv-text-caption);
+  padding: 0.4rem 0.55rem;
+}
+
+.shell__sidebar-foot {
+  display: grid;
+  gap: var(--fpv-space-8);
+  padding-top: var(--fpv-space-8);
+  border-top: 1px solid var(--fpv-border);
+}
+
+.shell__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.25rem;
+  border-radius: var(--fpv-radius-pill);
+  background: var(--fpv-accent);
+  color: var(--fpv-on-accent);
+  font-family: var(--fpv-font-mono);
+  font-size: 0.65rem;
+  margin-left: auto;
+}
+
+.shell__topbar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fpv-space-12);
+  padding: 0 var(--fpv-space-16);
+  border-bottom: 1px solid var(--fpv-border);
+  background: var(--fpv-surface);
+  z-index: var(--fpv-z-sticky);
+}
+
+.shell__topbar-main {
+  display: flex;
+  align-items: center;
+  gap: var(--fpv-space-12);
+}
+
+.shell__topbar-title {
+  margin: 0;
+  font-family: var(--fpv-font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  color: var(--fpv-text-muted);
+}
+
+.shell__topbar-actions {
+  display: flex;
+  gap: var(--fpv-space-8);
+}
+
+.shell__icon-btn {
+  appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fpv-space-8);
+  border: 1px solid var(--fpv-border);
+  border-radius: var(--fpv-radius-md);
+  background: transparent;
+  color: var(--fpv-text-muted);
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fpv-text-label);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.shell__icon-btn:hover {
+  color: var(--fpv-text);
+}
+
+.shell__flight-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fpv-space-12);
+  padding: var(--fpv-space-8) var(--fpv-space-12);
+  border-bottom: 1px solid var(--fpv-border);
+  background: rgba(0, 0, 0, 0.35);
+  z-index: var(--fpv-z-hud);
+}
+
+.shell__main {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.shell--flight .shell__main {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.shell__loading {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 2rem auto;
+  color: var(--fpv-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+}
+
+.shell__maintenance {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0.75rem auto;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--fpv-warn);
+  color: var(--fpv-warn);
+  background: color-mix(in srgb, var(--fpv-warn) 10%, transparent);
+  border-radius: var(--fpv-radius-md);
+}
+
+.shell__bottom {
+  display: none;
+}
+
+.shell__more-list {
+  display: grid;
+  gap: 2px;
+}
+
+.shell__more-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--fpv-space-12);
+  width: 100%;
+  border: 0;
+  border-radius: var(--fpv-radius-md);
+  background: transparent;
+  color: var(--fpv-text);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.75rem 0.5rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.shell__more-item:hover {
+  background: color-mix(in srgb, var(--fpv-text) 6%, transparent);
+}
+
+/* Desktop: sidebar visible, bottom nav hidden */
+@media (min-width: 901px) {
+  .shell__sidebar {
+    display: flex;
+    grid-row: 1;
+  }
+
+  .shell__topbar {
+    display: none;
+  }
+
+  .shell--flight {
+    grid-template-rows: auto 1fr;
+  }
+
+  .shell__topbar-status {
+    display: none;
+  }
+
+  .shell--sidebar-collapsed .shell__link span,
+  .shell--sidebar-collapsed .shell__brand-text {
+    display: none;
+  }
+
+  .shell--sidebar-collapsed .shell__link {
+    justify-content: center;
+    padding-inline: 0.55rem;
+  }
+
+  .shell--sidebar-collapsed .shell__badge {
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
+    margin: 0;
+  }
+}
+
+/* Tablet / mobile: bottom nav + top utility bar */
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: var(--fpv-shell-topbar) 1fr auto;
+    padding-bottom: 0;
+  }
+
+  .shell--landing {
+    grid-template-rows: 1fr;
+  }
+
+  .shell--landing .shell__topbar,
+  .shell--landing .shell__bottom {
+    display: none;
+  }
+
+  .shell__sidebar {
+    display: none;
+  }
+
+  .shell__topbar {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .shell__main {
+    grid-column: 1;
+    grid-row: 2;
+    padding-bottom: var(--fpv-space-8);
+  }
+
+  .shell__bottom {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-column: 1;
+    grid-row: 3;
+    gap: 0;
+    border-top: 1px solid var(--fpv-border);
+    background: var(--fpv-surface);
+    z-index: var(--fpv-z-sticky);
+    min-height: var(--fpv-shell-bottom-nav);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .shell__bottom-item {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--fpv-text-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    font: inherit;
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 0.45rem 0.15rem;
+    cursor: pointer;
+  }
+
+  .shell__bottom-item--active {
+    color: var(--fpv-accent);
+  }
+
+  .shell--flight {
+    grid-template-rows: auto 1fr;
+  }
+
+  .shell--flight .shell__bottom {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .shell__bottom-item span {
+    font-size: 0.55rem;
+  }
+}

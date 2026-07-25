@@ -1,0 +1,25 @@
+@if (current(); as toast) {
+  <div
+    class="achievement-toast"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    <span class="achievement-toast__icon" aria-hidden="true">{{ toast.icon }}</span>
+    <div class="achievement-toast__body">
+      <p class="achievement-toast__eyebrow">Achievement Unlocked</p>
+      <p class="achievement-toast__title">{{ toast.title }}</p>
+      @if (toast.unlock.xpAwarded > 0) {
+        <p class="achievement-toast__xp">+{{ toast.unlock.xpAwarded }} XP</p>
+      }
+    </div>
+    <button
+      type="button"
+      class="achievement-toast__close"
+      (click)="onClose()"
+      aria-label="Dismiss achievement"
+    >
+      ×
+    </button>
+  </div>
+}

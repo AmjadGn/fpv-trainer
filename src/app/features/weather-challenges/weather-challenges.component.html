@@ -1,0 +1,66 @@
+<div class="challenges">
+  <header class="challenges__header">
+    <div>
+      <p class="challenges__eyebrow">Weather ops</p>
+      <h1 class="challenges__title">Weather Challenges</h1>
+      <p class="challenges__support">
+        Locked weather presets on race courses — fly clean for medals and XP.
+      </p>
+    </div>
+    <button type="button" class="ghost-button" (click)="onBack()">
+      Back to Home
+    </button>
+  </header>
+
+  <ul class="challenge-grid">
+    @for (card of challenges(); track card.challenge.id) {
+      <li class="challenge-card">
+        <div class="challenge-card__top">
+          <h2 class="challenge-card__name">{{ card.challenge.title }}</h2>
+          <span class="challenge-card__badge">{{ card.challenge.difficulty }}</span>
+        </div>
+
+        <p class="challenge-card__desc">{{ card.challenge.description }}</p>
+
+        <dl class="challenge-card__meta">
+          <div>
+            <dt>Environment</dt>
+            <dd>{{ card.environmentName }}</dd>
+          </div>
+          <div>
+            <dt>Course</dt>
+            <dd>{{ card.courseName }}</dd>
+          </div>
+          <div>
+            <dt>Wind</dt>
+            <dd>{{ card.challenge.windStrengthLabel }}</dd>
+          </div>
+          <div>
+            <dt>Visibility</dt>
+            <dd>{{ card.challenge.visibilityLabel }}</dd>
+          </div>
+          <div>
+            <dt>Reward</dt>
+            <dd>{{ card.challenge.rewardXp }} XP</dd>
+          </div>
+          <div>
+            <dt>Medals</dt>
+            <dd>
+              B{{ card.challenge.medalThresholds.bronze }} /
+              S{{ card.challenge.medalThresholds.silver }} /
+              G{{ card.challenge.medalThresholds.gold }}
+            </dd>
+          </div>
+        </dl>
+
+        <button
+          type="button"
+          class="primary-button"
+          (click)="onStart(card.challenge)"
+        >
+          Start Challenge
+        </button>
+      </li>
+    }
+  </ul>
+</div>

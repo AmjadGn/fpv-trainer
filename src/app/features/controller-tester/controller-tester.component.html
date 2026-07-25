@@ -1,0 +1,177 @@
+<div class="tester">
+  <header class="tester__header">
+    <div class="tester__titles">
+      <h1 class="tester__brand">FPV Trainer</h1>
+      <p class="tester__subtitle">Controller Diagnostics</p>
+    </div>
+
+    <div class="tester__actions">
+      <p
+        class="status-badge"
+        [class.status-badge--connected]="connectionStatus() === 'connected'"
+        [class.status-badge--waiting]="connectionStatus() === 'waiting'"
+        [class.status-badge--unavailable]="connectionStatus() === 'unavailable'"
+        role="status"
+        [attr.aria-live]="connectionStatus() === 'connected' ? 'polite' : 'assertive'"
+      >
+        <span class="status-badge__dot" aria-hidden="true"></span>
+        {{ connectionLabel() }}
+      </p>
+
+      <button
+        type="button"
+        class="scan-button"
+        (click)="onScanControllers()"
+        [disabled]="!controller.apiAvailable()"
+      >
+        Scan Controllers
+      </button>
+    </div>
+  </header>
+
+  @if (connectionStatus() !== 'connected') {
+    <section class="panel instructions" aria-labelledby="instructions-heading">
+      <h2 id="instructions-heading" class="panel__title">Connect your controller</h2>
+      <ol class="instructions__list">
+        <li>Connect the controller using a USB-C data cable.</li>
+        <li>Turn on the controller.</li>
+        <li>Press a button or move a stick.</li>
+        <li>Use Google Chrome.</li>
+      </ol>
+      @if (connectionStatus() === 'unavailable') {
+        <p class="instructions__note">
+          This browser does not expose the Gamepad API. Open the app in Google Chrome on macOS.
+        </p>
+      }
+    </section>
+  }
+
+  @if (controller.connected()) {
+    <section class="panel summary" aria-labelledby="summary-heading">
+      <h2 id="summary-heading" class="panel__title">Controller</h2>
+      <dl class="summary__grid">
+        <div class="summary__item">
+          <dt>Name</dt>
+          <dd>{{ controller.controllerName() }}</dd>
+        </div>
+        <div class="summary__item">
+          <dt>Index</dt>
+          <dd>{{ controller.controllerIndex() }}</dd>
+        </div>
+        <div class="summary__item">
+          <dt>Mapping</dt>
+          <dd>{{ controller.mapping() }}</dd>
+        </div>
+        <div class="summary__item">
+          <dt>Axes</dt>
+          <dd>{{ controller.axes().length }}</dd>
+        </div>
+        <div class="summary__item">
+          <dt>Buttons</dt>
+          <dd>{{ controller.buttons().length }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="panel calibration-card" aria-labelledby="calibration-heading">
+      <div class="calibration-card__header">
+        <h2 id="calibration-heading" class="panel__title">Calibration status</h2>
+        <p
+          class="calibration-pill"
+          [class.calibration-pill--ok]="calibration.hasCalibration()"
+          [class.calibration-pill--warn]="!calibration.hasCalibration()"
+          role="status"
+        >
+          {{ calibrationLabel() }}
+        </p>
+      </div>
+
+      @if (calibration.calibratedInput(); as live) {
+        <dl class="calibration-grid">
+          @for (channel of channels; track channel) {
+            <div class="calibration-grid__item">
+              <dt>{{ channelLabel(channel) }}</dt>
+              <dd>{{ live[channel] | number: '1.4-4' }}</dd>
+            </div>
+          }
+        </dl>
+      } @else {
+        <p class="calibration-card__hint">
+          No calibration for this controller yet. Map throttle, yaw, pitch, and roll to get normalized flight input.
+        </p>
+      }
+
+      <div class="calibration-card__actions">
+        <button type="button" class="scan-button" (click)="onOpenCalibration()">
+          Open Calibration
+        </button>
+        @if (calibration.hasCalibration()) {
+          <button
+            type="button"
+            class="danger-button"
+            (click)="onResetCalibration()"
+          >
+            Reset Calibration
+          </button>
+        }
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="axes-heading">
+      <h2 id="axes-heading" class="panel__title">Axes</h2>
+      <ul class="axis-list">
+        @for (axis of controller.axes(); track axis.index) {
+          <li
+            class="axis-row"
+            [class.axis-row--active]="axis.active"
+          >
+            <div class="axis-row__meta">
+              <span class="axis-row__label">Axis {{ axis.index }}</span>
+              <span class="axis-row__value">{{ axis.rawValue | number: '1.4-4' }}</span>
+            </div>
+            <div
+              class="axis-bar"
+              role="meter"
+              [attr.aria-valuemin]="-1"
+              [attr.aria-valuemax]="1"
+              [attr.aria-valuenow]="axis.rawValue"
+              [attr.aria-label]="'Axis ' + axis.index"
+            >
+              <span class="axis-bar__track" aria-hidden="true">
+                <span class="axis-bar__center"></span>
+                <span
+                  class="axis-bar__fill"
+                  [style.width.%]="axisFillPercent(axis.rawValue)"
+                ></span>
+              </span>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <section class="panel" aria-labelledby="buttons-heading">
+      <h2 id="buttons-heading" class="panel__title">Buttons</h2>
+      <ul class="button-grid">
+        @for (button of controller.buttons(); track button.index) {
+          <li
+            class="button-cell"
+            [class.button-cell--pressed]="button.pressed"
+            [class.button-cell--touched]="button.touched && !button.pressed"
+          >
+            <span class="button-cell__index">B{{ button.index }}</span>
+            <span class="button-cell__value">{{ button.value | number: '1.2-2' }}</span>
+            <span class="button-cell__state">
+              {{ button.pressed ? 'Pressed' : button.touched ? 'Touched' : 'Idle' }}
+            </span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  <section class="panel diagnostics" aria-labelledby="diagnostics-heading">
+    <h2 id="diagnostics-heading" class="panel__title">Raw diagnostics</h2>
+    <pre class="diagnostics__json" tabindex="0">{{ diagnosticsJson() }}</pre>
+  </section>
+</div>

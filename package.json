@@ -1,0 +1,46 @@
+{
+  "name": "fpv-trainer-web",
+  "version": "1.0.0-alpha.1",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "test:ci": "ng test --watch=false",
+    "test:engineering": "ng test --watch=false --include=src/app/core/engineering/**/*.spec.ts",
+    "backend:test": "cd backend && php artisan test",
+    "catalog:check": "node scripts/check-catalog.mjs",
+    "catalog:sync": "cp -R shared/catalog/. public/catalog/",
+    "serve:ssr:fpv-trainer-web": "node dist/fpv-trainer-web/server/server.mjs"
+  },
+  "private": true,
+  "packageManager": "npm@10.9.8",
+  "dependencies": {
+    "@angular/common": "^22.0.0",
+    "@angular/compiler": "^22.0.0",
+    "@angular/core": "^22.0.0",
+    "@angular/forms": "^22.0.0",
+    "@angular/platform-browser": "^22.0.0",
+    "@angular/platform-server": "^22.0.0",
+    "@angular/router": "^22.0.0",
+    "@angular/ssr": "^22.0.7",
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "express": "^5.1.0",
+    "rxjs": "~7.8.0",
+    "three": "^0.185.1",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.0.7",
+    "@angular/cli": "^22.0.7",
+    "@angular/compiler-cli": "^22.0.0",
+    "@types/express": "^5.0.1",
+    "@types/node": "^20.17.19",
+    "@types/three": "^0.185.1",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~6.0.2",
+    "vitest": "^4.0.8"
+  }
+}

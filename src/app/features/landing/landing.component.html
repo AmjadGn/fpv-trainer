@@ -1,0 +1,165 @@
+<div class="landing">
+  <div class="landing__sky" aria-hidden="true">
+    <div class="landing__horizon"></div>
+    <div class="landing__scan"></div>
+    <div class="landing__vignette"></div>
+  </div>
+
+  <header class="landing__nav">
+    <a class="landing__logo" routerLink="/" aria-label="FPV Trainer home">
+      <span class="landing__logo-mark">FPV</span>
+      <span class="landing__logo-text">Trainer</span>
+    </a>
+    <nav class="landing__nav-links" aria-label="Landing">
+      <a routerLink="/privacy">Privacy</a>
+      <a routerLink="/terms">Terms</a>
+      <a routerLink="/login">Sign in</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="landing__hero">
+      <div class="landing__hero-copy">
+        <h1 class="landing__brand">
+          <span class="landing__brand-fpv">FPV</span>
+          <span class="landing__brand-trainer">Trainer</span>
+        </h1>
+        <p class="landing__headline">Learn to fly FPV in your browser</p>
+        <p class="landing__lede">
+          Manual-style controls, original aircraft, and real stick time — no account required to
+          start. Crashing is part of learning.
+        </p>
+        <div class="landing__cta">
+          @if (guestAllowed()) {
+            <button type="button" class="landing__btn landing__btn--primary" (click)="startGuest()">
+              Start flying
+            </button>
+            <button
+              type="button"
+              class="landing__btn landing__btn--secondary"
+              (click)="startOnboarding()"
+            >
+              Guided first flight
+            </button>
+          } @else {
+            <a routerLink="/login" class="landing__btn landing__btn--primary">Sign in to continue</a>
+          }
+          <a routerLink="/login" class="landing__ghost-link">I have an account</a>
+        </div>
+        <p class="landing__alpha">Public alpha — physics and features will change. Feedback welcome.</p>
+      </div>
+
+      <div class="landing__hud" aria-hidden="true">
+        <div class="landing__hud-frame">
+          <span class="landing__hud-corner landing__hud-corner--tl"></span>
+          <span class="landing__hud-corner landing__hud-corner--tr"></span>
+          <span class="landing__hud-corner landing__hud-corner--bl"></span>
+          <span class="landing__hud-corner landing__hud-corner--br"></span>
+          <p class="landing__hud-label">FPV VIEW</p>
+          <div class="landing__hud-cross"></div>
+          <div class="landing__hud-meta">
+            <span>THR 42%</span>
+            <span>ALT 12.4</span>
+            <span>SPD 38</span>
+          </div>
+          <div class="landing__drone"></div>
+        </div>
+      </div>
+    </section>
+
+    @if (accessRequired()) {
+      <section class="landing__access" aria-labelledby="access-heading">
+        <h2 id="access-heading">Alpha invitation</h2>
+        <p>Enter your invitation code to access the simulator.</p>
+        <form class="landing__access-form" (submit)="$event.preventDefault(); submitCode()">
+          <label>
+            Invitation code
+            <input
+              type="text"
+              name="invite"
+              autocomplete="off"
+              [value]="inviteCode()"
+              (input)="onInviteInput($event)"
+            />
+          </label>
+          <button type="submit" class="landing__btn landing__btn--primary">Continue</button>
+        </form>
+        @if (alphaError(); as err) {
+          <p class="landing__error" role="alert">{{ err }}</p>
+        }
+      </section>
+    }
+
+    <section class="landing__pillars" aria-labelledby="pillars-heading">
+      <h2 id="pillars-heading">Three ways to fly</h2>
+      <p class="landing__section-support">Everything in the product maps to Learn, Fly, or Compete.</p>
+      <div class="landing__pillar-grid">
+        <article>
+          <h3>Learn</h3>
+          <p>Controller basics, hover practice, gates, and a short guided first flight.</p>
+        </article>
+        <article>
+          <h3>Fly</h3>
+          <p>Free Flight, Test Flight, Hangar aircraft, environments, and weather.</p>
+        </article>
+        <article>
+          <h3>Compete</h3>
+          <p>Time trials, ghosts, leaderboards, seasons, and tournaments when you are ready.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="landing__features" aria-labelledby="features-heading">
+      <h2 id="features-heading">Built for stick time</h2>
+      <ul>
+        <li>Original aircraft with distinct flight feel — not manufacturer clones.</li>
+        <li>Gamepad and FPV controller support, plus keyboard fallback.</li>
+        <li>Browser-based — Chrome, Edge, Firefox, and Safari where WebGL allows.</li>
+        <li>Training Academy for structured practice before racing.</li>
+      </ul>
+    </section>
+
+    <section class="landing__limits" aria-labelledby="limits-heading">
+      <h2 id="limits-heading">Alpha limitations</h2>
+      <p>
+        Not every controller is supported. Flight behavior is an approximation. Competitive integrity
+        relies on server checks — client results can be rejected. This is a simulation, not a
+        substitute for real-world training or local laws.
+      </p>
+    </section>
+
+    <section class="landing__faq" aria-labelledby="faq-heading">
+      <h2 id="faq-heading">FAQ</h2>
+      <details>
+        <summary>Do I need an account?</summary>
+        <p>
+          No. Guests can onboard, calibrate, train, and Free Fly. Accounts are for sync, leaderboards,
+          and events.
+        </p>
+      </details>
+      <details>
+        <summary>Do you support my DJI controller?</summary>
+        <p>
+          Many DJI-compatible setups work through the Gamepad API in Chromium browsers. We do not
+          claim universal support — use Calibration to verify yours.
+        </p>
+      </details>
+      <details>
+        <summary>Can I fly on a phone?</summary>
+        <p>
+          Browse and set up on mobile. Ranked flight needs a supported control method — you will see
+          a clear warning if not.
+        </p>
+      </details>
+    </section>
+  </main>
+
+  <footer class="landing__footer">
+    <a routerLink="/privacy">Privacy</a>
+    <a routerLink="/terms">Terms</a>
+    <a routerLink="/licenses">Licenses</a>
+    <a routerLink="/alpha-disclaimer">Alpha disclaimer</a>
+    <a routerLink="/safety">Safety</a>
+    <span>FPV Trainer · Alpha</span>
+  </footer>
+</div>

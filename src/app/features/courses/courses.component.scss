@@ -1,0 +1,202 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  color: var(--fpv-text);
+  font-family: var(--fpv-font-sans);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(0, 180, 160, 0.12), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(220, 90, 40, 0.08), transparent 50%),
+    linear-gradient(180deg, var(--fpv-bg-top), var(--fpv-bg-bottom));
+}
+
+.courses {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.75rem 0 3rem;
+  display: grid;
+  gap: 1.75rem;
+}
+
+.courses__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--fpv-border);
+}
+
+.courses__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.courses__eyebrow {
+  margin: 0;
+  font-family: var(--fpv-font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fpv-accent);
+}
+
+.courses__title {
+  margin: 0.2rem 0 0;
+  font-family: var(--fpv-font-display);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.05;
+}
+
+.courses__support {
+  margin: 0.45rem 0 0;
+  max-width: 34rem;
+  color: var(--fpv-muted);
+  line-height: 1.45;
+}
+
+.course-grid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.9rem;
+}
+
+.course-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--fpv-border);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--fpv-panel) 88%, transparent);
+}
+
+.course-card--soon {
+  opacity: 0.78;
+}
+
+.course-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.course-card__name {
+  margin: 0;
+  font-family: var(--fpv-font-display);
+  font-size: 1.3rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.course-card__badge {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--fpv-accent) 40%, transparent);
+  border-radius: 0.3rem;
+  color: var(--fpv-accent);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.course-card__badge--soon {
+  border-color: color-mix(in srgb, var(--fpv-warn) 50%, transparent);
+  color: var(--fpv-warn);
+}
+
+.course-card__desc {
+  margin: 0;
+  color: var(--fpv-muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.course-card__meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.75rem;
+}
+
+.course-card__meta dt {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fpv-muted);
+}
+
+.course-card__meta dd {
+  margin: 0.15rem 0 0;
+  font-family: var(--fpv-font-mono);
+  font-size: 0.85rem;
+}
+
+.course-card__soon-note {
+  margin: 0;
+  color: var(--fpv-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.course-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+}
+
+.courses__ranked-error {
+  margin: 0.75rem 0 0;
+  color: var(--fpv-warn);
+  font-size: 0.95rem;
+}
+
+.primary-button,
+.ghost-button {
+  appearance: none;
+  border-radius: 0.35rem;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.55rem 0.95rem;
+  cursor: pointer;
+}
+
+.primary-button {
+  justify-self: start;
+  border: 1px solid var(--fpv-accent);
+  background: color-mix(in srgb, var(--fpv-accent) 18%, transparent);
+  color: var(--fpv-accent);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fpv-accent) 30%, transparent);
+}
+
+.ghost-button {
+  border: 1px solid var(--fpv-border);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--fpv-text);
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--fpv-accent) 50%, transparent);
+}
+
+.primary-button:focus-visible,
+.ghost-button:focus-visible {
+  outline: 2px solid var(--fpv-accent);
+  outline-offset: 3px;
+}

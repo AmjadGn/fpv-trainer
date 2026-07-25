@@ -1,0 +1,47 @@
+{
+  "catalogVersion": 1,
+  "courses": [
+    {
+      "id": "starter-circuit",
+      "version": 1,
+      "environmentId": "alpine-training-valley",
+      "name": "Starter Circuit",
+      "difficulty": "beginner",
+      "gateCount": 9,
+      "enabled": true,
+      "competitive": true,
+      "currentRulesVersion": 1,
+      "minPlausibleDurationMs": 15000,
+      "maxDurationMs": 300000,
+      "minSegmentMs": 800
+    },
+    {
+      "id": "industrial-sprint",
+      "version": 1,
+      "environmentId": "desert-industrial-yard",
+      "name": "Industrial Sprint",
+      "difficulty": "intermediate",
+      "gateCount": 11,
+      "enabled": true,
+      "competitive": true,
+      "currentRulesVersion": 1,
+      "minPlausibleDurationMs": 16000,
+      "maxDurationMs": 300000,
+      "minSegmentMs": 800
+    },
+    {
+      "id": "coastal-run",
+      "version": 1,
+      "environmentId": "coastal-ruins",
+      "name": "Coastal Run",
+      "difficulty": "intermediate",
+      "gateCount": 10,
+      "enabled": true,
+      "competitive": true,
+      "currentRulesVersion": 1,
+      "minPlausibleDurationMs": 18000,
+      "maxDurationMs": 300000,
+      "minSegmentMs": 800
+    }
+  ]
+}

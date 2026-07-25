@@ -1,0 +1,311 @@
+<div class="calibration">
+  <header class="calibration__header">
+    <div class="calibration__titles">
+      <p class="calibration__eyebrow">FPV Trainer</p>
+      <h1 class="calibration__brand">Controller Calibration</h1>
+      <p class="calibration__subtitle">{{ calibration.stepTitle() }}</p>
+    </div>
+
+    <div class="calibration__actions">
+      <p
+        class="status-badge"
+        [class.status-badge--ok]="calibration.calibrationStatus() === 'calibrated'"
+        [class.status-badge--active]="calibration.calibrationStatus() === 'calibrating'"
+        [class.status-badge--warn]="calibration.calibrationStatus() === 'uncalibrated'"
+        [class.status-badge--danger]="calibration.calibrationStatus() === 'error'"
+        role="status"
+      >
+        <span class="status-badge__dot" aria-hidden="true"></span>
+        {{ statusLabel() }}
+      </p>
+
+      <button
+        type="button"
+        class="ghost-button"
+        (click)="onBackToDiagnostics()"
+        aria-label="Return to controller diagnostics"
+      >
+        Diagnostics
+      </button>
+    </div>
+  </header>
+
+  <div
+    class="progress"
+    role="progressbar"
+    [attr.aria-valuemin]="1"
+    [attr.aria-valuemax]="calibration.progress().total"
+    [attr.aria-valuenow]="calibration.progress().current"
+    [attr.aria-label]="'Calibration step ' + calibration.progress().current + ' of ' + calibration.progress().total"
+  >
+    <div class="progress__track">
+      <span
+        class="progress__fill"
+        [style.width.%]="calibration.progress().fraction * 100"
+      ></span>
+    </div>
+    <p class="progress__label">
+      Step {{ calibration.progress().current }} / {{ calibration.progress().total }}
+    </p>
+  </div>
+
+  @if (calibration.error(); as errorMessage) {
+    <div class="banner banner--danger" role="alert">
+      {{ errorMessage }}
+    </div>
+  }
+
+  <section class="panel instruction-panel" aria-labelledby="step-heading">
+    <h2 id="step-heading" class="panel__title">{{ calibration.stepTitle() }}</h2>
+    <p class="instruction-panel__text">{{ calibration.stepInstruction() }}</p>
+  </section>
+
+  @if (step() === 'welcome') {
+    <section class="panel" aria-labelledby="welcome-heading">
+      <h2 id="welcome-heading" class="panel__title">Before you begin</h2>
+      <ul class="checklist">
+        <li>Use Google Chrome with your controller connected over USB-C.</li>
+        <li>You will map throttle, yaw, pitch, and roll without assuming fixed axis order.</li>
+        <li>Throttle may not self-center — keep it at the bottom during center capture.</li>
+        <li>You can invert any channel before saving.</li>
+      </ul>
+
+      <div class="panel__footer">
+        @if (!controller.connected()) {
+          <p class="hint">Connect a controller to start.</p>
+          <button type="button" class="primary-button" (click)="onScan()">
+            Scan Controllers
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="primary-button"
+            (click)="onStart()"
+            [disabled]="controller.axes().length < 4"
+          >
+            Start Calibration
+          </button>
+        }
+      </div>
+    </section>
+  }
+
+  @if (step() === 'center') {
+    <section class="panel" aria-labelledby="center-heading">
+      <h2 id="center-heading" class="panel__title">Stability</h2>
+      <div
+        class="stability"
+        role="meter"
+        [attr.aria-valuemin]="0"
+        [attr.aria-valuemax]="1"
+        [attr.aria-valuenow]="calibration.centerStability()"
+        aria-label="Stick stability"
+      >
+        <div class="stability__track">
+          <span
+            class="stability__fill"
+            [class.stability__fill--ready]="calibration.centerReady()"
+            [style.width.%]="calibration.centerStability() * 100"
+          ></span>
+        </div>
+        <p class="stability__label">
+          @if (calibration.centerReady()) {
+            Stable — ready to continue
+          } @else if (calibration.isCapturing()) {
+            Hold sticks still… {{ calibration.centerStability() | percent: '1.0-0' }}
+          } @else {
+            Waiting for samples
+          }
+        </p>
+      </div>
+
+      <div class="panel__footer">
+        <button type="button" class="ghost-button" (click)="onCancel()">Cancel</button>
+        <button type="button" class="ghost-button" (click)="onRepeat()">Repeat</button>
+        <button
+          type="button"
+          class="primary-button"
+          (click)="onContinueCenter()"
+          [disabled]="!calibration.centerReady()"
+        >
+          Continue
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (isIdentifyStep()) {
+    <section class="panel" aria-labelledby="identify-heading">
+      <h2 id="identify-heading" class="panel__title">Detected axis</h2>
+
+      @if (calibration.detectedAxis() !== null) {
+        <p class="detect-pill detect-pill--ok" role="status">
+          Axis {{ calibration.detectedAxis() }} detected
+        </p>
+      } @else {
+        <p class="detect-pill" role="status">Waiting for clear stick movement…</p>
+      }
+
+      <div class="panel__footer">
+        <button type="button" class="ghost-button" (click)="onCancel()">Cancel</button>
+        <button type="button" class="ghost-button" (click)="onRepeat()">Repeat</button>
+        <button
+          type="button"
+          class="primary-button"
+          (click)="onAcceptAxis()"
+          [disabled]="!calibration.identificationReady()"
+        >
+          Accept Axis
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (step() === 'range') {
+    <section class="panel" aria-labelledby="range-heading">
+      <h2 id="range-heading" class="panel__title">Live ranges</h2>
+      <ul class="range-list">
+        @for (entry of calibration.rangeStats(); track entry.channel) {
+          <li
+            class="range-row"
+            [class.range-row--warn]="!entry.stats.adequate"
+            [class.range-row--ok]="entry.stats.adequate"
+          >
+            <div class="range-row__meta">
+              <span class="range-row__label">{{ channelLabel(entry.channel) }} · Axis {{ entry.stats.axisIndex }}</span>
+              <span class="range-row__span">
+                span {{ entry.stats.span | number: '1.3-3' }}
+                @if (!entry.stats.adequate) {
+                  <span class="range-row__flag">too small</span>
+                }
+              </span>
+            </div>
+            <p class="range-row__values">
+              min {{ entry.stats.min | number: '1.4-4' }}
+              · current {{ entry.stats.current | number: '1.4-4' }}
+              · max {{ entry.stats.max | number: '1.4-4' }}
+            </p>
+          </li>
+        }
+      </ul>
+
+      <div class="panel__footer">
+        <button type="button" class="ghost-button" (click)="onCancel()">Cancel</button>
+        <button type="button" class="ghost-button" (click)="onRepeat()">Repeat</button>
+        <button
+          type="button"
+          class="primary-button"
+          (click)="onFinishRange()"
+          [disabled]="!calibration.rangeReady()"
+        >
+          Finish Ranges
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (step() === 'direction' || step() === 'complete') {
+    <section class="panel" aria-labelledby="live-heading">
+      <h2 id="live-heading" class="panel__title">Live calibrated channels</h2>
+
+      @if (calibration.liveDraftInput(); as live) {
+        <ul class="channel-list">
+          @for (channel of channels; track channel) {
+            <li class="channel-row">
+              <div class="channel-row__meta">
+                <span class="channel-row__label">{{ channelLabel(channel) }}</span>
+                <span class="channel-row__value">
+                  {{ live[channel] | number: '1.4-4' }}
+                </span>
+              </div>
+              <div
+                class="channel-bar"
+                role="meter"
+                [attr.aria-valuemin]="channel === 'throttle' ? 0 : -1"
+                [attr.aria-valuemax]="1"
+                [attr.aria-valuenow]="live[channel]"
+                [attr.aria-label]="channelLabel(channel)"
+              >
+                <span class="channel-bar__track" aria-hidden="true">
+                  @if (channel !== 'throttle') {
+                    <span class="channel-bar__center"></span>
+                  }
+                  <span
+                    class="channel-bar__fill"
+                    [style.width.%]="channelFillPercent(channel, live[channel])"
+                  ></span>
+                </span>
+              </div>
+
+                <label class="invert-toggle">
+                  <input
+                    type="checkbox"
+                    [checked]="isChannelInverted(channel)"
+                    (change)="onToggleInvert(channel)"
+                  />
+                  Invert {{ channelLabel(channel) }}
+                </label>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="hint">No live calibrated values yet.</p>
+      }
+
+      <div class="panel__footer">
+        @if (step() === 'direction') {
+          <button type="button" class="ghost-button" (click)="onCancel()">Cancel</button>
+          <button type="button" class="primary-button" (click)="onSave()">
+            Save Calibration
+          </button>
+        } @else {
+          <button type="button" class="ghost-button" (click)="onBackToDiagnostics()">
+            Return to Diagnostics
+          </button>
+          <button type="button" class="ghost-button" (click)="onReset()">
+            Reset Calibration
+          </button>
+          <button type="button" class="primary-button" (click)="onRecalibrate()">
+            Recalibrate
+          </button>
+        }
+      </div>
+    </section>
+  }
+
+  @if (controller.connected()) {
+    <section class="panel" aria-labelledby="raw-axes-heading">
+      <h2 id="raw-axes-heading" class="panel__title">Live raw axes</h2>
+      <ul class="axis-list">
+        @for (axis of controller.axes(); track axis.index) {
+          <li
+            class="axis-row"
+            [class.axis-row--active]="axis.active"
+            [class.axis-row--detected]="calibration.detectedAxis() === axis.index"
+          >
+            <div class="axis-row__meta">
+              <span class="axis-row__label">Axis {{ axis.index }}</span>
+              <span class="axis-row__value">{{ axis.rawValue | number: '1.4-4' }}</span>
+            </div>
+            <div
+              class="axis-bar"
+              role="meter"
+              [attr.aria-valuemin]="-1"
+              [attr.aria-valuemax]="1"
+              [attr.aria-valuenow]="axis.rawValue"
+              [attr.aria-label]="'Axis ' + axis.index"
+            >
+              <span class="axis-bar__track" aria-hidden="true">
+                <span class="axis-bar__center"></span>
+                <span
+                  class="axis-bar__fill"
+                  [style.width.%]="axisFillPercent(axis.rawValue)"
+                ></span>
+              </span>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</div>

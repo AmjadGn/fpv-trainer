@@ -1,0 +1,1292 @@
+<div
+  class="flight"
+  [class.flight--ready]="hudReady()"
+  [class.flight--fullscreen]="session.isFullscreen()"
+  [class.flight--hud-compact]="hudMode() === 'compact'"
+  [class.flight--hud-minimal]="hudMode() === 'minimal'"
+  [attr.data-hud-mode]="hudMode()"
+>
+  <header class="flight__header">
+    <div class="flight__titles">
+      <h1 class="flight__brand">FPV Trainer</h1>
+      <p class="flight__subtitle">
+        {{
+          playMode() === 'course'
+            ? courseRun.course().name
+            : playMode() === 'training'
+              ? (trainingModule()?.title ?? 'Training Academy')
+              : 'Free Flight'
+        }}
+        <span class="flight__mode-sep" aria-hidden="true">·</span>
+        <span class="flight__run-status">{{ runStatusLabel() }}</span>
+      </p>
+    </div>
+
+    <div class="flight__status" role="status">
+      <p
+        class="status-badge"
+        [class.status-badge--armed]="flight.armed()"
+        [class.status-badge--disarmed]="!flight.armed()"
+      >
+        {{ flight.armed() ? 'Armed' : 'Disarmed' }}
+      </p>
+
+      @if (flight.crashed()) {
+        <p class="status-badge status-badge--crash">Crashed</p>
+      }
+
+      <p class="status-badge status-badge--camera">
+        {{ cameraMode() === 'fpv' ? 'FPV' : 'Chase' }}
+      </p>
+
+      <p class="status-badge">{{ flight.rateProfile().name }}</p>
+    </div>
+  </header>
+
+  <div class="flight__stage" #stageHost>
+    <div
+      class="viewport"
+      #canvasHost
+      (pointerdown)="onViewportPointer()"
+    ></div>
+
+    <!-- LEFT: Controller Input -->
+    <aside class="hud-panel hud-panel--left" aria-label="Controller input">
+      <h2 class="hud-panel__title">Controller Input</h2>
+
+      <div class="throttle" aria-label="Throttle">
+        <div class="throttle__meta">
+          <span class="throttle__label">Throttle</span>
+          <span class="throttle__value">
+            {{ liveInput().throttle * 100 | number: '1.0-0' }}%
+          </span>
+        </div>
+        <div class="throttle__track">
+          <div
+            class="throttle__fill"
+            [style.transform]="'scaleY(' + liveInput().throttle + ')'"
+          ></div>
+          <div class="throttle__ticks" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="sticks" role="group" aria-label="Stick visualizers">
+        <div class="stick" aria-label="Pitch">
+          <span class="stick__label">Pitch</span>
+          <div class="stick__pad">
+            <span class="stick__cross stick__cross--v" aria-hidden="true"></span>
+            <span class="stick__cross stick__cross--h" aria-hidden="true"></span>
+            <span
+              class="stick__dot"
+              [style.transform]="
+                'translate(-50%, -50%) translateY(' + liveInput().pitch * -38 + '%)'
+              "
+            ></span>
+          </div>
+        </div>
+
+        <div class="stick" aria-label="Roll">
+          <span class="stick__label">Roll</span>
+          <div class="stick__pad">
+            <span class="stick__cross stick__cross--v" aria-hidden="true"></span>
+            <span class="stick__cross stick__cross--h" aria-hidden="true"></span>
+            <span
+              class="stick__dot"
+              [style.transform]="
+                'translate(-50%, -50%) translateX(' + liveInput().roll * 38 + '%)'
+              "
+            ></span>
+          </div>
+        </div>
+
+        <div class="stick" aria-label="Yaw">
+          <span class="stick__label">Yaw</span>
+          <div class="stick__pad">
+            <span class="stick__cross stick__cross--v" aria-hidden="true"></span>
+            <span class="stick__cross stick__cross--h" aria-hidden="true"></span>
+            <span
+              class="stick__dot"
+              [style.transform]="
+                'translate(-50%, -50%) translateX(' + liveInput().yaw * 38 + '%)'
+              "
+            ></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tx-silhouette" aria-hidden="true">
+        <svg viewBox="0 0 120 48" class="tx-silhouette__svg">
+          <rect x="18" y="14" width="84" height="26" rx="6" />
+          <circle cx="38" cy="27" r="8" />
+          <circle cx="82" cy="27" r="8" />
+          <rect x="52" y="8" width="16" height="8" rx="2" />
+        </svg>
+      </div>
+
+      <div class="ctrl-status">
+        <div class="ctrl-status__row">
+          <span class="ctrl-status__label">Controller Status</span>
+          <span
+            class="ctrl-status__value"
+            [class.ctrl-status__value--ok]="connectionStatus() === 'connected'"
+            [class.ctrl-status__value--warn]="connectionStatus() !== 'connected'"
+          >
+            <span class="ctrl-status__dot" aria-hidden="true"></span>
+            {{ connectionLabel() }}
+          </span>
+        </div>
+        <div class="ctrl-status__row">
+          <span class="ctrl-status__label">Calibration</span>
+          <span
+            class="ctrl-status__value"
+            [class.ctrl-status__value--ok]="calibration.hasCalibration()"
+            [class.ctrl-status__value--warn]="!calibration.hasCalibration()"
+          >
+            <span class="ctrl-status__dot" aria-hidden="true"></span>
+            {{ calibrationLabel() }}
+          </span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- RIGHT: Course Map -->
+    @if (showCourseMap()) {
+      <aside class="hud-panel hud-panel--right" aria-label="Course map">
+        <h2 class="hud-panel__title">Course Map</h2>
+
+        <div class="minimap" aria-hidden="true">
+          <svg
+            class="minimap__svg"
+            [attr.viewBox]="'0 0 ' + minimap().width + ' ' + minimap().height"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <defs>
+              <linearGradient id="trailGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#3ddc97" stop-opacity="0.95" />
+                <stop offset="100%" stop-color="#2ec4b6" stop-opacity="0.55" />
+              </linearGradient>
+              <filter id="nodeGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2.2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            @for (contour of minimap().contours; track $index) {
+              <path
+                class="minimap__contour"
+                [attr.d]="contour.d"
+                fill="none"
+                [attr.opacity]="contour.opacity"
+              />
+            }
+
+            <circle
+              class="minimap__start"
+              [attr.cx]="minimap().startX"
+              [attr.cy]="minimap().startY"
+              r="5"
+            />
+
+            <path
+              class="minimap__path"
+              [attr.d]="minimap().path"
+              fill="none"
+            />
+            <path
+              class="minimap__trail"
+              [attr.d]="minimap().path"
+              fill="none"
+              [attr.stroke-dasharray]="minimap().pathLength"
+              [attr.stroke-dashoffset]="minimapProgress().offset"
+            />
+
+            @for (node of minimap().nodes; track node.id) {
+              @let nodeState = gateNodeState(node.index);
+              <g [attr.transform]="'translate(' + node.x + ' ' + node.y + ')'">
+                <circle
+                  class="minimap__node"
+                  [class.minimap__node--done]="nodeState === 'done' || nodeState === 'celebrate'"
+                  [class.minimap__node--current]="nodeState === 'current'"
+                  [class.minimap__node--pending]="nodeState === 'pending'"
+                  [class.minimap__node--celebrate]="nodeState === 'celebrate'"
+                  r="9"
+                  [attr.filter]="nodeState === 'current' ? 'url(#nodeGlow)' : null"
+                />
+                <text
+                  class="minimap__num"
+                  [class.minimap__num--light]="nodeState === 'pending'"
+                  text-anchor="middle"
+                  dy="0.35em"
+                >
+                  {{ node.index + 1 }}
+                </text>
+              </g>
+            }
+
+            @if (ghostMapPos(); as gp) {
+              <circle
+                class="minimap__ghost"
+                [attr.cx]="gp.x"
+                [attr.cy]="gp.y"
+                r="4"
+              />
+            }
+
+            <g
+              class="minimap__drone"
+              [attr.transform]="
+                'translate(' +
+                droneMapPos().x +
+                ' ' +
+                droneMapPos().y +
+                ') rotate(' +
+                droneMapPos().headingDeg +
+                ')'
+              "
+            >
+              <polygon points="0,-6 5,5 0,2.5 -5,5" />
+            </g>
+
+            @if (showMinimapWind() && windHud()) {
+              <g
+                class="minimap__wind"
+                [attr.transform]="
+                  'translate(14 14) rotate(' + windHudArrowDeg() + ')'
+                "
+              >
+                <line x1="0" y1="6" x2="0" y2="-8" />
+                <polygon points="0,-10 3.2,-4 -3.2,-4" />
+              </g>
+            }
+          </svg>
+        </div>
+
+        <div class="minimap__legend">
+          <span class="minimap__legend-item minimap__legend-item--done">Done</span>
+          <span class="minimap__legend-item minimap__legend-item--current">Current</span>
+          <span class="minimap__legend-item minimap__legend-item--pending">Next</span>
+        </div>
+      </aside>
+    }
+
+    <!-- CENTER: clean telemetry + crosshair -->
+    <div class="hud-center" aria-live="polite">
+      <div class="telem">
+        <div class="telem__item">
+          <span class="telem__label">Speed</span>
+          <span class="telem__value">
+            {{ smoothSpeed() | number: '1.1-1' }}
+            <span class="telem__unit">m/s</span>
+          </span>
+          <div class="telem__bar" aria-hidden="true">
+            <span
+              class="telem__bar-fill"
+              [style.transform]="'scaleX(' + speedBarRatio() + ')'"
+            ></span>
+          </div>
+        </div>
+        <div class="telem__item">
+          <span class="telem__label">Altitude</span>
+          <span
+            class="telem__value"
+            [class.telem__value--warn]="groundProximityWarn()"
+          >
+            {{ smoothAltitude() | number: '1.1-1' }}
+            <span class="telem__unit">m</span>
+          </span>
+        </div>
+        <div class="telem__item">
+          <span class="telem__label">Timer</span>
+          <span class="telem__value telem__value--mono">{{ centerTimerLabel() }}</span>
+        </div>
+        @if (showCourseMap() && !isReplayMode()) {
+          <div class="telem__item">
+            <span class="telem__label">Gate</span>
+            <span class="telem__value telem__value--mono">{{ gateProgressLabel() }}</span>
+          </div>
+        }
+      </div>
+
+      @if (showGhostHud()) {
+        <div class="ghost-hud" role="status" aria-label="Ghost comparison">
+          <span class="ghost-hud__title">Ghost</span>
+          @if (
+            ghostRace.hud().raceState === 'unavailable' ||
+            ghostRace.hud().raceState === 'loading' ||
+            ghostRace.hud().raceState === 'error'
+          ) {
+            <span class="ghost-hud__status">{{ ghostRace.hud().message ?? 'NO GHOST YET' }}</span>
+          } @else {
+            <span class="ghost-hud__best">Best {{ formatGhostBest() }}</span>
+            @if (ghostRace.hud().raceState === 'ready' || ghostRace.hud().raceState === 'waiting') {
+              <span class="ghost-hud__status">GHOST READY</span>
+            } @else {
+              <span
+                class="ghost-hud__delta"
+                [class.ghost-hud__delta--ahead]="ghostRace.hud().comparison?.aheadState === 'ahead'"
+                [class.ghost-hud__delta--behind]="ghostRace.hud().comparison?.aheadState === 'behind'"
+              >
+                {{ formatGhostDelta() }}
+                <span class="ghost-hud__delta-label">{{ ghostAheadLabel() }}</span>
+              </span>
+            }
+          }
+        </div>
+      }
+
+      @if (showWindHud() && windHud(); as wind) {
+        <div class="wind-hud" role="status" aria-label="Wind">
+          <span class="wind-hud__title">WIND</span>
+          <span class="wind-hud__speed">
+            {{ wind.speed | number: '1.1-1' }} m/s
+          </span>
+          <span class="wind-hud__preset">{{ wind.presetName }}</span>
+          @if (wind.gustActive) {
+            <span class="wind-hud__gust">GUST</span>
+          }
+          <span
+            class="wind-hud__arrow"
+            aria-hidden="true"
+            [style.transform]="'rotate(' + windHudArrowDeg() + 'deg)'"
+          ></span>
+        </div>
+      }
+
+      <div class="crosshair" aria-hidden="true">
+        <span class="crosshair__ring"></span>
+        <span class="crosshair__h"></span>
+        <span class="crosshair__v"></span>
+        <span class="crosshair__dot"></span>
+      </div>
+
+      @if (gateFlashLabel(); as gateMsg) {
+        <p class="hud-flash hud-flash--gate">{{ gateMsg }}</p>
+      }
+      @if (newBestLabel(); as bestMsg) {
+        <p class="hud-flash hud-flash--best">{{ bestMsg }}</p>
+      }
+    </div>
+
+    @if (countdownDisplay(); as cd) {
+      <div class="overlay overlay--countdown" aria-live="assertive">
+        <span class="overlay__giant" [class.overlay__giant--go]="cd === 'GO'">{{ cd }}</span>
+      </div>
+    }
+
+    @if (paused() && !flight.crashed() && !isReplayMode()) {
+      <div class="overlay overlay--pause" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <div class="pause-card">
+          <p class="pause-card__title" id="pause-title">Paused</p>
+          <p class="pause-card__hint">Press <kbd>P</kbd> to resume</p>
+          <div class="pause-card__actions">
+            <button type="button" class="btn btn--primary" (click)="onTogglePause()">Resume</button>
+            <button type="button" class="btn" (click)="onResetDrone()">Reset aircraft</button>
+            <button type="button" class="btn" (click)="onRestartFlight()">Restart</button>
+            <button type="button" class="btn" (click)="onOpenFlightSettings()">Settings</button>
+            <button type="button" class="btn" (click)="onPauseFeedback()">Feedback</button>
+            <button type="button" class="btn" (click)="onReturnSetup()">Return to setup</button>
+            <button type="button" class="btn" (click)="onExitToDashboard()">Exit to dashboard</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (environmentLoading() || environmentError()) {
+      <div class="overlay overlay--env" role="status">
+        <div class="env-load">
+          @if (environmentError(); as err) {
+            <p class="env-load__title">Environment failed</p>
+            <p class="env-load__stage">{{ err }}</p>
+            <button type="button" class="btn btn--primary" (click)="onRetryEnvironment()">
+              Retry
+            </button>
+          } @else {
+            <p class="env-load__title">Preparing Alpine Training Valley</p>
+            <p class="env-load__stage">{{ environmentStageLabel() }}</p>
+            <div class="env-load__bar" aria-hidden="true">
+              <span
+                class="env-load__fill"
+                [attr.data-stage]="environmentStage()"
+              ></span>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    @if (courseRun.runState().missedGate) {
+      <div class="banner banner--warn" role="alert">Missed Gate — turn back and pass through</div>
+    }
+
+    @if (courseRun.runState().wrongDirection) {
+      <div class="banner banner--warn" role="alert">Wrong Direction</div>
+    }
+
+    @if (courseRun.runState().status === 'invalid') {
+      <div class="overlay overlay--panel" role="alert">
+        <div class="overlay__card">
+          <h2 class="overlay__title">Run Invalid</h2>
+          <p class="overlay__text">{{ courseRun.runState().invalidReason ?? 'Run invalidated' }}</p>
+          <div class="overlay__actions">
+            <button type="button" class="btn btn--primary" (click)="onRetryRun()">Retry</button>
+            <button type="button" class="btn" (click)="onFreeFlight()">Free Flight</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (courseRun.runState().status === 'finished' && !isReplayMode()) {
+      <div class="overlay overlay--panel" role="status">
+        <div class="overlay__card">
+          <h2 class="overlay__title">Run Complete</h2>
+          @if (isNewBest()) {
+            <p class="results__best-banner">New Best</p>
+            @if (newBestDeltaLabel(); as improve) {
+              <p class="results__best-delta">{{ improve }}</p>
+            }
+          }
+          <dl class="results">
+            <div class="results__row">
+              <dt>Final time</dt>
+              <dd>{{ courseRun.formattedElapsedTime() }}</dd>
+            </div>
+            <div class="results__row">
+              <dt>Best</dt>
+              <dd>{{ courseRun.formattedBestTime() }}</dd>
+            </div>
+            @if (timeDeltaLabel(); as delta) {
+              <div class="results__row">
+                <dt>Delta</dt>
+                <dd>{{ delta }}</dd>
+              </div>
+            }
+            @if (showGhostHud() || ghostRace.hud().bestTimeMs !== null) {
+              <div class="results__row">
+                <dt>Ghost</dt>
+                <dd>
+                  {{
+                    ghostSavedThisRun()
+                      ? 'New Ghost Saved'
+                      : ghostBeatenThisRun()
+                        ? 'Ghost Beaten'
+                        : ghostRace.hud().bestTimeMs !== null
+                          ? 'Ghost Wins'
+                          : 'No Ghost'
+                  }}
+                </dd>
+              </div>
+              @if (ghostRace.hud().finalDeltaSeconds !== null) {
+                <div class="results__row">
+                  <dt>Ghost delta</dt>
+                  <dd>{{ formatGhostDelta() }}</dd>
+                </div>
+              }
+            }
+            @if (lastGhostSaveWarning(); as ghostWarning) {
+              <div class="results__row">
+                <dt>Notice</dt>
+                <dd>{{ ghostWarning }}</dd>
+              </div>
+            }
+            @if (lastXpEarned() > 0) {
+              <div class="results__row">
+                <dt>XP earned</dt>
+                <dd>+{{ lastXpEarned() }}</dd>
+              </div>
+            }
+          </dl>
+          <div class="overlay__actions">
+            @if (replayRecorder.hasReplay()) {
+              <button type="button" class="btn btn--primary" (click)="onWatchReplay()">
+                Watch Replay
+              </button>
+            }
+            <button type="button" class="btn btn--primary" (click)="onRetryRun()">Retry</button>
+            <button type="button" class="btn" (click)="onCloseResults()">Close</button>
+            <button type="button" class="btn" (click)="shell.showCourses()">
+              Return to Courses
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (playMode() === 'training') {
+      @if (academy.briefingVisible() && trainingModule(); as module) {
+        <div class="overlay overlay--panel" role="dialog" aria-label="Training briefing">
+          <div class="overlay__card">
+            <h2 class="overlay__title">{{ module.title }}</h2>
+            <p class="overlay__text">{{ module.objective }}</p>
+            @if (recommendedProfilePrompt(); as prompt) {
+              <p class="settings__hint">{{ prompt }}</p>
+            }
+            <div class="overlay__actions">
+              <button
+                type="button"
+                class="btn btn--primary"
+                [disabled]="!canFly()"
+                (click)="onStartTraining()"
+              >
+                Start
+              </button>
+              <button type="button" class="btn" (click)="onUseRecommendedProfile()">
+                Use recommended profile
+              </button>
+              <button type="button" class="btn" (click)="onCancelTraining()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (academy.state() === 'results' && academy.evaluation(); as evaluation) {
+        <div class="overlay overlay--panel" role="status">
+          <div class="overlay__card">
+            <h2 class="overlay__title">
+              {{ evaluation.completed ? 'Module Complete' : 'Module Failed' }}
+            </h2>
+            @if (evaluation.completed && evaluation.medal !== 'none') {
+              <p class="results__best-banner">{{ evaluation.medal | uppercase }} Medal</p>
+            }
+            <dl class="results">
+              <div class="results__row">
+                <dt>Score</dt>
+                <dd>{{ evaluation.score | number: '1.0-0' }}</dd>
+              </div>
+              @if (evaluation.message) {
+                <div class="results__row">
+                  <dt>Note</dt>
+                  <dd>{{ evaluation.message }}</dd>
+                </div>
+              }
+              @if (lastXpEarned() > 0) {
+                <div class="results__row">
+                  <dt>XP earned</dt>
+                  <dd>+{{ lastXpEarned() }}</dd>
+                </div>
+              }
+            </dl>
+            <div class="overlay__actions">
+              <button type="button" class="btn btn--primary" (click)="onRetryTraining()">
+                Retry
+              </button>
+              @if (evaluation.completed) {
+                <button type="button" class="btn" (click)="onNextTrainingModule()">Next</button>
+              }
+              <button type="button" class="btn" (click)="onReturnToAcademy()">
+                Return to Academy
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    }
+
+    @if (isReplayMode()) {
+      <div class="replay-hud" role="region" aria-label="Replay controls">
+        <div class="replay-hud__top">
+          <p class="replay-hud__title">Replay</p>
+          <p class="replay-hud__time">
+            {{ formattedReplayTime() }}
+            <span aria-hidden="true">/</span>
+            {{ formattedReplayDuration() }}
+          </p>
+        </div>
+
+        <label class="replay-hud__scrub">
+          <span class="visually-hidden">Timeline</span>
+          <input
+            type="range"
+            min="0"
+            [max]="replayPlayback.durationMs()"
+            step="16"
+            [value]="replayPlayback.currentTimeMs()"
+            (pointerdown)="onReplayScrubStart()"
+            (input)="onReplayScrub($any($event.target).value)"
+            (pointerup)="onReplayScrubEnd()"
+            (change)="onReplayScrubEnd()"
+          />
+        </label>
+
+        <div class="replay-hud__controls">
+          <button type="button" class="btn" (click)="onTogglePause()">
+            {{ replayPlayback.state() === 'playing' ? 'Pause' : 'Play' }}
+            <kbd>Space</kbd>
+          </button>
+          <button type="button" class="btn" (click)="onReplayRestart()">
+            Restart
+            <kbd>R</kbd>
+          </button>
+          <div class="replay-hud__seg" role="group" aria-label="Playback speed">
+            @for (s of replaySpeeds; track s) {
+              <button
+                type="button"
+                class="replay-hud__chip"
+                [class.replay-hud__chip--active]="replayPlayback.playbackSpeed() === s"
+                (click)="onReplaySpeed(s)"
+              >
+                {{ s }}x
+              </button>
+            }
+          </div>
+          <div class="replay-hud__seg" role="group" aria-label="Replay camera">
+            @for (c of replayCameras; track c) {
+              <button
+                type="button"
+                class="replay-hud__chip"
+                [class.replay-hud__chip--active]="replayPlayback.selectedReplayCamera() === c"
+                [disabled]="c === 'orbit' && replayPlayback.state() === 'playing'"
+                (click)="onReplayCamera(c)"
+              >
+                {{ c === 'fpv' ? 'FPV' : c === 'chase' ? 'Chase' : 'Orbit' }}
+              </button>
+            }
+          </div>
+          <button type="button" class="btn" (click)="onExitReplay()">Exit</button>
+        </div>
+      </div>
+    }
+
+    @if (audioManager.needsGesture()) {
+      <div class="banner banner--info banner--audio" role="status">
+        Audio is blocked by the browser.
+        <button type="button" class="banner__action" (click)="onEnableAudio()">
+          Enable Audio
+        </button>
+      </div>
+    }
+
+    @if (replayRecorder.warning(); as replayWarn) {
+      <div class="banner banner--info" role="status">{{ replayWarn }}</div>
+    }
+
+    @if (physicsWarning(); as physWarn) {
+      <div class="banner banner--info" role="status">{{ physWarn }}</div>
+    }
+
+    @if (guidanceMessage(); as guide) {
+      <div class="banner banner--info" role="status">{{ guide }}</div>
+    }
+
+    @if (flight.crashed() && courseRun.runState().status !== 'invalid' && !isReplayMode()) {
+      <div
+        class="overlay overlay--crash"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="crash-title"
+      >
+        <div class="pause-card">
+          <p class="pause-card__title" id="crash-title">{{ crashReasonLabel() ?? 'Crashed' }}</p>
+          <p class="pause-card__hint">Impact feedback is approximate. Reset and try again.</p>
+          <div class="pause-card__actions">
+            <button type="button" class="btn btn--primary" (click)="onCrashReset()">
+              Instant reset
+            </button>
+            @if (isTrainingMode()) {
+              <button type="button" class="btn" (click)="onCrashReset()">Retry step</button>
+            }
+            @if (isRaceMode()) {
+              <button type="button" class="btn" (click)="onCrashRestart()">Restart attempt</button>
+            }
+            <button type="button" class="btn" (click)="onReturnHangar()">Change aircraft</button>
+            <button type="button" class="btn" (click)="onReturnSetup()">Return to setup</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (flight.armWarning(); as warning) {
+      <div class="banner banner--warn banner--arm" role="alert">{{ warning }}</div>
+    }
+
+    @if (connectionStatus() !== 'connected') {
+      <div class="banner banner--info">
+        Controller disconnected. Reconnect it, then press Resume — or continue with keyboard.
+      </div>
+    }
+
+    @if (session.userMessage(); as fsMessage) {
+      <div class="banner banner--info banner--session" role="status">{{ fsMessage }}</div>
+    }
+
+    <!-- BOTTOM TOOLBAR -->
+    @if (!isReplayMode()) {
+    <nav class="hud-toolbar" aria-label="Flight toolbar">
+      <button
+        type="button"
+        class="tb-btn"
+        (click)="cycleHudMode()"
+        [attr.title]="'HUD: ' + hudMode()"
+        [attr.aria-label]="'Cycle HUD mode, currently ' + hudMode()"
+      >
+        <span class="tb-btn__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M4 6h16M4 12h10M4 18h16" stroke-linecap="round" />
+          </svg>
+        </span>
+        <span class="tb-btn__label">HUD {{ hudMode() }}</span>
+      </button>
+
+      <button type="button" class="tb-btn" (click)="onSwitchCamera()">
+        <span class="tb-btn__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75">
+            <rect x="2" y="6" width="14" height="12" rx="2" />
+            <path d="M16 10l6-3v10l-6-3V10z" />
+          </svg>
+        </span>
+        <span class="tb-btn__label">Camera</span>
+        <kbd class="tb-btn__key">C</kbd>
+      </button>
+
+      <button
+        type="button"
+        class="tb-btn"
+        [class.tb-btn--active]="session.isFullscreen()"
+        [attr.aria-label]="session.isFullscreen() ? 'Exit Fullscreen' : 'Enter Fullscreen'"
+        [attr.aria-pressed]="session.isFullscreen()"
+        (click)="onToggleFullscreen()"
+      >
+        <span class="tb-btn__icon" aria-hidden="true">
+          @if (session.isFullscreen()) {
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" stroke-linecap="round" />
+            </svg>
+          } @else {
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          }
+        </span>
+        <span class="tb-btn__label">{{ session.isFullscreen() ? 'Exit Fullscreen' : 'Fullscreen' }}</span>
+        <kbd class="tb-btn__key">F</kbd>
+      </button>
+
+      <button
+        type="button"
+        class="tb-btn"
+        [class.tb-btn--active]="paused()"
+        (click)="onTogglePause()"
+      >
+        <span class="tb-btn__icon" aria-hidden="true">
+          @if (paused()) {
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <path d="M8 5v14l11-7L8 5z" />
+            </svg>
+          } @else {
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <rect x="6" y="5" width="4" height="14" rx="1" />
+              <rect x="14" y="5" width="4" height="14" rx="1" />
+            </svg>
+          }
+        </span>
+        <span class="tb-btn__label">{{ paused() ? 'Resume' : 'Pause' }}</span>
+        <kbd class="tb-btn__key">P</kbd>
+      </button>
+
+      <button type="button" class="tb-btn" (click)="onResetDrone()">
+        <span class="tb-btn__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round" />
+            <path d="M3 4v5h5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+        <span class="tb-btn__label">Reset</span>
+        <kbd class="tb-btn__key">R</kbd>
+      </button>
+
+      <button
+        type="button"
+        class="tb-btn"
+        [class.tb-btn--active]="settingsOpen()"
+        (click)="onToggleSettings()"
+      >
+        <span class="tb-btn__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round" />
+          </svg>
+        </span>
+        <span class="tb-btn__label">Settings</span>
+        <kbd class="tb-btn__key">ESC</kbd>
+      </button>
+
+      <div class="tb-rate">
+        <button
+          type="button"
+          class="tb-btn"
+          [class.tb-btn--active]="rateMenuOpen()"
+          [disabled]="!canChangeProfile()"
+          (click)="onToggleRateMenu()"
+        >
+          <span class="tb-btn__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M4 19V5M4 12h7M11 7l9 5-9 5V7z" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="tb-btn__label">{{ flight.rateProfile().name }}</span>
+          <kbd class="tb-btn__key">Rates</kbd>
+        </button>
+
+        @if (rateMenuOpen()) {
+          <div class="rate-menu" role="menu" aria-label="Rate profile">
+            @for (id of rateProfileIds; track id) {
+              <button
+                type="button"
+                role="menuitemradio"
+                class="rate-menu__item"
+                [class.rate-menu__item--active]="flight.rateProfileId() === id"
+                [attr.aria-checked]="flight.rateProfileId() === id"
+                (click)="onSelectProfile(id)"
+              >
+                {{ rateProfiles[id].name }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </nav>
+    }
+
+    <!-- Settings drawer -->
+    @if (settingsOpen()) {
+      <div class="settings" role="dialog" aria-label="Flight settings">
+        <div class="settings__backdrop" (click)="onToggleSettings()"></div>
+        <div class="settings__panel">
+          <header class="settings__head">
+            <h2 class="settings__title">Settings</h2>
+            <button type="button" class="settings__close" (click)="onToggleSettings()" aria-label="Close">
+              ✕
+            </button>
+          </header>
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Flight</h3>
+            <div class="settings__actions">
+              <button
+                type="button"
+                class="btn"
+                (click)="onArmToggle()"
+                [disabled]="!canArm() && !flight.armed()"
+              >
+                {{ flight.armed() ? 'Disarm' : 'Arm' }}
+                <kbd>Space</kbd>
+              </button>
+
+              @if (playMode() === 'course') {
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  (click)="onStartRun()"
+                  [disabled]="runBusy()"
+                >
+                  Start Run
+                  <kbd>T</kbd>
+                </button>
+                <button type="button" class="btn" (click)="onRetryRun()">Retry</button>
+                <button
+                  type="button"
+                  class="btn"
+                  (click)="onCancelRun()"
+                  [disabled]="courseRun.runState().status === 'idle'"
+                >
+                  Cancel Run
+                </button>
+                <button type="button" class="btn" (click)="onFreeFlight()">Free Flight</button>
+              } @else if (playMode() === 'training') {
+                <button type="button" class="btn" (click)="onCancelTraining()">
+                  Cancel Training
+                </button>
+                <button type="button" class="btn" (click)="onFreeFlight()">Free Flight</button>
+              } @else {
+                <button type="button" class="btn btn--primary" (click)="onCourseMode()">
+                  Course Mode
+                </button>
+              }
+            </div>
+            @if (armBlockHint() && !flight.armed()) {
+              <p class="settings__hint">{{ armBlockHint() }}</p>
+            }
+          </div>
+
+          <div class="settings__section">
+            <app-environment-settings
+              [settings]="environmentSettings()"
+              [weather]="weatherSettings()"
+              [disabled]="environmentLoading() || runBusy()"
+              (qualityChange)="onEnvironmentQuality($event)"
+              (timeOfDayChange)="onEnvironmentTimeOfDay($event)"
+              (vegetationChange)="onEnvironmentVegetation($event)"
+              (shadowsChange)="onEnvironmentShadows($event)"
+              (fogChange)="onEnvironmentFog($event)"
+              (environmentIdChange)="onSelectEnvironment($event)"
+              (weatherPresetChange)="onWeatherPreset($event)"
+              (windHudChange)="onWindHudToggle($event)"
+              (windPhysicsChange)="onWindPhysicsToggle($event)"
+              (precipitationChange)="onPrecipitationToggle($event)"
+              (ambienceVolumeChange)="onAmbienceVolume($event)"
+              (weatherAudioVolumeChange)="onWeatherAudioVolume($event)"
+            />
+          </div>
+
+          @if (playMode() === 'free') {
+            <div class="settings__section">
+              <h3 class="settings__section-title">Weather presets</h3>
+              <div class="settings__seg" role="group" aria-label="Weather presets">
+                @for (preset of availableWeatherPresets(); track preset.id) {
+                  <button
+                    type="button"
+                    class="settings__chip"
+                    [class.settings__chip--active]="
+                      weatherSettings().selectedFreeFlightWeatherPreset === preset.id
+                    "
+                    [disabled]="environmentLoading() || runBusy()"
+                    (click)="onWeatherPreset(preset.id)"
+                  >
+                    {{ preset.name }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Display</h3>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="autoFullscreenOnFlight()"
+                (change)="onAutoFullscreenChange($any($event.target).checked)"
+              />
+              <span>Auto fullscreen on Start Run</span>
+            </label>
+            <p class="settings__hint">
+              Requests fullscreen only after you start a run — never on page load.
+            </p>
+          </div>
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Camera Effects</h3>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().camera.cameraEffectsEnabled"
+                (change)="onCameraEffectsToggle($any($event.target).checked)"
+              />
+              <span>Enable camera effects</span>
+            </label>
+            <div class="settings__row">
+              <span class="settings__label">Intensity</span>
+              <div class="settings__seg">
+                @for (level of cameraIntensities; track level) {
+                  <button
+                    type="button"
+                    class="settings__chip"
+                    [class.settings__chip--active]="
+                      polishSettings().camera.cameraEffectsIntensity === level
+                    "
+                    (click)="onCameraIntensity(level)"
+                  >
+                    {{ level }}
+                  </button>
+                }
+              </div>
+            </div>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().camera.speedVibrationEnabled"
+                (change)="onCameraEffectFlag('speedVibrationEnabled', $any($event.target).checked)"
+              />
+              <span>Speed vibration</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().camera.throttleVibrationEnabled"
+                (change)="onCameraEffectFlag('throttleVibrationEnabled', $any($event.target).checked)"
+              />
+              <span>Throttle vibration</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().camera.impactShakeEnabled"
+                (change)="onCameraEffectFlag('impactShakeEnabled', $any($event.target).checked)"
+              />
+              <span>Impact shake</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().camera.dynamicFovEnabled"
+                (change)="onCameraEffectFlag('dynamicFovEnabled', $any($event.target).checked)"
+              />
+              <span>Dynamic FOV</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="forceCameraEffects()"
+                (change)="onForceCameraEffects($any($event.target).checked)"
+              />
+              <span>Allow effects with reduced motion</span>
+            </label>
+          </div>
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Audio</h3>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().audio.audioEnabled"
+                (change)="onAudioEnabled($any($event.target).checked)"
+              />
+              <span>Audio enabled</span>
+            </label>
+            <label class="settings__slider">
+              <span>Master {{ polishSettings().audio.masterVolume }}</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                [value]="polishSettings().audio.masterVolume"
+                (input)="onAudioVolume('masterVolume', $any($event.target).value)"
+              />
+            </label>
+            <label class="settings__slider">
+              <span>Motor {{ polishSettings().audio.motorVolume }}</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                [value]="polishSettings().audio.motorVolume"
+                (input)="onAudioVolume('motorVolume', $any($event.target).value)"
+              />
+            </label>
+            <label class="settings__slider">
+              <span>Effects {{ polishSettings().audio.effectsVolume }}</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                [value]="polishSettings().audio.effectsVolume"
+                (input)="onAudioVolume('effectsVolume', $any($event.target).value)"
+              />
+            </label>
+            <label class="settings__slider">
+              <span>UI {{ polishSettings().audio.uiVolume }}</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                [value]="polishSettings().audio.uiVolume"
+                (input)="onAudioVolume('uiVolume', $any($event.target).value)"
+              />
+            </label>
+            <div class="settings__actions">
+              <button type="button" class="btn" (click)="onToggleMute()">
+                {{ audioMuted() ? 'Unmute' : 'Mute all' }}
+              </button>
+              <button type="button" class="btn" (click)="onEnableAudio()">Enable Audio</button>
+            </div>
+          </div>
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Visual Effects</h3>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().visualEffects.propellerBlurEnabled"
+                (change)="onVisualFlag('propellerBlurEnabled', $any($event.target).checked)"
+              />
+              <span>Propeller blur</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().visualEffects.groundDustEnabled"
+                (change)="onVisualFlag('groundDustEnabled', $any($event.target).checked)"
+              />
+              <span>Ground dust</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().visualEffects.crashParticlesEnabled"
+                (change)="onVisualFlag('crashParticlesEnabled', $any($event.target).checked)"
+              />
+              <span>Crash particles</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().visualEffects.gatePulseEnabled"
+                (change)="onVisualFlag('gatePulseEnabled', $any($event.target).checked)"
+              />
+              <span>Gate pulse</span>
+            </label>
+          </div>
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Replay</h3>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="polishSettings().replay.replayFlightTrailEnabled"
+                (change)="onReplayTrailToggle($any($event.target).checked)"
+              />
+              <span>Flight trail</span>
+            </label>
+            <div class="settings__actions">
+              <button type="button" class="btn" (click)="onResetPolishSettings()">
+                Reset Polish Settings
+              </button>
+            </div>
+          </div>
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Ghost</h3>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="trainerSettings.settings().ghost.ghostEnabled"
+                (change)="onGhostToggle($any($event.target).checked)"
+              />
+              <span>Ghost enabled</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="trainerSettings.settings().ghost.ghostTrailEnabled"
+                (change)="onGhostTrailToggle($any($event.target).checked)"
+              />
+              <span>Ghost trail</span>
+            </label>
+            <label class="settings__slider">
+              <span>Ghost opacity {{ trainerSettings.settings().ghost.ghostOpacity | number: '1.1-2' }}</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                [value]="trainerSettings.settings().ghost.ghostOpacity"
+                (input)="onGhostOpacity($any($event.target).value)"
+              />
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="trainerSettings.settings().ghost.ghostCountdownPreview"
+                (change)="onGhostCountdownPreviewToggle($any($event.target).checked)"
+              />
+              <span>Show ghost during countdown</span>
+            </label>
+            <div class="settings__row">
+              <span class="settings__label">Comparison mode</span>
+              <div class="settings__seg">
+                <button
+                  type="button"
+                  class="settings__chip"
+                  [class.settings__chip--active]="trainerSettings.settings().ghost.ghostComparisonMode === 'gateSplits'"
+                  (click)="onGhostComparisonMode('gateSplits')"
+                >
+                  Gate splits
+                </button>
+                <button
+                  type="button"
+                  class="settings__chip"
+                  [class.settings__chip--active]="trainerSettings.settings().ghost.ghostComparisonMode === 'approximateLive'"
+                  (click)="onGhostComparisonMode('approximateLive')"
+                >
+                  Live estimate
+                </button>
+                <button
+                  type="button"
+                  class="settings__chip"
+                  [class.settings__chip--active]="trainerSettings.settings().ghost.ghostComparisonMode === 'both'"
+                  (click)="onGhostComparisonMode('both')"
+                >
+                  Both
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Training &amp; Progression</h3>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="trainerSettings.settings().training.trainingGuidanceEnabled"
+                (change)="onTrainingGuidanceToggle($any($event.target).checked)"
+              />
+              <span>Training guidance overlays</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="trainerSettings.settings().training.trainingTipsEnabled"
+                (change)="onTrainingTipsToggle($any($event.target).checked)"
+              />
+              <span>Show training tips</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="trainerSettings.settings().training.autoShowTrainingBriefing"
+                (change)="onAutoShowBriefingToggle($any($event.target).checked)"
+              />
+              <span>Auto-show briefing</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="trainerSettings.settings().progression.achievementNotificationsEnabled"
+                (change)="onAchievementNotificationsToggle($any($event.target).checked)"
+              />
+              <span>Achievement notifications</span>
+            </label>
+            <label class="settings__toggle">
+              <input
+                type="checkbox"
+                [checked]="trainerSettings.settings().progression.xpNotificationsEnabled"
+                (change)="onXpNotificationsToggle($any($event.target).checked)"
+              />
+              <span>XP notifications</span>
+            </label>
+          </div>
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Setup</h3>
+            <div class="settings__actions">
+              @if (!calibration.hasCalibration()) {
+                <button type="button" class="btn btn--accent" (click)="onOpenCalibration()">
+                  Open Calibration
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="settings__section">
+            <h3 class="settings__section-title">Keyboard</h3>
+            <ul class="help__list">
+              <li><kbd>W</kbd>/<kbd>S</kbd> throttle</li>
+              <li><kbd>A</kbd>/<kbd>D</kbd> yaw</li>
+              <li><kbd>↑</kbd>/<kbd>↓</kbd> pitch</li>
+              <li><kbd>←</kbd>/<kbd>→</kbd> roll</li>
+              <li><kbd>Space</kbd> arm / disarm</li>
+              <li><kbd>R</kbd> reset</li>
+              <li><kbd>C</kbd> camera</li>
+              <li><kbd>F</kbd> fullscreen</li>
+              <li><kbd>P</kbd> pause</li>
+              <li><kbd>T</kbd> start run</li>
+              <li><kbd>Esc</kbd> settings</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+</div>

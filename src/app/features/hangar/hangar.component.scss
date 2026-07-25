@@ -1,0 +1,386 @@
+.hangar {
+  min-height: 100%;
+  padding: var(--fpv-space-24);
+  color: var(--fpv-text);
+}
+
+.hangar__header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--fpv-space-16);
+  align-items: flex-end;
+  margin-bottom: var(--fpv-space-24);
+  flex-wrap: wrap;
+}
+
+.hangar__eyebrow {
+  margin: 0;
+  color: var(--fpv-accent);
+  font-size: var(--fpv-text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hangar__title {
+  margin: 0.2rem 0;
+  font-family: var(--fpv-font-display);
+  font-size: var(--fpv-text-h1);
+}
+
+.hangar__support {
+  margin: 0;
+  max-width: 40rem;
+  color: var(--fpv-text-secondary);
+}
+
+.hangar__header-actions {
+  display: flex;
+  gap: var(--fpv-space-8);
+}
+
+.hangar__layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 320px);
+  gap: var(--fpv-space-16);
+  min-height: min(70vh, 720px);
+}
+
+.hangar__list,
+.hangar__details {
+  background: var(--fpv-panel-glass);
+  border: 1px solid var(--fpv-border);
+  border-radius: var(--fpv-radius-lg);
+  padding: var(--fpv-space-16);
+  overflow: auto;
+}
+
+.hangar__search input,
+.hangar__filters select {
+  width: 100%;
+  background: var(--fpv-surface);
+  border: 1px solid var(--fpv-border);
+  color: var(--fpv-text);
+  border-radius: var(--fpv-radius-md);
+  padding: 0.55rem 0.7rem;
+}
+
+.hangar__filters {
+  display: flex;
+  gap: var(--fpv-space-8);
+  margin: var(--fpv-space-12) 0;
+}
+
+.hangar__craft-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.hangar__craft {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.15rem 0.5rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: var(--fpv-radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hangar__craft:hover,
+.hangar__craft:focus-visible {
+  border-color: var(--fpv-border-strong);
+  outline: 2px solid var(--fpv-focus-ring);
+  outline-offset: 1px;
+}
+
+.hangar__craft--active {
+  background: var(--fpv-accent-soft);
+  border-color: color-mix(in srgb, var(--fpv-accent) 45%, transparent);
+}
+
+.hangar__craft-name {
+  font-weight: 600;
+}
+
+.hangar__craft-meta {
+  grid-column: 1;
+  color: var(--fpv-text-muted);
+  font-size: var(--fpv-text-caption);
+  text-transform: capitalize;
+}
+
+.hangar__craft-actions {
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.hangar__icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--fpv-text-secondary);
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.hangar__stage {
+  position: relative;
+  border-radius: var(--fpv-radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--fpv-border);
+  background: radial-gradient(ellipse at 50% 20%, #152029 0%, #0a1016 70%);
+  min-height: 320px;
+}
+
+.hangar__canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.hangar__canvas:active {
+  cursor: grabbing;
+}
+
+.hangar__loading {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  background: var(--fpv-panel-glass);
+  border-radius: var(--fpv-radius-sm);
+}
+
+.hangar__nameplate {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  max-width: min(90%, 28rem);
+}
+
+.hangar__nameplate h2 {
+  margin: 0.25rem 0;
+  font-family: var(--fpv-font-display);
+  font-size: 1.75rem;
+}
+
+.hangar__nameplate p {
+  margin: 0;
+  color: var(--fpv-text-secondary);
+}
+
+.hangar__badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--fpv-radius-sm);
+  background: var(--fpv-accent-soft);
+  color: var(--fpv-accent);
+  font-size: var(--fpv-text-caption);
+  text-transform: capitalize;
+}
+
+.hangar__details-title {
+  margin: 0 0 0.5rem;
+  font-size: var(--fpv-text-h3);
+}
+
+.hangar__desc {
+  color: var(--fpv-text-secondary);
+  font-size: var(--fpv-text-body-sm);
+}
+
+.hangar__facts {
+  display: grid;
+  gap: 0.5rem;
+  margin: var(--fpv-space-16) 0;
+}
+
+.hangar__facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--fpv-border);
+  padding-bottom: 0.35rem;
+}
+
+.hangar__facts dt {
+  color: var(--fpv-text-muted);
+  font-size: var(--fpv-text-caption);
+}
+
+.hangar__facts dd {
+  margin: 0;
+  text-align: right;
+  text-transform: capitalize;
+}
+
+.hangar__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.hangar__stat-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fpv-text-caption);
+  color: var(--fpv-text-secondary);
+}
+
+.hangar__stat-bar {
+  height: 6px;
+  background: var(--fpv-surface);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.hangar__stat-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--fpv-accent-strong), var(--fpv-accent));
+}
+
+.hangar__disclaimer {
+  margin: var(--fpv-space-12) 0;
+  font-size: var(--fpv-text-caption);
+  color: var(--fpv-text-muted);
+}
+
+.hangar__liveries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: var(--fpv-space-16);
+}
+
+.hangar__livery {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--fpv-border);
+  background: var(--fpv-surface);
+  color: inherit;
+  border-radius: var(--fpv-radius-md);
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+}
+
+.hangar__livery--active {
+  border-color: var(--fpv-accent);
+}
+
+.hangar__swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+}
+
+.hangar__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.hangar__compare {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 40;
+  padding: 1rem;
+}
+
+.hangar__compare-panel {
+  width: min(960px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--fpv-surface-elevated);
+  border: 1px solid var(--fpv-border);
+  border-radius: var(--fpv-radius-lg);
+  padding: var(--fpv-space-20);
+  box-shadow: var(--fpv-shadow-modal);
+}
+
+.hangar__compare-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hangar__compare-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fpv-text-body-sm);
+}
+
+.hangar__compare-panel th,
+.hangar__compare-panel td {
+  border-bottom: 1px solid var(--fpv-border);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.hangar__hi {
+  color: var(--fpv-success);
+}
+
+.hangar__lo {
+  color: var(--fpv-warning);
+}
+
+.hangar__diff {
+  background: color-mix(in srgb, var(--fpv-info) 8%, transparent);
+}
+
+@media (max-width: 1100px) {
+  .hangar__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .hangar__list {
+    order: 2;
+    max-height: 280px;
+  }
+
+  .hangar__stage {
+    order: 1;
+    min-height: 360px;
+  }
+
+  .hangar__details {
+    order: 3;
+  }
+}
+
+@media (max-width: 640px) {
+  .hangar {
+    padding: var(--fpv-space-12);
+    padding-bottom: calc(var(--fpv-space-64) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .hangar__canvas {
+    min-height: 280px;
+  }
+
+  .hangar__list {
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hangar__stat-fill {
+    transition: none;
+  }
+}
