@@ -232,14 +232,14 @@
 .builder__option {
   width: 100%;
   display: grid;
-  grid-template-columns: 6rem minmax(0, 1fr);
+  grid-template-columns: 7rem minmax(0, 1fr);
   gap: 0.75rem;
   align-items: start;
 }
 
 .builder__option-media {
   position: relative;
-  width: 6rem;
+  width: 7rem;
   aspect-ratio: 4 / 3;
   border-radius: 8px;
   overflow: hidden;
@@ -251,7 +251,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .builder__option-fallback-label {
@@ -278,6 +278,68 @@
 
 .builder__option-compat {
   font-size: 0.75rem;
+}
+
+.builder__spec-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.builder__spec-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.4rem;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #cce9d6;
+  background: color-mix(in srgb, #2a4034 75%, transparent);
+  border: 1px solid color-mix(in srgb, #6fbf8a 35%, transparent);
+}
+
+.builder__selected-detail {
+  display: grid;
+  grid-template-columns: minmax(10rem, 15rem) minmax(0, 1fr);
+  gap: 0.9rem;
+  margin-top: 0.85rem;
+  padding: 0.85rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #6fbf8a 28%, transparent);
+  background: color-mix(in srgb, #0f1612 80%, transparent);
+}
+
+.builder__selected-detail-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0b110e;
+}
+
+.builder__selected-detail-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.builder__selected-detail-body {
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.builder__selected-detail-body h3,
+.builder__selected-detail-body h4 {
+  margin: 0;
+}
+
+.builder__selected-detail-body p {
+  margin: 0;
 }
 
 .builder__pill {
@@ -367,6 +429,10 @@
 
   .builder__actions {
     position: static;
+  }
+
+  .builder__selected-detail {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -491,7 +557,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .builder__advanced-option-body {

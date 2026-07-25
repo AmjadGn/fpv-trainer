@@ -1,11 +1,14 @@
 import type { ComponentType } from '@fpv/component-catalog';
 
-import type { ComponentPresentationMedia } from './component-presentation-media.models';
+import type {
+  ComponentPresentationMedia,
+  ComponentVisualMetadata,
+} from './component-presentation-media.models';
 
 const FALLBACK_ROOT = '/assets/components/fallbacks';
-const ILLUSTRATION_ROOT = '/assets/components/illustrations';
+const PRODUCT_ROOT = '/assets/components/products';
 
-const SOURCE = 'FPV Trainer project-owned silhouette';
+const SOURCE = 'FPV Trainer project-owned technical illustration';
 const LICENSE = 'Project asset · not commercial product photography';
 
 /** Category fallback paths — clearly generic silhouettes. */
@@ -29,20 +32,22 @@ export const CATEGORY_FALLBACK_ASSET_PATHS: Readonly<
   unknown: `${FALLBACK_ROOT}/generic.svg`,
 };
 
-function categoryEntry(
+function product(
   revisionId: string,
-  category: ComponentType,
+  relativePath: string,
   displayName: string,
+  visual: ComponentVisualMetadata,
 ): ComponentPresentationMedia {
-  const path = CATEGORY_FALLBACK_ASSET_PATHS[category];
+  const path = `${PRODUCT_ROOT}/${relativePath}`;
   return {
     componentRevisionId: revisionId,
     thumbnailAssetPath: path,
     imageAssetPath: path,
-    altText: `${displayName} — generic ${category.replace(/-/g, ' ')} illustration`,
+    altText: `${displayName} — project-owned technical illustration`,
     sourceLabel: SOURCE,
     licenseLabel: LICENSE,
-    usesCategoryFallback: true,
+    usesCategoryFallback: false,
+    visual,
   };
 }
 
@@ -51,117 +56,231 @@ function categoryEntry(
  * Intentionally separate from the engineering catalog so media changes cannot
  * alter fingerprints or compilation output.
  *
- * Most stocked parts intentionally use generic category silhouettes.
- * One dedicated project illustration exists for a known racing frame so the
- * registry can demonstrate a non-fallback mapping without branded photography.
+ * Every stocked official-catalog revision has a unique product-specific asset.
+ * Category fallbacks are reserved for missing entries / load failures only.
  */
 export const COMPONENT_PRESENTATION_MEDIA_BY_REVISION_ID: Readonly<
   Record<string, ComponentPresentationMedia>
 > = {
   // Frames
-  'frame-cine-ducted-220@1': categoryEntry(
+  'frame-cine-ducted-220@1': product(
     'frame-cine-ducted-220@1',
-    'frame',
+    'frames/frame-cine-ducted-220.svg',
     'Cine Ducted 220',
+    { category: 'frame' },
   ),
-  'frame-hybrid-speed-280@1': categoryEntry(
+  'frame-hybrid-speed-280@1': product(
     'frame-hybrid-speed-280@1',
-    'frame',
+    'frames/frame-hybrid-speed-280.svg',
     'Hybrid Speed 280',
+    { category: 'frame' },
   ),
-  'frame-nano-85@1': categoryEntry('frame-nano-85@1', 'frame', 'Nano 85'),
-  'frame-racing-5in@1': {
-    componentRevisionId: 'frame-racing-5in@1',
-    thumbnailAssetPath: `${ILLUSTRATION_ROOT}/frame-racing-5in.svg`,
-    imageAssetPath: `${ILLUSTRATION_ROOT}/frame-racing-5in.svg`,
-    altText: 'Racing 5-inch frame — project-owned illustration',
-    sourceLabel: SOURCE,
-    licenseLabel: LICENSE,
-    usesCategoryFallback: false,
-  },
-  'frame-freestyle-5in@1': categoryEntry(
+  'frame-nano-85@1': product(
+    'frame-nano-85@1',
+    'frames/frame-nano-85.svg',
+    'Nano 85',
+    { category: 'frame' },
+  ),
+  'frame-racing-5in@1': product(
+    'frame-racing-5in@1',
+    'frames/frame-racing-5in.svg',
+    'Racing 5in',
+    { category: 'frame' },
+  ),
+  'frame-freestyle-5in@1': product(
     'frame-freestyle-5in@1',
-    'frame',
-    'Freestyle 5-inch',
+    'frames/frame-freestyle-5in.svg',
+    'Freestyle 5in',
+    { category: 'frame' },
   ),
-  'frame-longrange-7in@1': categoryEntry(
+  'frame-longrange-7in@1': product(
     'frame-longrange-7in@1',
-    'frame',
-    'Long Range 7-inch',
+    'frames/frame-longrange-7in.svg',
+    'Long Range 7in',
+    { category: 'frame' },
   ),
 
   // Motors
-  'motor-1404-4500kv@1': categoryEntry(
+  'motor-1404-4500kv@1': product(
     'motor-1404-4500kv@1',
-    'motor',
+    'motors/motor-1404-4500kv.svg',
     '1404 4500KV',
+    { category: 'motor', motorStatorClass: '1404' },
   ),
-  'motor-2207-2450kv@1': categoryEntry(
+  'motor-2207-2450kv@1': product(
     'motor-2207-2450kv@1',
-    'motor',
+    'motors/motor-2207-2450kv.svg',
     '2207 2450KV',
+    { category: 'motor', motorStatorClass: '2207' },
   ),
-  'motor-1103-10000kv@1': categoryEntry(
+  'motor-1103-10000kv@1': product(
     'motor-1103-10000kv@1',
-    'motor',
+    'motors/motor-1103-10000kv.svg',
     '1103 10000KV',
+    { category: 'motor', motorStatorClass: '1103' },
   ),
-  'motor-2306-2750kv@1': categoryEntry(
+  'motor-2306-2750kv@1': product(
     'motor-2306-2750kv@1',
-    'motor',
+    'motors/motor-2306-2750kv.svg',
     '2306 2750KV',
+    { category: 'motor', motorStatorClass: '2306' },
   ),
-  'motor-2207-1950kv@1': categoryEntry(
+  'motor-2207-1950kv@1': product(
     'motor-2207-1950kv@1',
-    'motor',
+    'motors/motor-2207-1950kv.svg',
     '2207 1950KV',
+    { category: 'motor', motorStatorClass: '2207' },
   ),
-  'motor-2807-1500kv@1': categoryEntry(
+  'motor-2807-1500kv@1': product(
     'motor-2807-1500kv@1',
-    'motor',
+    'motors/motor-2807-1500kv.svg',
     '2807 1500KV',
+    { category: 'motor', motorStatorClass: '2807' },
   ),
 
   // Propellers
-  'prop-ducted-3blade-120@1': categoryEntry(
+  'prop-ducted-3blade-120@1': product(
     'prop-ducted-3blade-120@1',
-    'propeller',
+    'propellers/prop-ducted-3blade-120.svg',
     'Ducted 120mm 3-blade',
+    {
+      category: 'propeller',
+      propellerBladeCount: 3,
+      propellerDiameterClass: '120mm',
+    },
   ),
-  'prop-5x4x3@1': categoryEntry('prop-5x4x3@1', 'propeller', '5x4x3'),
-  'prop-5x4.5x3@1': categoryEntry('prop-5x4.5x3@1', 'propeller', '5x4.5x3'),
-  'prop-65mm-2blade@1': categoryEntry(
+  'prop-5x4x3@1': product(
+    'prop-5x4x3@1',
+    'propellers/prop-5x4x3.svg',
+    '5x4x3',
+    {
+      category: 'propeller',
+      propellerBladeCount: 3,
+      propellerDiameterClass: '5in',
+    },
+  ),
+  'prop-5x4.5x3@1': product(
+    'prop-5x4.5x3@1',
+    'propellers/prop-5x4.5x3.svg',
+    '5x4.5x3',
+    {
+      category: 'propeller',
+      propellerBladeCount: 3,
+      propellerDiameterClass: '5in',
+    },
+  ),
+  'prop-65mm-2blade@1': product(
     'prop-65mm-2blade@1',
-    'propeller',
+    'propellers/prop-65mm-2blade.svg',
     '65mm 2-blade',
+    {
+      category: 'propeller',
+      propellerBladeCount: 2,
+      propellerDiameterClass: '65mm',
+    },
   ),
-  'prop-6x4x3@1': categoryEntry('prop-6x4x3@1', 'propeller', '6x4x3'),
-  'prop-7x4x3@1': categoryEntry('prop-7x4x3@1', 'propeller', '7x4x3'),
+  'prop-6x4x3@1': product(
+    'prop-6x4x3@1',
+    'propellers/prop-6x4x3.svg',
+    '6x4x3',
+    {
+      category: 'propeller',
+      propellerBladeCount: 3,
+      propellerDiameterClass: '6in',
+    },
+  ),
+  'prop-7x4x3@1': product(
+    'prop-7x4x3@1',
+    'propellers/prop-7x4x3.svg',
+    '7x4x3',
+    {
+      category: 'propeller',
+      propellerBladeCount: 3,
+      propellerDiameterClass: '7in',
+    },
+  ),
 
   // Batteries
-  'batt-4s-2800@1': categoryEntry('batt-4s-2800@1', 'battery', '4S 2800mAh'),
-  'batt-6s-1500@1': categoryEntry('batt-6s-1500@1', 'battery', '6S 1500mAh'),
-  'batt-6s-2200@1': categoryEntry('batt-6s-2200@1', 'battery', '6S 2200mAh'),
-  'batt-1s-450@1': categoryEntry('batt-1s-450@1', 'battery', '1S 450mAh'),
-  'batt-6s-1800@1': categoryEntry('batt-6s-1800@1', 'battery', '6S 1800mAh'),
-  'batt-6s-3000@1': categoryEntry('batt-6s-3000@1', 'battery', '6S 3000mAh'),
+  'batt-4s-2800@1': product(
+    'batt-4s-2800@1',
+    'batteries/batt-4s-2800.svg',
+    '4S 2800mAh',
+    { category: 'battery' },
+  ),
+  'batt-6s-1500@1': product(
+    'batt-6s-1500@1',
+    'batteries/batt-6s-1500.svg',
+    '6S 1500mAh',
+    { category: 'battery' },
+  ),
+  'batt-6s-2200@1': product(
+    'batt-6s-2200@1',
+    'batteries/batt-6s-2200.svg',
+    '6S 2200mAh',
+    { category: 'battery' },
+  ),
+  'batt-1s-450@1': product(
+    'batt-1s-450@1',
+    'batteries/batt-1s-450.svg',
+    '1S 450mAh',
+    { category: 'battery' },
+  ),
+  'batt-6s-1800@1': product(
+    'batt-6s-1800@1',
+    'batteries/batt-6s-1800.svg',
+    '6S 1800mAh',
+    { category: 'battery' },
+  ),
+  'batt-6s-3000@1': product(
+    'batt-6s-3000@1',
+    'batteries/batt-6s-3000.svg',
+    '6S 3000mAh',
+    { category: 'battery' },
+  ),
 
   // ESCs
-  'esc-4in1-45a@1': categoryEntry('esc-4in1-45a@1', 'esc', '4-in-1 45A'),
-  'esc-4in1-20a@1': categoryEntry('esc-4in1-20a@1', 'esc', '4-in-1 20A'),
-  'esc-4in1-12a@1': categoryEntry('esc-4in1-12a@1', 'esc', '4-in-1 12A'),
+  'esc-4in1-45a@1': product(
+    'esc-4in1-45a@1',
+    'escs/esc-4in1-45a.svg',
+    '4-in-1 45A',
+    { category: 'esc' },
+  ),
+  'esc-4in1-20a@1': product(
+    'esc-4in1-20a@1',
+    'escs/esc-4in1-20a.svg',
+    '4-in-1 20A',
+    { category: 'esc' },
+  ),
+  'esc-4in1-12a@1': product(
+    'esc-4in1-12a@1',
+    'escs/esc-4in1-12a.svg',
+    '4-in-1 12A',
+    { category: 'esc' },
+  ),
 
   // Electronics
-  'fc-f7-standard@1': categoryEntry(
+  'fc-f7-standard@1': product(
     'fc-f7-standard@1',
-    'flight-controller',
+    'electronics/fc-f7-standard.svg',
     'F7 FC',
+    { category: 'flight-controller' },
   ),
-  'cam-fpv-standard@1': categoryEntry(
+  'cam-fpv-standard@1': product(
     'cam-fpv-standard@1',
-    'camera',
+    'electronics/cam-fpv-standard.svg',
     'FPV Camera',
+    { category: 'camera' },
   ),
-  'vtx-25-800@1': categoryEntry('vtx-25-800@1', 'video-transmitter', 'VTX 25-800mW'),
-  'rx-elrs@1': categoryEntry('rx-elrs@1', 'receiver', 'ELRS Receiver'),
+  'vtx-25-800@1': product(
+    'vtx-25-800@1',
+    'electronics/vtx-25-800.svg',
+    'VTX 25-800mW',
+    { category: 'video-transmitter' },
+  ),
+  'rx-elrs@1': product(
+    'rx-elrs@1',
+    'electronics/rx-elrs.svg',
+    'ELRS Receiver',
+    { category: 'receiver' },
+  ),
 };

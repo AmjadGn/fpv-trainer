@@ -165,16 +165,16 @@
                   >
                     <span class="builder__advanced-option-media">
                       <img
-                        [src]="detail.option.media.imageUrl"
+                        [src]="detail.option.media.thumbnailUrl"
                         [alt]="detail.option.media.altText"
-                        width="160"
-                        height="120"
+                        width="120"
+                        height="90"
                         loading="lazy"
                         decoding="async"
                         (error)="onMediaError($event, detail.option.category)"
                       />
                       @if (detail.option.media.isFallback) {
-                        <span class="builder__option-fallback-label">Category illustration</span>
+                        <span class="builder__option-fallback-label">Generic image</span>
                       }
                     </span>
                     <span class="builder__advanced-option-body">
@@ -189,6 +189,13 @@
                       </span>
                       <span>{{ detail.option.categoryLabel }} · {{ detail.manufacturerLabel }}</span>
                       <span class="builder__meta">Revision: {{ detail.revisionDisplay }}</span>
+                      @if (detail.option.distinguishingLabels.length) {
+                        <span class="builder__spec-chips" aria-label="Key specifications">
+                          @for (label of detail.option.distinguishingLabels; track label) {
+                            <span class="builder__spec-chip">{{ label }}</span>
+                          }
+                        </span>
+                      }
                       <span>{{ compatibilityStatusLabel(detail.option.compatibilityStatus) }}</span>
                       <span class="builder__meta">Data: {{ detail.dataAvailability }}</span>
 
@@ -235,6 +242,63 @@
                 </li>
               }
             </ul>
+
+            @if (selectedAdvancedDetail(); as selected) {
+              <section class="builder__selected-detail builder__selected-detail--advanced" aria-label="Selected component detail">
+                <div class="builder__selected-detail-media">
+                  <img
+                    [src]="selected.option.media.imageUrl"
+                    [alt]="selected.option.media.altText"
+                    width="280"
+                    height="210"
+                    decoding="async"
+                    (error)="onMediaError($event, selected.option.category)"
+                  />
+                  @if (selected.option.media.isFallback) {
+                    <span class="builder__option-fallback-label">Generic image</span>
+                  }
+                </div>
+                <div class="builder__selected-detail-body">
+                  <h3>{{ selected.option.name }}</h3>
+                  <p class="builder__meta">Revision: {{ selected.revisionDisplay }}</p>
+                  @if (selected.option.distinguishingLabels.length) {
+                    <div class="builder__spec-chips">
+                      @for (label of selected.option.distinguishingLabels; track label) {
+                        <span class="builder__spec-chip">{{ label }}</span>
+                      }
+                    </div>
+                  }
+                  <p>{{ compatibilityStatusLabel(selected.option.compatibilityStatus) }}</p>
+                  <p class="builder__meta">Data: {{ selected.dataAvailability }}</p>
+                  <div class="builder__spec-grid">
+                    <div>
+                      <h4>Physical</h4>
+                      <dl>
+                        @for (spec of selected.physicalSpecs; track spec.label) {
+                          <div>
+                            <dt>{{ spec.label }}</dt>
+                            <dd [class.builder__na]="!spec.available">{{ spec.value }}</dd>
+                          </div>
+                        }
+                      </dl>
+                    </div>
+                    @if (selected.electricalSpecs.length) {
+                      <div>
+                        <h4>Electrical</h4>
+                        <dl>
+                          @for (spec of selected.electricalSpecs; track spec.label) {
+                            <div>
+                              <dt>{{ spec.label }}</dt>
+                              <dd [class.builder__na]="!spec.available">{{ spec.value }}</dd>
+                            </div>
+                          }
+                        </dl>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </section>
+            }
           </section>
 
           <aside class="builder__advanced-side" aria-label="Diagnostics and engineering">
@@ -591,14 +655,14 @@
                       <img
                         [src]="opt.media.thumbnailUrl"
                         [alt]="opt.media.altText"
-                        width="96"
-                        height="72"
+                        width="112"
+                        height="84"
                         loading="lazy"
                         decoding="async"
                         (error)="onMediaError($event, opt.category)"
                       />
                       @if (opt.media.isFallback) {
-                        <span class="builder__option-fallback-label">Category illustration</span>
+                        <span class="builder__option-fallback-label">Generic image</span>
                       }
                     </span>
                     <span class="builder__option-body">
@@ -611,7 +675,15 @@
                           <span class="builder__pill builder__pill--selected">Selected</span>
                         }
                       </span>
-                      <span>{{ opt.mainSpec }}</span>
+                      @if (opt.distinguishingLabels.length) {
+                        <span class="builder__spec-chips" aria-label="Key specifications">
+                          @for (label of opt.distinguishingLabels; track label) {
+                            <span class="builder__spec-chip">{{ label }}</span>
+                          }
+                        </span>
+                      } @else {
+                        <span>{{ opt.mainSpec }}</span>
+                      }
                       <span class="builder__option-compat">
                         {{ compatibilityStatusLabel(opt.compatibilityStatus) }}
                       </span>
@@ -625,6 +697,38 @@
                 </li>
               }
             </ul>
+
+            @if (selectedOption(); as selected) {
+              <section class="builder__selected-detail" aria-label="Selected component detail">
+                <div class="builder__selected-detail-media">
+                  <img
+                    [src]="selected.media.imageUrl"
+                    [alt]="selected.media.altText"
+                    width="240"
+                    height="180"
+                    decoding="async"
+                    (error)="onMediaError($event, selected.category)"
+                  />
+                  @if (selected.media.isFallback) {
+                    <span class="builder__option-fallback-label">Generic image</span>
+                  }
+                </div>
+                <div class="builder__selected-detail-body">
+                  <h3>{{ selected.name }}</h3>
+                  @if (selected.distinguishingLabels.length) {
+                    <div class="builder__spec-chips">
+                      @for (label of selected.distinguishingLabels; track label) {
+                        <span class="builder__spec-chip">{{ label }}</span>
+                      }
+                    </div>
+                  }
+                  <p class="builder__option-effect">{{ selected.simplePerformanceEffect }}</p>
+                  <p class="builder__option-compat">
+                    {{ compatibilityStatusLabel(selected.compatibilityStatus) }}
+                  </p>
+                </div>
+              </section>
+            }
           </fpv-panel>
         </section>
 

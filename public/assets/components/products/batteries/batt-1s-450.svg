@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="1S 450mAh battery">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="66" y="53" width="28" height="14" rx="4" fill="#2a4034" stroke="#6fbf8a" stroke-width="2"/>
+  
+  <rect x="88" y="57" width="10" height="6" rx="1" fill="#8fd6a8"/>
+  <rect x="70" y="57" width="7" height="6" rx="1" fill="#1a2a22"/>
+</svg>

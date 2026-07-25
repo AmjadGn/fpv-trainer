@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="4S 2800mAh battery">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="45" y="47" width="70" height="26" rx="4" fill="#2a4034" stroke="#6fbf8a" stroke-width="2"/>
+  <line x1="62.5" y1="49" x2="62.5" y2="71" stroke="#3d5c48" stroke-width="1.5"/>
+<line x1="80" y1="49" x2="80" y2="71" stroke="#3d5c48" stroke-width="1.5"/>
+<line x1="97.5" y1="49" x2="97.5" y2="71" stroke="#3d5c48" stroke-width="1.5"/>
+  <rect x="111" y="55" width="12" height="10" rx="2" fill="#8fd6a8"/>
+  <rect x="121" y="58" width="4" height="4" fill="#6fbf8a"/>
+  <rect x="49" y="51" width="17.5" height="6" rx="1" fill="#1a2a22"/>
+</svg>

@@ -126,6 +126,8 @@ export interface BuilderComponentOptionView {
   readonly category: ComponentType;
   readonly categoryLabel: string;
   readonly mainSpec: string;
+  /** Short distinguishing labels shown on cards (stator, KV, blades, etc.). */
+  readonly distinguishingLabels: readonly string[];
   readonly recommendedUse: string;
   readonly compatibilityStatus:
     | 'compatible'

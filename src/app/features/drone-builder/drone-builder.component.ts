@@ -57,8 +57,14 @@ export class DroneBuilderComponent implements OnInit {
   protected readonly options = computed(() =>
     this.facade.mappedOptionsForActiveCategory(),
   );
+  protected readonly selectedOption = computed(
+    () => this.options().find((o) => o.selected) ?? null,
+  );
   protected readonly advancedDetails = computed(() =>
     this.facade.mappedAdvancedDetailsForActiveCategory(),
+  );
+  protected readonly selectedAdvancedDetail = computed(
+    () => this.advancedDetails().find((d) => d.option.selected) ?? null,
   );
   protected readonly tuningInfo = computed(() => this.facade.currentTuningInfo());
   protected readonly provenanceInfo = computed(() =>

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, isDevMode } from '@angular/core';
 import type { ComponentType } from '@fpv/component-catalog';
 
 import {
@@ -24,8 +24,16 @@ export class ComponentPresentationMediaService {
   ): ResolvedComponentMedia {
     const entry = this.lookup(componentRevisionId);
     if (entry) {
+      if (entry.usesCategoryFallback) {
+        this.warnDev(
+          `Media registry entry for ${componentRevisionId} uses category fallback.`,
+        );
+      }
       return this.toResolved(entry, category);
     }
+    this.warnDev(
+      `Missing presentation media for ${componentRevisionId ?? '(null)'}; using ${category} fallback.`,
+    );
     return this.categoryFallback(category, displayName);
   }
 
@@ -60,6 +68,28 @@ export class ComponentPresentationMediaService {
     }
     img.setAttribute('data-fallback', '1');
     img.src = fallback;
+    const host = img.closest(
+      '.builder__option-media, .builder__advanced-option-media, .builder__selected-detail-media, .builder__progress-thumb',
+    );
+    if (host instanceof HTMLElement) {
+      host.classList.add('builder__media--fallback');
+      if (!host.querySelector('.builder__option-fallback-label')) {
+        const label = document.createElement('span');
+        label.className = 'builder__option-fallback-label';
+        label.textContent = 'Generic image';
+        host.appendChild(label);
+      }
+    }
+    this.warnDev(
+      `Component media failed to load; using category fallback for ${category}.`,
+    );
+  }
+
+  private warnDev(message: string): void {
+    // Development-only — never blocks selection, validation, or compilation.
+    if (isDevMode()) {
+      console.warn(`[builder-media] ${message}`);
+    }
   }
 
   private toResolved(

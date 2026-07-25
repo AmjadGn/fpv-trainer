@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="FPV camera">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="48" y="40" width="44" height="40" rx="4" fill="#2a4034" stroke="#6fbf8a" stroke-width="2"/>
+  <circle cx="70" cy="60" r="14" fill="#1a2a22" stroke="#8fd6a8" stroke-width="2"/>
+  <circle cx="70" cy="60" r="6" fill="#3d5c48"/>
+  <rect x="92" y="50" width="18" height="20" rx="2" fill="#2a4034" stroke="#6fbf8a" stroke-width="1.5"/>
+  <path d="M110 55 L128 48 L128 72 L110 65 Z" fill="#3d5c48" stroke="#6fbf8a" stroke-width="1.5"/>
+</svg>

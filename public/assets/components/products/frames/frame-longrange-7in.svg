@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Long-range 7-inch frame">
+  <rect width="160" height="120" fill="#142018"/>
+  
+  <line x1="80" y1="60" x2="142.4" y2="-2.3999999999999986" stroke="#6fbf8a" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="142.4" cy="-2.3999999999999986" r="5" fill="#8fd6a8"/>
+<line x1="80" y1="60" x2="17.6" y2="-2.3999999999999986" stroke="#6fbf8a" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="17.6" cy="-2.3999999999999986" r="5" fill="#8fd6a8"/>
+<line x1="80" y1="60" x2="17.6" y2="122.4" stroke="#6fbf8a" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="17.6" cy="122.4" r="5" fill="#8fd6a8"/>
+<line x1="80" y1="60" x2="142.4" y2="122.4" stroke="#6fbf8a" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="142.4" cy="122.4" r="5" fill="#8fd6a8"/>
+  <rect x="65" y="51" width="30" height="18" rx="3" fill="#2a4034" stroke="#6fbf8a" stroke-width="2"/>
+  <rect x="72.5" y="55.5" width="15" height="9" rx="2" fill="#1a2a22"/>
+</svg>

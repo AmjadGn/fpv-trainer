@@ -17,6 +17,24 @@ export interface ComponentPresentationMedia {
    * dedicated component illustration.
    */
   readonly usesCategoryFallback: boolean;
+  /**
+   * Optional visual validation metadata — presentation-only.
+   * Never included in engineering fingerprints.
+   */
+  readonly visual?: ComponentVisualMetadata;
+}
+
+/** Presentation-only visual metadata used for asset validation tests. */
+export interface ComponentVisualMetadata {
+  readonly category: ComponentType;
+  /** Motor stator class e.g. "1103", "2306"; null when N/A. */
+  readonly motorStatorClass?: string | null;
+  /** Propeller blade count depicted in the asset. */
+  readonly propellerBladeCount?: number | null;
+  /** Propeller diameter class in inches or mm label, e.g. "5in", "65mm". */
+  readonly propellerDiameterClass?: string | null;
+  /** Intentional shared fallback marker — only for category silhouettes. */
+  readonly intentionalSharedFallback?: boolean;
 }
 
 /** UI-resolved media result for templates. */

@@ -202,6 +202,7 @@ export class BuilderPresentationMapperService {
       category: revision.componentType,
       categoryLabel: this.categoryLabel(revision.componentType),
       mainSpec: this.mainSpec(revision),
+      distinguishingLabels: this.distinguishingLabels(revision),
       recommendedUse:
         revision.display.tags[0] ??
         revision.display.categoryLabels[0] ??
@@ -729,21 +730,133 @@ export class BuilderPresentationMapperService {
   private mainSpec(revision: ComponentRevision): string {
     const eng = revision.engineering;
     if (eng.type === 'battery') {
-      return `${eng.battery.cellCount}S · ${round(eng.battery.capacityAh * 1000, 0)} mAh`;
+      return `${eng.battery.cellCount}S · ${round(eng.battery.capacityAh * 1000, 0)} mAh · ${eng.battery.dischargeCRating}C`;
     }
     if (eng.type === 'esc') {
-      return `${eng.esc.continuousCurrentA}A continuous`;
+      return `${eng.esc.continuousCurrentA} A · ${eng.esc.topology || 'ESC'}`;
     }
     if (eng.type === 'motor') {
-      return `${eng.motor.kv} KV`;
+      return `${eng.motor.statorWidthMm}${String(eng.motor.statorHeightMm).padStart(2, '0')} · ${eng.motor.kv} KV`;
     }
     if (eng.type === 'propeller') {
+      const diaIn = eng.propeller.diameterMeters / 0.0254;
+      const pitchIn = eng.propeller.pitchMeters / 0.0254;
+      if (diaIn >= 3.5) {
+        return `${round(diaIn, 1)} × ${round(pitchIn, 1)} · ${eng.propeller.bladeCount} blades`;
+      }
       return `${round(eng.propeller.diameterMeters * 1000, 0)} mm · ${eng.propeller.bladeCount}-blade`;
     }
     if (eng.type === 'frame') {
       return `${round(eng.frame.wheelbaseMeters * 1000, 0)} mm wheelbase`;
     }
+    if (eng.type === 'video-transmitter') {
+      return '25–800 mW';
+    }
+    if (eng.type === 'receiver') {
+      return revision.compatibilityTags.includes('elrs') ? 'ELRS' : 'Receiver';
+    }
     return revision.display.categoryLabels[0] ?? this.categoryLabel(revision.componentType);
+  }
+
+  private distinguishingLabels(revision: ComponentRevision): string[] {
+    const eng = revision.engineering;
+    const labels: string[] = [];
+    const massG =
+      Number.isFinite(revision.massKg) ? round(revision.massKg * 1000, 1) : null;
+    const classTag =
+      revision.display.tags[0] ??
+      revision.compatibilityTags.find((t) =>
+        ['racing', 'freestyle', 'cinewhoop', 'whoop', 'long-range', '7inch', '5inch', 'hybrid', 'ducted', 'micro'].includes(
+          t,
+        ),
+      );
+
+    if (eng.type === 'motor') {
+      labels.push(
+        `${eng.motor.statorWidthMm}${String(eng.motor.statorHeightMm).padStart(2, '0')}`,
+      );
+      labels.push(`${eng.motor.kv} KV`);
+      if (massG != null) labels.push(`${massG} g`);
+      const vmin = eng.motor.voltageMin;
+      const vmax = eng.motor.voltageMax;
+      if (Number.isFinite(vmin) && Number.isFinite(vmax)) {
+        const sMin = Math.max(1, Math.round(vmin / 3.7));
+        const sMax = Math.max(sMin, Math.round(vmax / 4.2));
+        labels.push(`${sMin}S–${sMax}S`);
+      }
+      if (classTag) labels.push(this.humanizeTag(classTag));
+      return labels;
+    }
+    if (eng.type === 'propeller') {
+      const diaIn = eng.propeller.diameterMeters / 0.0254;
+      const pitchIn = eng.propeller.pitchMeters / 0.0254;
+      if (diaIn >= 3.5) {
+        labels.push(`${round(diaIn, 1)} × ${round(pitchIn, 1)}`);
+      } else {
+        labels.push(`${round(eng.propeller.diameterMeters * 1000, 0)} mm`);
+      }
+      labels.push(`${eng.propeller.bladeCount} blades`);
+      if (massG != null) labels.push(`${massG} g`);
+      if (classTag) labels.push(this.humanizeTag(classTag));
+      return labels;
+    }
+    if (eng.type === 'battery') {
+      labels.push(`${eng.battery.cellCount}S`);
+      labels.push(`${round(eng.battery.capacityAh * 1000, 0)} mAh`);
+      labels.push(`${eng.battery.dischargeCRating} C`);
+      if (massG != null) labels.push(`${massG} g`);
+      return labels;
+    }
+    if (eng.type === 'esc') {
+      labels.push(`${round(eng.esc.continuousCurrentA, 0)} A`);
+      if (Number.isFinite(eng.esc.burstCurrentA)) {
+        labels.push(`${round(eng.esc.burstCurrentA, 0)} A burst`);
+      }
+      labels.push(eng.esc.topology === '4in1' ? '4-in-1' : eng.esc.topology || 'ESC');
+      const vmin = eng.esc.voltageMin;
+      const vmax = eng.esc.voltageMax;
+      if (Number.isFinite(vmin) && Number.isFinite(vmax)) {
+        const sMin = Math.max(1, Math.round(vmin / 3.7));
+        const sMax = Math.max(sMin, Math.round(vmax / 4.2));
+        labels.push(`${sMin}S–${sMax}S`);
+      }
+      return labels;
+    }
+    if (eng.type === 'frame') {
+      labels.push(`${round(eng.frame.wheelbaseMeters * 1000, 0)} mm`);
+      if (massG != null) labels.push(`${massG} g`);
+      if (classTag) labels.push(this.humanizeTag(classTag));
+      return labels;
+    }
+    if (eng.type === 'video-transmitter') {
+      labels.push('25–800 mW');
+      if (massG != null) labels.push(`${massG} g`);
+      return labels;
+    }
+    if (eng.type === 'receiver') {
+      if (revision.compatibilityTags.includes('elrs')) labels.push('ELRS');
+      if (massG != null) labels.push(`${massG} g`);
+      return labels;
+    }
+    if (eng.type === 'flight-controller' || eng.type === 'camera') {
+      if (massG != null) labels.push(`${massG} g`);
+      const dims = revision.dimensions;
+      if (Number.isFinite(dims.widthMeters)) {
+        labels.push(`${round(dims.widthMeters * 1000, 0)} mm`);
+      }
+      return labels;
+    }
+    if (massG != null) labels.push(`${massG} g`);
+    return labels;
+  }
+
+  private humanizeTag(tag: string): string {
+    return tag
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .replace(/\bIn\b/g, 'in')
+      .replace(/5inch/i, '5-inch')
+      .replace(/7inch/i, '7-inch');
   }
 
   private simpleEffect(revision: ComponentRevision): string {
