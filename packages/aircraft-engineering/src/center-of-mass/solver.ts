@@ -1,5 +1,4 @@
-import type { ComponentRevision } from '@fpv/component-catalog';
-import type { ComponentSelection } from '@fpv/drone-build-domain';
+import type { ResolvedAssembly } from '@fpv/drone-build-domain';
 
 export interface CenterOfMassResult {
   readonly x: number;
@@ -9,18 +8,15 @@ export interface CenterOfMassResult {
   readonly confidence: 'high' | 'medium' | 'low';
 }
 
-export function solveCenterOfMass(
-  selections: readonly ComponentSelection[],
-  components: ReadonlyMap<string, ComponentRevision>,
-): CenterOfMassResult {
+export function solveCenterOfMass(assembly: ResolvedAssembly): CenterOfMassResult {
   let mx = 0;
   let my = 0;
   let mz = 0;
   let total = 0;
   let lowConfidence = false;
 
-  for (const s of selections) {
-    const c = components.get(s.componentRevisionId);
+  for (const s of assembly.revision.selections) {
+    const c = assembly.componentBySelectionId.get(s.selectionId);
     if (!c) continue;
     const mass = c.massKg * s.quantity;
     if (mass <= 0) continue;

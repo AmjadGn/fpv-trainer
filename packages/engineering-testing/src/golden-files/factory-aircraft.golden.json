@@ -1,0 +1,134 @@
+[
+  {
+    "id": "aeroguard-2",
+    "buildFingerprint": "5cb8b9cee51e8574",
+    "compilationContextFingerprint": "5490b8aca592ba64",
+    "artifactFingerprint": "01fbfdf68698b47b",
+    "totalMassKg": 0.30750000000000005,
+    "centerOfMass": {
+      "x": 0.00006504065040650396,
+      "y": 0,
+      "z": -0.007089430894308942
+    },
+    "inertiaKgM2": {
+      "roll": 0.0004119530406504066,
+      "pitch": 0.0004179517398373984,
+      "yaw": 0.000760414699186992
+    },
+    "maxThrustNewtons": 8.693999999999999,
+    "thrustToWeight": 2.8820765271872895,
+    "runtimeRollInertia": 0.541143243307555,
+    "runtimeMaxRollRate": 3.5850112,
+    "rankedContextFingerprint": "9e30cc24a26eeb8f"
+  },
+  {
+    "id": "velocity-x",
+    "buildFingerprint": "84252df5f05a8b46",
+    "compilationContextFingerprint": "5490b8aca592ba64",
+    "artifactFingerprint": "ce25d15bfe67f339",
+    "totalMassKg": 0.6485000000000001,
+    "centerOfMass": {
+      "x": 0.00003084040092521199,
+      "y": 0,
+      "z": -0.008172706245181188
+    },
+    "inertiaKgM2": {
+      "roll": 0.002134402186815729,
+      "pitch": 0.002142501354124904,
+      "yaw": 0.0040833549673091754
+    },
+    "maxThrustNewtons": 32.01,
+    "thrustToWeight": 5.031606695290708,
+    "runtimeRollInertia": 0.8924323725934173,
+    "runtimeMaxRollRate": 7.570384,
+    "rankedContextFingerprint": "9e30cc24a26eeb8f"
+  },
+  {
+    "id": "nano-scout",
+    "buildFingerprint": "f6632e03d12918a1",
+    "compilationContextFingerprint": "5490b8aca592ba64",
+    "artifactFingerprint": "b3cd40e5b817932c",
+    "totalMassKg": 0.07590000000000002,
+    "centerOfMass": {
+      "x": 0.00026350461133069854,
+      "y": 0,
+      "z": -0.0017918313570487471
+    },
+    "inertiaKgM2": {
+      "roll": 0.00000712470882740448,
+      "pitch": 0.000009222864295125162,
+      "yaw": 0.000012430155467720682
+    },
+    "maxThrustNewtons": 1.472,
+    "thrustToWeight": 1.9769561053964717,
+    "runtimeRollInertia": 0.3168965426736865,
+    "runtimeMaxRollRate": 2.570656,
+    "rankedContextFingerprint": "9e30cc24a26eeb8f"
+  },
+  {
+    "id": "apex-r5",
+    "buildFingerprint": "9cb8f0faf5c3a258",
+    "compilationContextFingerprint": "5490b8aca592ba64",
+    "artifactFingerprint": "fb6e368d3b7240d7",
+    "totalMassKg": 0.48429999999999995,
+    "centerOfMass": {
+      "x": 0.000041296716911005515,
+      "y": 0,
+      "z": -0.0075407805079496185
+    },
+    "inertiaKgM2": {
+      "roll": 0.0008327119091472229,
+      "pitch": 0.0008378112071030353,
+      "yaw": 0.0015805232979558127
+    },
+    "maxThrustNewtons": 35.711999999999996,
+    "thrustToWeight": 7.516760215727987,
+    "runtimeRollInertia": 0.6094944118242827,
+    "runtimeMaxRollRate": 7.071136,
+    "rankedContextFingerprint": "9e30cc24a26eeb8f"
+  },
+  {
+    "id": "flux-f5",
+    "buildFingerprint": "ab2b53f9a279e758",
+    "compilationContextFingerprint": "5490b8aca592ba64",
+    "artifactFingerprint": "bb7460f4affee6cc",
+    "totalMassKg": 0.5435000000000001,
+    "centerOfMass": {
+      "x": 0.0000367985280588777,
+      "y": 0,
+      "z": -0.00798528058877645
+    },
+    "inertiaKgM2": {
+      "roll": 0.0010168209881324748,
+      "pitch": 0.0010225202889604418,
+      "yaw": 0.0019254479008279672
+    },
+    "maxThrustNewtons": 28.64999999999999,
+    "thrustToWeight": 5.373485366395739,
+    "runtimeRollInertia": 0.636757640963837,
+    "runtimeMaxRollRate": 6.213039999999999,
+    "rankedContextFingerprint": "9e30cc24a26eeb8f"
+  },
+  {
+    "id": "horizon-l7",
+    "buildFingerprint": "6088d08c808881c7",
+    "compilationContextFingerprint": "5490b8aca592ba64",
+    "artifactFingerprint": "5ff450ff3c31be35",
+    "totalMassKg": 0.7965,
+    "centerOfMass": {
+      "x": 0.000025109855618330702,
+      "y": 0,
+      "z": -0.009064657878217199
+    },
+    "inertiaKgM2": {
+      "roll": 0.0038771177551789092,
+      "pitch": 0.00388611700188324,
+      "yaw": 0.007492175246704331
+    },
+    "maxThrustNewtons": 33.92999999999999,
+    "thrustToWeight": 4.342392462436001,
+    "runtimeRollInertia": 1.176184803430262,
+    "runtimeMaxRollRate": 8.254527999999997,
+    "rankedContextFingerprint": "9e30cc24a26eeb8f"
+  }
+]

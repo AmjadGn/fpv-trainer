@@ -1,5 +1,4 @@
-import type { ComponentRevision } from '@fpv/component-catalog';
-import type { ComponentSelection, UserTuningValues } from '@fpv/drone-build-domain';
+import type { ResolvedAssembly, UserTuningValues } from '@fpv/drone-build-domain';
 import type { ElectricalSystemResult } from '../electrical/solver';
 
 export interface ThrustSample {
@@ -9,9 +8,15 @@ export interface ThrustSample {
   readonly rpm: number;
 }
 
+export type PropulsionDataProvenance =
+  | 'measured-table'
+  | 'peak-thrust-hint-fallback'
+  | 'estimated';
+
 export interface PropulsionUnitResult {
   readonly selectionId: string;
   readonly motorSelectionId: string;
+  readonly propellerSelectionId: string;
   readonly maxThrustNewtons: number;
   readonly maxTransientThrustNewtons: number;
   readonly responseTimeS: number;
@@ -20,6 +25,10 @@ export interface PropulsionUnitResult {
   readonly position: { x: number; y: number; z: number };
   readonly rotation: 'cw' | 'ccw';
   readonly thrustCurve: readonly ThrustSample[];
+  readonly dataProvenance: PropulsionDataProvenance;
+  readonly confidence: 'high' | 'medium' | 'low';
+  readonly fallbackPath: string | null;
+  readonly modelVersion: string;
 }
 
 export interface PropulsionSystemResult {
@@ -27,6 +36,10 @@ export interface PropulsionSystemResult {
   readonly totalMaxThrustNewtons: number;
   readonly thrustToWeight: number;
   readonly hoverThrottleEstimate: number;
+  readonly modelVersion: string;
+  readonly dataProvenance: PropulsionDataProvenance;
+  readonly confidence: 'high' | 'medium' | 'low';
+  readonly warnings: readonly string[];
 }
 
 function buildThrustCurve(
@@ -49,36 +62,34 @@ function buildThrustCurve(
   return samples;
 }
 
+/**
+ * Topology-driven propulsion solver.
+ * Consumes ResolvedPropulsionUnit relationships — never pairs by array index.
+ *
+ * Current thrust model is an explicit approximation using motor.peakThrustHintNewtons
+ * scaled by propeller thrust coefficient and battery voltage. This is NOT a measured
+ * motor/prop performance table. Future measured tables can replace the unit loop
+ * without changing the build domain.
+ */
 export function solvePropulsion(
-  selections: readonly ComponentSelection[],
-  components: ReadonlyMap<string, ComponentRevision>,
+  assembly: ResolvedAssembly,
   electrical: ElectricalSystemResult,
   totalMassKg: number,
   tuning: UserTuningValues,
 ): PropulsionSystemResult {
-  const motors = selections.filter((s) => {
-    const c = components.get(s.componentRevisionId);
-    return c?.componentType === 'motor';
-  });
-  const props = selections.filter((s) => {
-    const c = components.get(s.componentRevisionId);
-    return c?.componentType === 'propeller';
-  });
-
   const units: PropulsionUnitResult[] = [];
   let totalThrust = 0;
+  const warnings: string[] = [
+    'propulsion uses peakThrustHintNewtons fallback — not measured performance tables',
+  ];
 
-  for (let i = 0; i < motors.length; i++) {
-    const motorSel = motors[i];
-    const propSel = props[i] ?? props[0];
-    const motor = components.get(motorSel.componentRevisionId);
-    const prop = propSel
-      ? components.get(propSel.componentRevisionId)
-      : undefined;
-    if (!motor || motor.engineering.type !== 'motor') continue;
+  for (const pu of assembly.propulsionUnits) {
+    const motor = pu.motorComponent;
+    const prop = pu.propellerComponent;
+    if (motor.engineering.type !== 'motor') continue;
 
     const propCt =
-      prop && prop.engineering.type === 'propeller'
+      prop.engineering.type === 'propeller'
         ? prop.engineering.propeller.thrustCoefficient
         : 0.1;
     const voltageFactor = electrical.nominalVoltage / 14.8;
@@ -88,7 +99,7 @@ export function solvePropulsion(
       Math.max(0.5, Math.min(1.6, voltageFactor));
     const transient = maxThrust * 1.08;
     const maxRpm =
-      prop && prop.engineering.type === 'propeller'
+      prop.engineering.type === 'propeller'
         ? prop.engineering.propeller.recommendedRpmMax
         : 40000;
     const response = motor.engineering.motor.responseTimeConstantS;
@@ -100,20 +111,21 @@ export function solvePropulsion(
     );
 
     units.push({
-      selectionId: propSel?.selectionId ?? `prop-unit-${i}`,
-      motorSelectionId: motorSel.selectionId,
+      selectionId: pu.propellerSelection.selectionId,
+      motorSelectionId: pu.motorSelection.selectionId,
+      propellerSelectionId: pu.propellerSelection.selectionId,
       maxThrustNewtons: maxThrust,
       maxTransientThrustNewtons: transient,
       responseTimeS: response,
       spoolUpTimeS: response * 1.2,
       spoolDownTimeS: response * 1.6,
-      position: {
-        x: motorSel.transform.position.x,
-        y: motorSel.transform.position.y,
-        z: motorSel.transform.position.z,
-      },
-      rotation: propSel?.propellerRotation ?? (i % 2 === 0 ? 'cw' : 'ccw'),
+      position: { ...pu.position },
+      rotation: pu.rotationDirection,
       thrustCurve: curve,
+      dataProvenance: 'peak-thrust-hint-fallback',
+      confidence: 'low',
+      fallbackPath: 'motor.peakThrustHintNewtons * (0.85 + propCt) * voltageFactor',
+      modelVersion: '1.1.1-hint-approx',
     });
     totalThrust += maxThrust;
   }
@@ -124,7 +136,10 @@ export function solvePropulsion(
     totalThrust > 0
       ? Math.min(
           0.95,
-          Math.pow(weightN / totalThrust, 1 / Math.max(0.5, tuning.thrustCurveExponent)),
+          Math.pow(
+            weightN / totalThrust,
+            1 / Math.max(0.5, tuning.thrustCurveExponent),
+          ),
         )
       : 1;
 
@@ -133,5 +148,9 @@ export function solvePropulsion(
     totalMaxThrustNewtons: totalThrust,
     thrustToWeight: twr,
     hoverThrottleEstimate: hoverThrottle,
+    modelVersion: '1.1.1-hint-approx',
+    dataProvenance: 'peak-thrust-hint-fallback',
+    confidence: 'low',
+    warnings,
   };
 }

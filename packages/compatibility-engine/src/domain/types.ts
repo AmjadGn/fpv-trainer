@@ -1,7 +1,21 @@
+import type {
+  ResolvedAssembly,
+  DroneBuildRevision,
+} from '@fpv/drone-build-domain';
 import type { ComponentRevision } from '@fpv/component-catalog';
-import type { DroneBuildRevision } from '@fpv/drone-build-domain';
 
 export type ValidationSeverity = 'info' | 'warning' | 'error' | 'fatal';
+
+export type ValidationPhase =
+  | 'resolution'
+  | 'structural'
+  | 'topology'
+  | 'mechanical'
+  | 'electrical'
+  | 'pre-engineering-ruleset'
+  | 'engineering-calculation'
+  | 'post-engineering'
+  | 'integrity';
 
 export interface ValidationIssue {
   readonly ruleCode: string;
@@ -11,6 +25,7 @@ export interface ValidationIssue {
   readonly parameters: Readonly<Record<string, string | number | boolean>>;
   readonly affectedPath: string;
   readonly remediationKeys: readonly string[];
+  readonly phase: ValidationPhase;
 }
 
 export interface ValidationReport {
@@ -21,10 +36,19 @@ export interface ValidationReport {
   readonly canCompile: boolean;
 }
 
+/** Minimal post-engineering inputs — avoids depending on aircraft-engineering. */
+export interface EngineeringValidationSnapshot {
+  readonly totalTakeoffMassKg: number;
+  readonly thrustToWeight: number;
+}
+
 export interface ValidationContext {
   readonly revision: DroneBuildRevision;
+  /** @deprecated Prefer assembly.selectedComponents. */
   readonly components: ReadonlyMap<string, ComponentRevision>;
+  readonly assembly: ResolvedAssembly;
   readonly policy: ValidationPolicy;
+  readonly engineering?: EngineeringValidationSnapshot;
 }
 
 export interface ValidationPolicy {
@@ -40,7 +64,7 @@ export interface ValidationPolicy {
 
 export const FREE_FLIGHT_POLICY: ValidationPolicy = {
   policyId: 'free-flight',
-  policyVersion: '1.1.0',
+  policyVersion: '1.1.1',
   maxTakeoffMassKg: null,
   allowedComponentSources: ['official', 'community', 'marketplace', 'private-local'],
   requireOfficialCatalog: false,
@@ -51,7 +75,7 @@ export const FREE_FLIGHT_POLICY: ValidationPolicy = {
 
 export const RANKED_RACING_POLICY: ValidationPolicy = {
   policyId: 'ranked-racing',
-  policyVersion: '1.1.0',
+  policyVersion: '1.1.1',
   maxTakeoffMassKg: 0.85,
   allowedComponentSources: ['official'],
   requireOfficialCatalog: true,
@@ -62,13 +86,7 @@ export const RANKED_RACING_POLICY: ValidationPolicy = {
 
 export type ValidationRule = {
   readonly code: string;
-  readonly phase:
-    | 'structural'
-    | 'mechanical'
-    | 'electrical'
-    | 'propulsion'
-    | 'stability'
-    | 'ruleset';
+  readonly phase: ValidationPhase;
   readonly evaluate: (ctx: ValidationContext) => ValidationIssue[];
 };
 
@@ -82,5 +100,27 @@ export function summarizeIssues(issues: readonly ValidationIssue[]): ValidationR
     hasError,
     hasWarning,
     canCompile: !hasFatal && !hasError,
+  };
+}
+
+export function issue(
+  ruleCode: string,
+  severity: ValidationIssue['severity'],
+  messageKey: string,
+  phase: ValidationPhase,
+  relatedSelectionIds: string[] = [],
+  parameters: Record<string, string | number | boolean> = {},
+  affectedPath = 'build',
+  remediationKeys: string[] = [],
+): ValidationIssue {
+  return {
+    ruleCode,
+    severity,
+    messageKey,
+    relatedSelectionIds,
+    parameters,
+    affectedPath,
+    remediationKeys,
+    phase,
   };
 }

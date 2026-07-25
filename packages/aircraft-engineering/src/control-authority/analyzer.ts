@@ -1,6 +1,11 @@
 import type { InertiaEstimate } from '../inertia/estimator';
 import type { PropulsionSystemResult } from '../propulsion/solver';
 
+/**
+ * Physical control-authority estimate using SI inertia (kg·m²) and thrust (N).
+ * Torque in N·m; angular acceleration in rad/s².
+ * Solver-facing rate clamps belong in @fpv/aircraft-runtime-adapter.
+ */
 export interface ControlAuthorityResult {
   readonly maxRollTorque: number;
   readonly maxPitchTorque: number;
@@ -8,10 +13,16 @@ export interface ControlAuthorityResult {
   readonly rollAcceleration: number;
   readonly pitchAcceleration: number;
   readonly yawAcceleration: number;
+  /** Unclamped physical estimate of achievable rate (rad/s) from authority margin. */
   readonly maxRollRate: number;
   readonly maxPitchRate: number;
   readonly maxYawRate: number;
   readonly authorityMargin: number;
+  readonly units: {
+    readonly torque: 'N·m';
+    readonly angularAcceleration: 'rad/s²';
+    readonly angularRate: 'rad/s';
+  };
 }
 
 export function analyzeControlAuthority(
@@ -32,25 +43,30 @@ export function analyzeControlAuthority(
     yawTorque += u.maxThrustNewtons * arm * 0.12;
   }
 
-  const rollAcc = rollTorque / Math.max(0.05, inertia.roll / 180);
-  const pitchAcc = pitchTorque / Math.max(0.05, inertia.pitch / 180);
-  const yawAcc = yawTorque / Math.max(0.05, inertia.yaw / 180);
+  const rollAcc = rollTorque / Math.max(1e-8, inertia.roll);
+  const pitchAcc = pitchTorque / Math.max(1e-8, inertia.pitch);
+  const yawAcc = yawTorque / Math.max(1e-8, inertia.yaw);
 
-  // Map to solver-facing rates (rad/s) similar to existing profiles.
-  const maxRollRate = Math.min(12, 2.5 + rollAcc * 0.08);
-  const maxPitchRate = Math.min(12, 2.4 + pitchAcc * 0.08);
-  const maxYawRate = Math.min(10, 2.0 + yawAcc * 0.07);
+  // Physical rate estimates from acceleration capability (no solver clamps).
+  const maxRollRate = Math.sqrt(Math.max(0, 2 * rollAcc * (Math.PI / 2)));
+  const maxPitchRate = Math.sqrt(Math.max(0, 2 * pitchAcc * (Math.PI / 2)));
+  const maxYawRate = Math.sqrt(Math.max(0, 2 * yawAcc * (Math.PI / 3)));
 
   return {
     maxRollTorque: rollTorque,
     maxPitchTorque: pitchTorque,
     maxYawTorque: yawTorque,
-    rollAcceleration: Math.min(40, rollAcc * 0.15),
-    pitchAcceleration: Math.min(40, pitchAcc * 0.15),
-    yawAcceleration: Math.min(35, yawAcc * 0.12),
+    rollAcceleration: rollAcc,
+    pitchAcceleration: pitchAcc,
+    yawAcceleration: yawAcc,
     maxRollRate,
     maxPitchRate,
     maxYawRate,
     authorityMargin: propulsion.thrustToWeight - 1,
+    units: {
+      torque: 'N·m',
+      angularAcceleration: 'rad/s²',
+      angularRate: 'rad/s',
+    },
   };
 }

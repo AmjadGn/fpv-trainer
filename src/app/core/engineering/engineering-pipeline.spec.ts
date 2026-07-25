@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import { OFFICIAL_COMPONENT_REVISIONS, buildOfficialCatalogSnapshot } from '@fpv/component-catalog';
-import { compileAircraft } from '@fpv/aircraft-compiler';
-import { executeValidation, FREE_FLIGHT_POLICY, RANKED_RACING_POLICY } from '@fpv/compatibility-engine';
+import {
+  compileAircraft,
+  createMemoryCompilationCache,
+  fingerprintCompilationContext,
+  normalizeBuildRevision,
+} from '@fpv/aircraft-compiler';
+import {
+  executeValidation,
+  FREE_FLIGHT_POLICY,
+  RANKED_RACING_POLICY,
+} from '@fpv/compatibility-engine';
 import {
   compileAllFactoryAircraft,
   compileFactoryAircraft,
@@ -11,14 +20,16 @@ import {
   validateAllFactoryManifests,
 } from '@fpv/factory-aircraft';
 import { aggregateMass } from '@fpv/aircraft-engineering';
-import { createMemoryCompilationCache } from '@fpv/aircraft-compiler';
 import {
   createMemoryArtifactRepository,
   createMemoryBuildRepository,
 } from '@fpv/drone-build-persistence';
 import { asDroneBuildId } from '@fpv/engineering-kernel';
-import { createDraft, publishRevision } from '@fpv/drone-build-domain';
-
+import {
+  createDraft,
+  publishRevision,
+  resolveAssembly,
+} from '@fpv/drone-build-domain';
 describe('drone builder engineering core', () => {
   it('has official catalog revisions', () => {
     expect(OFFICIAL_COMPONENT_REVISIONS.length).toBeGreaterThan(20);
@@ -36,7 +47,9 @@ describe('drone builder engineering core', () => {
       expect(craft.physics.takeoffMassKg).toBeGreaterThan(0);
       expect(craft.flightProfile.maxThrustNewtons).toBeGreaterThan(0);
       expect(craft.compilation.specification?.buildFingerprint).toBeTruthy();
+      expect(craft.compilation.specification?.compilationContextFingerprint).toBeTruthy();
       expect(craft.compilation.specification?.artifactFingerprint).toBeTruthy();
+      expect(craft.physics.physicalInertiaKgM2?.roll).toBeGreaterThan(0);
     }
   });
 
@@ -84,10 +97,8 @@ describe('drone builder engineering core', () => {
     };
     const revision = materializeFactoryRevision(broken);
     const snap = buildOfficialCatalogSnapshot();
-    const components = new Map(
-      [...snap.revisions.entries()].map(([k, v]) => [k as string, v]),
-    );
-    const validation = executeValidation(revision, components, FREE_FLIGHT_POLICY);
+    const assembly = resolveAssembly(normalizeBuildRevision(revision), snap.revisions);
+    const validation = executeValidation(assembly, FREE_FLIGHT_POLICY);
     expect(validation.canCompile).toBe(false);
     expect(validation.issues.some((i) => i.ruleCode === 'ELEC_VOLTAGE_COMPAT')).toBe(
       true,
@@ -95,17 +106,12 @@ describe('drone builder engineering core', () => {
   });
 
   it('applies ranked racing policy cell limits', () => {
-    // Horizon uses 6S — allowed. Create a hypothetical by using free policy then ranked.
     const craft = compileFactoryAircraft('horizon-l7');
     expect(craft.physics.batteryCellCount).toBe(6);
     const revision = materializeFactoryRevision(getFactoryManifest('horizon-l7'));
     const snap = buildOfficialCatalogSnapshot();
-    const components = new Map(
-      [...snap.revisions.entries()].map(([k, v]) => [k as string, v]),
-    );
-    const ranked = executeValidation(revision, components, RANKED_RACING_POLICY);
-    // Horizon exceeds 0.85kg takeoff typically — may warn/error on mass if we add that rule later.
-    // Cell count 6 is at max — should pass cell rule.
+    const assembly = resolveAssembly(normalizeBuildRevision(revision), snap.revisions);
+    const ranked = executeValidation(assembly, RANKED_RACING_POLICY);
     expect(
       ranked.issues.every((i) => i.ruleCode !== 'RULESET_MAX_CELLS'),
     ).toBe(true);
@@ -115,29 +121,49 @@ describe('drone builder engineering core', () => {
     const craft = compileFactoryAircraft('flux-f5');
     const revision = materializeFactoryRevision(getFactoryManifest('flux-f5'));
     const snap = buildOfficialCatalogSnapshot();
-    const components = new Map(
-      [...snap.revisions.entries()].map(([k, v]) => [k as string, v]),
+    const fullAssembly = resolveAssembly(normalizeBuildRevision(revision), snap.revisions);
+    const full = aggregateMass(fullAssembly);
+    const withoutCamera = {
+      ...revision,
+      selections: revision.selections.filter((s) => s.selectionId !== 'camera'),
+    };
+    const reducedAssembly = resolveAssembly(
+      normalizeBuildRevision(withoutCamera),
+      snap.revisions,
     );
-    const full = aggregateMass(revision.selections, components);
-    const withoutCamera = revision.selections.filter((s) => s.selectionId !== 'camera');
-    const reduced = aggregateMass(withoutCamera, components);
+    const reduced = aggregateMass(reducedAssembly);
     expect(reduced.totalTakeoffMassKg).toBeLessThanOrEqual(full.totalTakeoffMassKg);
     expect(craft.physics.takeoffMassKg).toBeGreaterThan(0);
   });
 
-  it('uses compilation cache by fingerprint', () => {
+  it('uses compilation cache by fingerprint and refuses cross-policy hits', () => {
     const cache = createMemoryCompilationCache();
     const revision = materializeFactoryRevision(getFactoryManifest('apex-r5'));
     const snap = buildOfficialCatalogSnapshot();
     const list = [...snap.revisions.values()];
-    const first = compileAircraft(revision, list, { cache, collectTrace: true });
-    const second = compileAircraft(revision, list, { cache, collectTrace: true });
+    const first = compileAircraft(revision, list, {
+      cache,
+      collectTrace: true,
+      policy: FREE_FLIGHT_POLICY,
+    });
+    const second = compileAircraft(revision, list, {
+      cache,
+      collectTrace: true,
+      policy: FREE_FLIGHT_POLICY,
+    });
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     expect(second.trace.some((t) => t.stage === 'cache-hit')).toBe(true);
+
+    const ranked = compileAircraft(revision, list, {
+      cache,
+      collectTrace: true,
+      policy: RANKED_RACING_POLICY,
+    });
+    expect(ranked.trace.some((t) => t.stage === 'cache-hit')).toBe(false);
   });
 
-  it('persists builds in memory repositories', async () => {
+  it('persists builds in memory repositories with immutable insert', async () => {
     const builds = createMemoryBuildRepository();
     const artifacts = createMemoryArtifactRepository();
     const draft = createDraft({
@@ -152,11 +178,21 @@ describe('drone builder engineering core', () => {
     expect(loaded?.name).toBe('My Draft');
 
     const revision = publishRevision(draft, 'user-draft-1@1');
-    await builds.saveRevision(revision);
+    await builds.insertRevision(revision);
+    await builds.insertRevision(revision); // idempotent
+    const mutated = {
+      ...revision,
+      tuning: { ...revision.tuning, thrustCurveExponent: 9 },
+    };
+    await expect(builds.insertRevision(mutated)).rejects.toThrow(
+      /REVISION_IMMUTABLE_CONFLICT|Cannot overwrite published revision/,
+    );
+
     const craft = compileFactoryAircraft('apex-r5');
     const spec = craft.compilation.specification!;
     await artifacts.save({
       buildFingerprint: spec.buildFingerprint,
+      compilationContextFingerprint: spec.compilationContextFingerprint,
       artifactFingerprint: spec.artifactFingerprint,
       engineeringModelVersion: spec.versionManifest.engineeringModelVersion,
       compilerVersion: spec.versionManifest.compilerVersion,
@@ -166,9 +202,80 @@ describe('drone builder engineering core', () => {
     });
     const cached = await artifacts.get(
       spec.buildFingerprint,
+      spec.compilationContextFingerprint,
       spec.versionManifest.engineeringModelVersion,
       spec.versionManifest.compilerVersion,
     );
     expect(cached?.artifactFingerprint).toBe(spec.artifactFingerprint);
+  });
+
+  it('derives frame dimensions from the active build, not the catalog order', () => {
+    const apex = compileFactoryAircraft('apex-r5');
+    const horizon = compileFactoryAircraft('horizon-l7');
+    expect(apex.physics.wheelbaseMeters).not.toBe(horizon.physics.wheelbaseMeters);
+    expect(apex.physics.propellerDiameterMeters).not.toBe(
+      horizon.physics.propellerDiameterMeters,
+    );
+
+    const revision = materializeFactoryRevision(getFactoryManifest('apex-r5'));
+    const snap = buildOfficialCatalogSnapshot();
+    const reversed = [...snap.revisions.values()].reverse();
+    const a = compileAircraft(revision, [...snap.revisions.values()]);
+    const b = compileAircraft(revision, reversed);
+    expect(a.specification?.physicalAssembly.dimensions.wheelbaseMeters).toBe(
+      b.specification?.physicalAssembly.dimensions.wheelbaseMeters,
+    );
+    expect(a.specification?.buildFingerprint).toBe(b.specification?.buildFingerprint);
+  });
+
+  it('keeps fingerprints stable when unused catalog components are injected', () => {
+    const revision = materializeFactoryRevision(getFactoryManifest('flux-f5'));
+    const snap = buildOfficialCatalogSnapshot();
+    const base = compileAircraft(revision, [...snap.revisions.values()]);
+    const withExtra = compileAircraft(revision, [
+      ...snap.revisions.values(),
+      ...OFFICIAL_COMPONENT_REVISIONS,
+    ]);
+    expect(base.specification?.buildFingerprint).toBe(
+      withExtra.specification?.buildFingerprint,
+    );
+    expect(base.specification?.physicalAssembly.totalMassKg).toBe(
+      withExtra.specification?.physicalAssembly.totalMassKg,
+    );
+  });
+
+  it('produces distinct free-flight vs ranked compilation context fingerprints', () => {
+    const free = fingerprintCompilationContext(FREE_FLIGHT_POLICY);
+    const ranked = fingerprintCompilationContext(RANKED_RACING_POLICY);
+    expect(free).not.toBe(ranked);
+    const reordered = fingerprintCompilationContext({
+      ...FREE_FLIGHT_POLICY,
+      allowedComponentSources: [...FREE_FLIGHT_POLICY.allowedComponentSources].reverse(),
+    });
+    expect(reordered).toBe(free);
+    const tighter = fingerprintCompilationContext({
+      ...FREE_FLIGHT_POLICY,
+      minThrustToWeight: FREE_FLIGHT_POLICY.minThrustToWeight + 0.1,
+    });
+    expect(tighter).not.toBe(free);
+  });
+
+  it('shuffling topology and selections preserves fingerprints', () => {
+    const revision = materializeFactoryRevision(getFactoryManifest('apex-r5'));
+    const snap = buildOfficialCatalogSnapshot();
+    const shuffled = {
+      ...revision,
+      selections: [...revision.selections].reverse(),
+      topology: [...revision.topology].reverse(),
+    };
+    const a = compileAircraft(revision, [...snap.revisions.values()]);
+    const b = compileAircraft(shuffled, [...snap.revisions.values()]);
+    expect(a.specification?.buildFingerprint).toBe(b.specification?.buildFingerprint);
+    expect(a.specification?.artifactFingerprint).toBe(
+      b.specification?.artifactFingerprint,
+    );
+    expect(
+      a.specification?.propulsion.units.map((u) => u.motorSelectionId),
+    ).toEqual(b.specification?.propulsion.units.map((u) => u.motorSelectionId));
   });
 });

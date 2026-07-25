@@ -11,6 +11,10 @@ export type DroneBuildRevisionId = Brand<string, 'DroneBuildRevisionId'>;
 export type MountPointId = Brand<string, 'MountPointId'>;
 export type InstallationSlotId = Brand<string, 'InstallationSlotId'>;
 export type BuildFingerprint = Brand<string, 'BuildFingerprint'>;
+export type CompilationContextFingerprint = Brand<
+  string,
+  'CompilationContextFingerprint'
+>;
 export type ArtifactFingerprint = Brand<string, 'ArtifactFingerprint'>;
 export type RuntimeCompatibilitySignature = Brand<
   string,
@@ -40,6 +44,11 @@ export function asInstallationSlotId(value: string): InstallationSlotId {
 }
 export function asBuildFingerprint(value: string): BuildFingerprint {
   return value as BuildFingerprint;
+}
+export function asCompilationContextFingerprint(
+  value: string,
+): CompilationContextFingerprint {
+  return value as CompilationContextFingerprint;
 }
 export function asArtifactFingerprint(value: string): ArtifactFingerprint {
   return value as ArtifactFingerprint;

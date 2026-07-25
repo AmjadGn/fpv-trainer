@@ -1,24 +1,29 @@
-import type { ComponentRevision } from '@fpv/component-catalog';
-import type { ComponentSelection } from '@fpv/drone-build-domain';
+import type { ResolvedAssembly } from '@fpv/drone-build-domain';
 import type { CenterOfMassResult } from '../center-of-mass/solver';
 
+/**
+ * Physical (SI) inertia estimate about center of mass.
+ * Units: kg·m². Solver-specific scaling belongs in @fpv/aircraft-runtime-adapter.
+ */
 export interface InertiaEstimate {
+  /** Ixx about CoM (kg·m²) — roll axis in body frame approximation. */
   readonly roll: number;
+  /** Iyy about CoM (kg·m²). */
   readonly pitch: number;
+  /** Izz about CoM (kg·m²). */
   readonly yaw: number;
+  /** Diagonal tensor [Ixx, Iyy, Izz] in kg·m². */
+  readonly tensorDiagonalKgM2: readonly [number, number, number];
   readonly motorPropRotational: number;
   readonly confidence: 'high' | 'medium' | 'low';
+  readonly units: 'kg·m²';
+  readonly modelVersion: string;
 }
 
-/**
- * Point-mass inertia estimate about center of mass + frame factor.
- * Values are scaled for the existing flight solver (dimensionless-ish).
- */
 export function estimateInertia(
-  selections: readonly ComponentSelection[],
-  components: ReadonlyMap<string, ComponentRevision>,
+  assembly: ResolvedAssembly,
   com: CenterOfMassResult,
-  totalMassKg: number,
+  _totalMassKg: number,
 ): InertiaEstimate {
   let Ixx = 0;
   let Iyy = 0;
@@ -26,8 +31,8 @@ export function estimateInertia(
   let rotational = 0;
   let frameFactor = 1;
 
-  for (const s of selections) {
-    const c = components.get(s.componentRevisionId);
+  for (const s of assembly.revision.selections) {
+    const c = assembly.componentBySelectionId.get(s.selectionId);
     if (!c) continue;
     const mass = c.massKg * s.quantity;
     const dx = s.transform.position.x + c.localCenterOfMass.x - com.x;
@@ -46,13 +51,18 @@ export function estimateInertia(
     }
   }
 
-  // Map SI kg·m² into flight-solver scale used by existing profiles (~0.4–2.5).
-  const scale = 180 / Math.max(0.05, totalMassKg);
+  const roll = Math.max(1e-8, Ixx * frameFactor);
+  const pitch = Math.max(1e-8, Iyy * frameFactor);
+  const yaw = Math.max(1e-8, Izz * frameFactor);
+
   return {
-    roll: Math.max(0.2, Ixx * scale * frameFactor + 0.3),
-    pitch: Math.max(0.2, Iyy * scale * frameFactor + 0.3),
-    yaw: Math.max(0.2, Izz * scale * frameFactor + 0.25),
+    roll,
+    pitch,
+    yaw,
+    tensorDiagonalKgM2: [roll, pitch, yaw],
     motorPropRotational: rotational,
     confidence: 'medium',
+    units: 'kg·m²',
+    modelVersion: '1.1.1-point-mass',
   };
 }

@@ -185,9 +185,9 @@ export const OFFICIAL_COMPONENT_REVISIONS: readonly ComponentRevision[] = [
         supportedPropDiameterMinM: m(0.12),
         supportedPropDiameterMaxM: m(0.132),
         batteryMountZone: {
-          widthMeters: m(0.04),
+          widthMeters: m(0.045),
           lengthMeters: m(0.12),
-          heightMeters: m(0.03),
+          heightMeters: m(0.04),
         },
         maxRecommendedTakeoffMassKg: kg(0.75),
         dragProfileFactor: 0.7,
@@ -220,7 +220,7 @@ export const OFFICIAL_COMPONENT_REVISIONS: readonly ComponentRevision[] = [
         batteryMountZone: {
           widthMeters: m(0.045),
           lengthMeters: m(0.13),
-          heightMeters: m(0.035),
+          heightMeters: m(0.04),
         },
         maxRecommendedTakeoffMassKg: kg(0.85),
         dragProfileFactor: 0.75,
