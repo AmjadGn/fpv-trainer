@@ -39,6 +39,11 @@ export default defineConfig({
       ),
       '@fpv/factory-aircraft': resolve(root, 'packages/factory-aircraft/src/index.ts'),
       '@fpv/engineering-testing': resolve(root, 'packages/engineering-testing/src/index.ts'),
+      '@fpv/simulation-contracts': resolve(root, 'packages/simulation-contracts/src/index.ts'),
+      '@fpv/location-domain': resolve(root, 'packages/location-domain/src/index.ts'),
+      '@fpv/mission-domain': resolve(root, 'packages/mission-domain/src/index.ts'),
+      '@fpv/photography-domain': resolve(root, 'packages/photography-domain/src/index.ts'),
+      '@fpv/location-validation': resolve(root, 'packages/location-validation/src/index.ts'),
     },
   },
 });
