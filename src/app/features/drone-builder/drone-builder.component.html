@@ -408,8 +408,8 @@
             </fpv-panel>
 
             <fpv-panel title="Engineering report" subtitle="Shared engineering pipeline output.">
-              <div class="builder__report-section">
-                <h3>Mass</h3>
+              <details class="builder__collapse" open>
+                <summary>Mass</summary>
                 <ul class="builder__stats">
                   @for (stat of massStats(); track stat.id) {
                     <li>
@@ -422,9 +422,9 @@
                     <li class="builder__empty">Not available yet.</li>
                   }
                 </ul>
-              </div>
-              <div class="builder__report-section">
-                <h3>Propulsion</h3>
+              </details>
+              <details class="builder__collapse" open>
+                <summary>Propulsion</summary>
                 <ul class="builder__stats">
                   @for (stat of propulsionStats(); track stat.id) {
                     <li>
@@ -437,9 +437,9 @@
                     <li class="builder__empty">Not available yet.</li>
                   }
                 </ul>
-              </div>
-              <div class="builder__report-section">
-                <h3>Electrical</h3>
+              </details>
+              <details class="builder__collapse">
+                <summary>Electrical</summary>
                 <ul class="builder__stats">
                   @for (stat of electricalStats(); track stat.id) {
                     <li>
@@ -452,9 +452,9 @@
                     <li class="builder__empty">Not available yet.</li>
                   }
                 </ul>
-              </div>
-              <div class="builder__report-section">
-                <h3>Endurance</h3>
+              </details>
+              <details class="builder__collapse">
+                <summary>Endurance</summary>
                 <ul class="builder__stats">
                   @for (stat of enduranceStats(); track stat.id) {
                     <li>
@@ -466,9 +466,9 @@
                     <li class="builder__empty">Not available yet.</li>
                   }
                 </ul>
-              </div>
-              <div class="builder__report-section">
-                <h3>Runtime mapping</h3>
+              </details>
+              <details class="builder__collapse">
+                <summary>Runtime mapping</summary>
                 <ul class="builder__stats">
                   @for (stat of runtimeStats(); track stat.id) {
                     <li>
@@ -480,7 +480,7 @@
                     <li class="builder__empty">Not available yet.</li>
                   }
                 </ul>
-              </div>
+              </details>
             </fpv-panel>
 
             <fpv-panel title="Confidence & provenance" [subtitle]="provenanceInfo().label">
@@ -609,7 +609,11 @@
               />
             </label>
             <p id="builder-name-help" class="builder__hint">
-              Save Draft Session keeps this name in memory for the current browser session only.
+              @if (snapshot().persistenceBackend === 'memory-fallback') {
+                Persistent storage is unavailable — this name is kept only for the current browser session.
+              } @else {
+                Save Draft stores this name with the build on this device (local IndexedDB). It is not synced to the cloud.
+              }
             </p>
           </div>
 

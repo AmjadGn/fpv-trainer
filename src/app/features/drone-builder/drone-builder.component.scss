@@ -583,6 +583,30 @@
   color: var(--fpv-text-muted, #9aa49c);
 }
 
+.builder__collapse {
+  margin: 0 0 0.65rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.builder__collapse > summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--fpv-text-muted, #9aa49c);
+  list-style: disclosure-closed;
+}
+
+.builder__collapse[open] > summary {
+  margin-bottom: 0.35rem;
+  list-style: disclosure-open;
+}
+
+.builder__collapse .builder__stats {
+  margin: 0;
+}
+
 .builder__spec-grid dl,
 .builder__tuning {
   margin: 0;
