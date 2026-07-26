@@ -11,7 +11,8 @@ import { SUBJECT_IDS } from '../identity';
 
 /**
  * Photography objective definitions for Coastal Ruins Survey.
- * Capture/scoring runtime is deferred to Checkpoint 5 — definitions are structurally valid.
+ * Consumed by the mission capture loop: stability, framing, and line-of-sight
+ * thresholds here are the authoritative gates for `evaluatePhotoCapture`.
  */
 export const COASTAL_RUINS_PHOTO_OBJECTIVES: readonly PhotographyObjectiveDefinition[] = [
   {

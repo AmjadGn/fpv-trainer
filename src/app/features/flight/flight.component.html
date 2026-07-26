@@ -15,7 +15,9 @@
             ? courseRun.course().name
             : playMode() === 'training'
               ? (trainingModule()?.title ?? 'Training Academy')
-              : 'Free Flight'
+              : missionActive()
+                ? (missionTitle() ?? 'Expedition Mission')
+                : 'Free Flight'
         }}
         <span class="flight__mode-sep" aria-hidden="true">·</span>
         <span class="flight__run-status">{{ runStatusLabel() }}</span>
@@ -56,6 +58,37 @@
       [active]="photographyObjectiveActive()"
       [preview]="missionFramingPreview()"
     />
+
+    @if (missionActive() && !missionResults.available()) {
+      <app-mission-photography-hud
+        [missionTitle]="missionTitle()"
+        [objectiveTitle]="missionPresentation().activeObjectiveDisplayName"
+        [objectiveNumber]="missionObjectiveNumber()"
+        [objectiveCount]="missionPresentation().objectiveCount"
+        [subjectName]="missionSubjectName()"
+        [attemptNumber]="missionPresentation().attemptNumber"
+        [capturePending]="missionCapturePending()"
+        [captureEnabled]="photographyObjectiveActive()"
+        [objectiveAccepted]="missionObjectiveAccepted()"
+        [feedbackCodes]="missionFeedbackCodes()"
+        [componentScores]="missionComponentScores()"
+        [lastScore]="missionLastEvaluation()?.totalScore ?? null"
+        [lastMaxScore]="missionLastEvaluation()?.maxScore ?? null"
+        [elapsedSeconds]="missionElapsedSeconds()"
+        [boundaryWarning]="missionBoundaryState().outOfBounds"
+        [boundaryRemainingSeconds]="missionBoundaryState().remainingSeconds"
+        [infrastructureNotice]="missionInfrastructureNotice()"
+        (captureRequested)="onPhotoShutter()"
+      />
+    }
+
+    @if (missionResults.available()) {
+      <app-mission-session-results
+        [viewModel]="missionResults.viewModel()"
+        (retryRequested)="onMissionRetry()"
+        (returnRequested)="onMissionExit()"
+      />
+    }
 
     @if (showFrameDebug() && frameDebug(); as fd) {
       <aside class="hud-panel hud-panel--frame-debug" aria-label="Body-frame diagnostics">
@@ -711,7 +744,12 @@
       <div class="banner banner--info" role="status">{{ guide }}</div>
     }
 
-    @if (flight.crashed() && courseRun.runState().status !== 'invalid' && !isReplayMode()) {
+    @if (
+      flight.crashed() &&
+      courseRun.runState().status !== 'invalid' &&
+      !isReplayMode() &&
+      !missionResults.available()
+    ) {
       <div
         class="overlay overlay--crash"
         role="alertdialog"
@@ -1324,6 +1362,7 @@
               <li><kbd>F</kbd> fullscreen</li>
               <li><kbd>P</kbd> pause</li>
               <li><kbd>T</kbd> start run</li>
+              <li><kbd>V</kbd> photo shutter</li>
               <li><kbd>Esc</kbd> settings</li>
             </ul>
           </div>

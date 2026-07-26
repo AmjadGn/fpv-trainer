@@ -86,7 +86,14 @@ import { FlightCameraSnapshotAdapter } from '../../core/camera/services/flight-c
 import { MissionLaunchCoordinator } from '../../core/mission/services/mission-launch-coordinator.service';
 import { MissionRuntimeCoordinator } from '../../core/mission/services/mission-runtime-coordinator.service';
 import { MissionSessionFacade } from '../../core/mission/services/mission-session.facade';
+import { MissionResultsFacade } from '../../core/mission/services/mission-results.facade';
+import { PhotographyMissionRuntime } from '../../core/mission/services/photography-mission-runtime.service';
+import { LocationLoadCoordinator } from '../../core/mission/services/location-load-coordinator.service';
+import { ExpeditionMissionCatalog } from '../../core/mission/services/expedition-mission-catalog.service';
+import type { ExpeditionMissionPackage } from '../../core/mission/services/expedition-mission-catalog.service';
 import { MissionFramingGuideComponent } from '../missions/components/mission-framing-guide.component';
+import { MissionPhotographyHudComponent } from '../missions/components/mission-photography-hud.component';
+import { MissionSessionResultsComponent } from '../missions/components/mission-session-results.component';
 import {
   getMediterraneanExpeditionRegionLocation,
   SPAWN_IDS,
@@ -155,7 +162,14 @@ export type FlightHudMode = 'full' | 'compact' | 'minimal';
 
 @Component({
   selector: 'app-flight',
-  imports: [DecimalPipe, UpperCasePipe, EnvironmentSettingsComponent, MissionFramingGuideComponent],
+  imports: [
+    DecimalPipe,
+    UpperCasePipe,
+    EnvironmentSettingsComponent,
+    MissionFramingGuideComponent,
+    MissionPhotographyHudComponent,
+    MissionSessionResultsComponent,
+  ],
   templateUrl: './flight.component.html',
   styleUrl: './flight.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -216,6 +230,10 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   private readonly missionRuntimeCoordinator = inject(MissionRuntimeCoordinator);
   private readonly missionSessionFacade = inject(MissionSessionFacade);
   private readonly missionLaunchCoordinator = inject(MissionLaunchCoordinator);
+  private readonly photographyRuntime = inject(PhotographyMissionRuntime);
+  private readonly locationLoadCoordinator = inject(LocationLoadCoordinator);
+  private readonly expeditionCatalog = inject(ExpeditionMissionCatalog);
+  protected readonly missionResults = inject(MissionResultsFacade);
 
   /** Cached metadata for authoritative step snapshots (updated on aircraft apply). */
   private activeAircraftSourceType: 'factory' | 'user-compiled' = 'factory';
@@ -273,14 +291,81 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   protected readonly paused = signal(false);
   protected readonly missionActive = signal(false);
   /**
-   * Checkpoint 4: remains false until Checkpoint 5 wires real photography objectives.
-   * Framing guide shipping rule: visible only while a photography objective is active,
-   * unless an explicit development preview flag is set.
+   * Framing guide shipping rule: visible only while a photography objective is
+   * active, unless an explicit development preview flag is set.
    */
-  protected readonly photographyObjectiveActive = signal(false);
+  protected readonly photographyObjectiveActive = computed(
+    () =>
+      this.missionActive() &&
+      !this.missionResults.available() &&
+      this.photographyRuntime.photographyObjectiveActive(),
+  );
   protected readonly missionFramingPreview = signal(false);
   /** Invalidates in-flight mission preparation after teardown / newer launch. */
   private missionPrepareGeneration = 0;
+  /** Content package for the running expedition; drives HUD copy and retry. */
+  private activeMissionPackage: ExpeditionMissionPackage | null = null;
+  private missionSpawnPose: {
+    position: Vec3;
+    orientation: { x: number; y: number; z: number; w: number };
+  } | null = null;
+  protected readonly missionTitle = signal<string | null>(null);
+  /** Photography objective id → target subject display name for the running mission. */
+  private readonly missionSubjectNames = new Map<string, string>();
+  /** Last rejected shutter press, surfaced to the pilot until the next attempt. */
+  private readonly missionShutterNotice = signal<string | null>(null);
+
+  // --- Photography HUD projections (presentation only; core owns authority) ---
+  protected readonly missionPresentation = this.photographyRuntime.objectivePresentation;
+  protected readonly missionCapturePending = this.photographyRuntime.capturePending;
+  protected readonly missionBoundaryState = this.photographyRuntime.boundaryState;
+
+  protected readonly missionElapsedSeconds = computed(
+    () => this.missionPresentation().elapsedTicks * this.flightSimClock.fixedStepSeconds(),
+  );
+
+  protected readonly missionObjectiveNumber = computed(() => {
+    const index = this.missionPresentation().activeObjectiveIndex;
+    return index < 0 ? 0 : index + 1;
+  });
+
+  protected readonly missionSubjectName = computed(() => {
+    const objectiveId = this.missionPresentation().activePhotographyObjectiveId;
+    return objectiveId === null ? null : (this.missionSubjectNames.get(objectiveId) ?? null);
+  });
+
+  protected readonly missionLastEvaluation = computed(
+    () => this.photographyRuntime.lastCaptureOutcome()?.evaluation ?? null,
+  );
+
+  protected readonly missionFeedbackCodes = computed<readonly string[]>(() => {
+    const evaluation = this.missionLastEvaluation();
+    if (evaluation) {
+      return evaluation.feedbackCodes;
+    }
+    return this.missionPresentation().lastAttemptFeedbackCodes;
+  });
+
+  protected readonly missionComponentScores = computed(
+    () => this.missionLastEvaluation()?.components ?? [],
+  );
+
+  protected readonly missionObjectiveAccepted = computed(
+    () => this.missionPresentation().lastAttemptPassed === true,
+  );
+
+  protected readonly missionInfrastructureNotice = computed<string | null>(() => {
+    const rejected = this.missionShutterNotice();
+    if (rejected) {
+      return rejected;
+    }
+    const outcomeDiagnostic = this.photographyRuntime.lastCaptureOutcome()?.diagnostic ?? null;
+    if (outcomeDiagnostic) {
+      return outcomeDiagnostic.message;
+    }
+    const diagnostics = this.photographyRuntime.diagnostics();
+    return diagnostics.length > 0 ? diagnostics[diagnostics.length - 1].message : null;
+  });
   protected readonly viewportCssSize = signal({ width: 1280, height: 720 });
   protected readonly settingsOpen = signal(false);
   protected readonly rateMenuOpen = signal(false);
@@ -864,6 +949,20 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       });
     });
 
+    // Pause and camera mode gate photo capture in the photography runtime.
+    effect(() => {
+      const paused = this.paused();
+      const fpv = this.cameraMode() === 'fpv';
+      const missionActive = this.missionActive();
+      untracked(() => {
+        if (!missionActive) {
+          return;
+        }
+        this.photographyRuntime.setPaused(paused);
+        this.photographyRuntime.setCameraModeFpv(fpv);
+      });
+    });
+
     this.destroyRef.onDestroy(() => this.teardown());
   }
 
@@ -930,6 +1029,11 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       } else {
         this.flight.reset();
       }
+    } else if (this.missionActive() && this.missionSpawnPose) {
+      this.flight.reset({
+        position: { ...this.missionSpawnPose.position },
+        orientation: { ...this.missionSpawnPose.orientation },
+      });
     } else {
       this.flight.reset();
     }
@@ -1261,6 +1365,10 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   }
 
   protected onReturnSetup(): void {
+    if (this.missionActive()) {
+      this.onMissionExit();
+      return;
+    }
     this.paused.set(false);
     if (this.playMode() === 'training') {
       this.shell.showLearn();
@@ -1900,7 +2008,6 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       this.selectedAircraft.select(intent.aircraftId);
       this.guidance.stop();
       this.missionActive.set(false);
-      this.photographyObjectiveActive.set(false);
       this.missionFramingPreview.set(false);
       return;
     }
@@ -1985,8 +2092,13 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   }): Promise<void> {
     const prepareGeneration = ++this.missionPrepareGeneration;
     this.missionActive.set(false);
-    this.photographyObjectiveActive.set(false);
     this.missionFramingPreview.set(false);
+
+    const pack = this.expeditionCatalog.get(intent.missionId);
+    if (!pack) {
+      this.environmentError.set(`Mission package not installed: ${intent.missionId}`);
+      return;
+    }
 
     const prepared = await this.missionLaunchCoordinator.prepareLaunch(intent);
     if (prepareGeneration !== this.missionPrepareGeneration) {
@@ -1995,7 +2107,6 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
     }
     if (!prepared.ok) {
       this.missionActive.set(false);
-      this.photographyObjectiveActive.set(false);
       this.missionFramingPreview.set(false);
       this.missionRuntimeCoordinator.detach();
       this.environmentError.set(prepared.diagnostic.message);
@@ -2007,25 +2118,153 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
     const spawn =
       location.gameplaySpatial.spawnPoints.find((s) => String(s.id) === spawnId) ??
       location.gameplaySpatial.spawnPoints[0];
-    if (spawn) {
-      this.flight.reset({
-        position: { ...spawn.pose.position },
-        orientation: { ...spawn.pose.orientation },
-      });
-    } else {
-      this.flight.reset();
-    }
-    this.syncRendererPose();
+    this.missionSpawnPose = spawn
+      ? {
+          position: { ...spawn.pose.position },
+          orientation: { ...spawn.pose.orientation },
+        }
+      : null;
+    this.resetDroneToMissionSpawn();
 
     if (prepareGeneration !== this.missionPrepareGeneration) {
       return;
     }
 
     this.missionRuntimeCoordinator.attach(prepared.sessionGeneration);
-    // Checkpoint 4: no objective runtime yet — guide only via explicit preview.
-    this.photographyObjectiveActive.set(false);
+
+    // Capture requires the FPV camera; missions always begin there.
+    if (this.cameraMode() !== 'fpv') {
+      this.renderer.setCameraMode('fpv');
+      this.cameraMode.set('fpv');
+    }
+    const begun = this.photographyRuntime.begin({
+      mission: pack.mission,
+      photographyObjectives: pack.photographyObjectives,
+      scoringPolicy: pack.scoringPolicy,
+      sessionId: `mission-${intent.missionId}-${Date.now()}`,
+      sessionGeneration: prepared.sessionGeneration,
+      locationGeneration: this.locationLoadCoordinator.locationGeneration(),
+      subjects: location.photographySubjects,
+      boundaryShape: location.playableBoundary.shape,
+      zones: location.gameplaySpatial.zones.map((zone) => ({
+        zoneId: String(zone.id),
+        shape: zone.shape,
+      })),
+      fixedStepSeconds: this.flightSimClock.fixedStepSeconds(),
+    });
+    if (!begun.ok) {
+      this.missionRuntimeCoordinator.detach();
+      this.environmentError.set(begun.diagnostic.message);
+      return;
+    }
+
+    // `begin` resets its own pause/camera gates, so publish the live UI state.
+    this.photographyRuntime.setCameraModeFpv(this.cameraMode() === 'fpv');
+    this.photographyRuntime.setPaused(this.paused());
+
+    this.activeMissionPackage = pack;
+    this.missionTitle.set(pack.summary.title);
+    this.rebuildMissionSubjectNames(pack, location.photographySubjects);
+    this.missionShutterNotice.set(null);
     this.missionFramingPreview.set(!!intent.developmentFlags?.framingGuidePreview);
     this.missionActive.set(true);
+  }
+
+  /** Maps each photography objective to its primary subject's display name. */
+  private rebuildMissionSubjectNames(
+    pack: ExpeditionMissionPackage,
+    subjects: readonly { id: unknown; displayName: string }[],
+  ): void {
+    this.missionSubjectNames.clear();
+    const names = new Map(subjects.map((subject) => [String(subject.id), subject.displayName]));
+    for (const objective of pack.photographyObjectives) {
+      const subjectId =
+        objective.primarySubjectIds[0] ?? objective.requiredSubjectIds[0] ?? null;
+      const displayName = subjectId === null ? null : names.get(String(subjectId));
+      if (displayName) {
+        this.missionSubjectNames.set(String(objective.objectiveId), displayName);
+      }
+    }
+  }
+
+  private resetDroneToMissionSpawn(): void {
+    const spawn = this.missionSpawnPose;
+    if (spawn) {
+      this.flight.reset({
+        position: { ...spawn.position },
+        orientation: { ...spawn.orientation },
+      });
+    } else {
+      this.flight.reset();
+    }
+    this.syncRendererPose();
+  }
+
+  /** Shutter entry point: keyboard `V` and the photography HUD button. */
+  protected onPhotoShutter(): void {
+    if (!this.missionActive()) {
+      return;
+    }
+    const ack = this.photographyRuntime.requestPhotoCapture();
+    this.missionShutterNotice.set(ack.accepted ? null : (ack.diagnostic?.message ?? null));
+  }
+
+  /** Full mission retry on the already-loaded location — never reloads content. */
+  protected onMissionRetry(): void {
+    if (!this.activeMissionPackage) {
+      return;
+    }
+    // Fast retry requires intact location/spatial infrastructure; never silently reload.
+    if (this.locationLoadCoordinator.locationGeneration() <= 0) {
+      this.environmentError.set('Mission retry runtime unavailable: location is not loaded');
+      this.missionActive.set(false);
+      return;
+    }
+    const spatialProbe = this.missionRuntimeCoordinator.probeSpatialQuery();
+    if (spatialProbe) {
+      this.environmentError.set(spatialProbe.message);
+      this.missionActive.set(false);
+      return;
+    }
+
+    const sessionGeneration = this.flightSimClock.resetSession(
+      this.flightSimClock.fixedStepSeconds(),
+    );
+    this.missionRuntimeCoordinator.prepareRetry(sessionGeneration);
+    this.resetDroneToMissionSpawn();
+    this.flight.disarm();
+    this.crashReasonLabel.set(null);
+    this.renderer.setDroneDamageState('pristine', 0);
+    this.keyboard.resetThrottle();
+    this.liveInput.set({ throttle: 0, yaw: 0, pitch: 0, roll: 0 });
+    this.cameraEffects.reset();
+    this.wasCrashed = false;
+    this.missionShutterNotice.set(null);
+
+    const retried = this.photographyRuntime.retry(sessionGeneration);
+    if (!retried.ok) {
+      this.missionActive.set(false);
+      this.environmentError.set(retried.diagnostic.message);
+      return;
+    }
+    this.paused.set(false);
+    this.missionActive.set(true);
+  }
+
+  /** Leaves the expedition: stops the loop, tears the location down, returns to the hub. */
+  protected onMissionExit(): void {
+    this.photographyRuntime.exit();
+    this.missionPrepareGeneration += 1;
+    this.missionActive.set(false);
+    this.missionFramingPreview.set(false);
+    this.activeMissionPackage = null;
+    this.missionSpawnPose = null;
+    this.missionSubjectNames.clear();
+    this.missionTitle.set(null);
+    this.missionShutterNotice.set(null);
+    this.paused.set(false);
+    void this.missionRuntimeCoordinator.exitAndTeardown();
+    this.shell.showExpeditions();
   }
 
   private startTrainingModule(module: TrainingModuleDefinition): void {
@@ -3200,6 +3439,7 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       code === 'KeyT' ||
       code === 'KeyP' ||
       code === 'KeyF' ||
+      code === 'KeyV' ||
       code === 'Escape' ||
       code.startsWith('Arrow')
     ) {
@@ -3284,6 +3524,12 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       if (this.playMode() === 'course' && !this.runBusy()) {
         this.onStartRun();
       }
+      return;
+    }
+    // Photo shutter. No gamepad binding: GamepadControllerService exposes raw
+    // button state only and owns no action map to extend.
+    if (code === 'KeyV' && !event.repeat) {
+      this.onPhotoShutter();
       return;
     }
 
@@ -3487,8 +3733,12 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
     this.guidance.stop();
     this.missionPrepareGeneration += 1;
     this.missionActive.set(false);
-    this.photographyObjectiveActive.set(false);
     this.missionFramingPreview.set(false);
+    this.activeMissionPackage = null;
+    this.missionSpawnPose = null;
+    this.missionSubjectNames.clear();
+    this.missionTitle.set(null);
+    this.photographyRuntime.exit();
     void this.missionRuntimeCoordinator.exitAndTeardown();
     this.missionSessionFacade.reset();
     this.authoritativeStepPublisher.clearObservers();

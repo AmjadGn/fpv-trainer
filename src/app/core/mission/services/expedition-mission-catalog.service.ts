@@ -67,7 +67,7 @@ export class ExpeditionMissionCatalog {
           objectivesSummary: mission.briefing.objectivesSummary ?? [],
           recommendedCategories:
             mission.aircraftCompatibilityPolicy.recommendedCategories ?? [],
-          captureScoringEnabled: false,
+          captureScoringEnabled: true,
         },
         mission,
         photographyObjectives: COASTAL_RUINS_PHOTO_OBJECTIVES,

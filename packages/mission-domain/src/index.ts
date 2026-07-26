@@ -85,6 +85,18 @@ export type {
 } from './policies';
 
 export type {
+  AllocateObjectiveMaxPointsInput,
+  AllocateObjectiveMaxPointsResult,
+  ObjectiveScoreAllocationPolicy,
+  ObjectiveScoreWeight,
+} from './score-allocation';
+export {
+  OBJECTIVE_SCORE_ALLOCATION_VERSION,
+  allocateRequiredObjectiveMaxPoints,
+  scorePointsFromNormalized,
+} from './score-allocation';
+
+export type {
   CreateMissionDefinitionInput,
   LocationVersionRange,
   MissionBriefing,

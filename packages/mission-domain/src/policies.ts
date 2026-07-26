@@ -4,6 +4,7 @@
 
 import type { ElapsedTicks } from '@fpv/simulation-contracts';
 import type { ObjectiveId } from './ids';
+import type { ObjectiveScoreAllocationPolicy } from './score-allocation';
 
 /**
  * How a mission attempt is deemed complete.
@@ -94,4 +95,10 @@ export interface ScoreAggregationPolicy {
   readonly optionalBonusWeight: number;
   readonly timeBonusEnabled: boolean;
   readonly maxScore: number;
+  /**
+   * Authored required-objective point budgets. When present, application
+   * runtimes MUST use it to map normalized photography scores into mission
+   * points — they must not invent equal splits from objective count.
+   */
+  readonly objectiveScoreAllocation?: ObjectiveScoreAllocationPolicy;
 }
