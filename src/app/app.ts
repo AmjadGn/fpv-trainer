@@ -16,6 +16,7 @@ import { DroneBuilderComponent } from './features/drone-builder/drone-builder.co
 import { HomeComponent } from './features/home/home.component';
 import { LearnHubComponent } from './features/learn/learn-hub.component';
 import { FlyHubComponent } from './features/fly/fly-hub.component';
+import { ExpeditionsHubComponent } from './features/missions/expeditions-hub.component';
 import { OnboardingComponent } from './features/onboarding/onboarding.component';
 import { FeedbackComponent } from './features/feedback/feedback.component';
 import { PrivacyCenterComponent } from './features/privacy/privacy-center.component';
@@ -57,6 +58,7 @@ interface ShellNavItem {
     HomeComponent,
     LearnHubComponent,
     FlyHubComponent,
+    ExpeditionsHubComponent,
     OnboardingComponent,
     FeedbackComponent,
     PrivacyCenterComponent,
@@ -185,6 +187,7 @@ export class App {
       if (item.view === 'fly') {
         return (
           this.shell.view() === 'fly' ||
+          this.shell.view() === 'missions' ||
           this.shell.view() === 'courses' ||
           this.shell.view() === 'environments' ||
           this.shell.view() === 'challenges' ||

@@ -77,6 +77,14 @@ import { TrainerSettingsService } from '../../core/settings/services/trainer-set
 import { TrainerSessionService } from '../../core/session/services/trainer-session.service';
 import { AppShellService } from '../../core/shell/app-shell.service';
 import type { FlightLaunchIntent } from '../../core/shell/app-shell.service';
+import { AuthoritativeFlightStepPublisher } from '../../core/flight-runtime/services/authoritative-flight-step-publisher.service';
+import { FlightSimulationClock } from '../../core/flight-runtime/services/flight-simulation-clock.service';
+import type { AuthoritativeCollisionOutcomeSummary } from '../../core/flight-runtime/models/authoritative-flight-step-snapshot';
+import { MissionAircraftSnapshotAdapter } from '../../core/mission/adapters/mission-aircraft-snapshot.adapter';
+import { MissionAircraftCapabilitiesAdapter } from '../../core/mission/adapters/mission-aircraft-capabilities.adapter';
+import { FlightCameraSnapshotAdapter } from '../../core/camera/services/flight-camera-snapshot-adapter.service';
+import { MissionRuntimeCoordinator } from '../../core/mission/services/mission-runtime-coordinator.service';
+import { MissionSessionFacade } from '../../core/mission/services/mission-session.facade';
 import { AccountPromptService } from '../../core/online/services/account-prompt.service';
 import { RankedRaceService } from '../../core/online/services/ranked-race.service';
 import { PhysicsSessionService } from '../../core/physics/services/physics-session.service';
@@ -192,6 +200,20 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   private readonly frameMonitor = inject(FrameTimeMonitorService);
   private readonly guidance = inject(GuidanceEngineService);
   private readonly continueXp = inject(ContinueExperienceService);
+  private readonly flightSimClock = inject(FlightSimulationClock);
+  private readonly authoritativeStepPublisher = inject(AuthoritativeFlightStepPublisher);
+  private readonly missionAircraftSnapshotAdapter = inject(MissionAircraftSnapshotAdapter);
+  private readonly missionAircraftCapabilitiesAdapter = inject(
+    MissionAircraftCapabilitiesAdapter,
+  );
+  private readonly flightCameraSnapshotAdapter = inject(FlightCameraSnapshotAdapter);
+  private readonly missionRuntimeCoordinator = inject(MissionRuntimeCoordinator);
+  private readonly missionSessionFacade = inject(MissionSessionFacade);
+
+  /** Cached metadata for authoritative step snapshots (updated on aircraft apply). */
+  private activeAircraftSourceType: 'factory' | 'user-compiled' = 'factory';
+  private activeDefinitionVersion: string | null = null;
+  private activePhysicsProfileVersion: string | null = null;
 
   private readonly keyboard = new FlightKeyboardAdapter();
   private mounted = false;
@@ -1851,6 +1873,16 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
     if (intent.kind === 'replay') {
       this.pendingLaunchIntent = intent;
     }
+
+    if (intent.kind === 'mission') {
+      // Mission flights reuse the shared free-flight runtime path.
+      // Full mission scoring / location install is Checkpoint 4+.
+      this.playMode.set('free');
+      this.pendingLaunchIntent = intent;
+      this.selectedAircraft.select(intent.aircraftId);
+      this.guidance.stop();
+      return;
+    }
   }
 
   /** Apply the staged launch intent once the environment/drone is ready. */
@@ -1896,6 +1928,15 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
           this.onWatchReplay();
         }
         break;
+      case 'mission': {
+        // Shared free-flight runtime; mission coordinator observes fixed steps.
+        this.flight.reset();
+        this.syncRendererPose();
+        this.missionRuntimeCoordinator.attach(
+          this.flightSimClock.sessionGeneration(),
+        );
+        break;
+      }
     }
   }
 
@@ -2016,6 +2057,7 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
           this.flight.update(this.frameInput, fixedDt);
 
           // Hybrid Rapier collision: custom flight predicted pose → contacts → corrections.
+          let collisionOutcome: AuthoritativeCollisionOutcomeSummary = 'unavailable';
           if (this.physicsSession.isActive() && !this.isReplayMode()) {
             const correction = this.physicsSession.processFixedStep({
               position: this.flight.position(),
@@ -2027,6 +2069,7 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
               timestampMs: this.flight.getSimulationTime() * 1000,
             });
             if (correction) {
+              collisionOutcome = correction.outcome;
               const meaningful =
                 correction.crash ||
                 (correction.outcome !== 'none' &&
@@ -2073,6 +2116,8 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
                 }
               }
               }
+            } else {
+              collisionOutcome = 'none';
             }
             this.flight.recordPostPhysicsVelocity(this.flight.velocity());
             this.renderer.setDroneDamageState(
@@ -2081,7 +2126,11 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
             );
           } else {
             this.flight.recordPostPhysicsVelocity(this.flight.velocity(), null);
+            collisionOutcome = this.physicsSession.isActive() ? 'none' : 'unavailable';
           }
+
+          // Authoritative completed-step seam (post-collision, pre course/replay/render).
+          this.publishAuthoritativeFixedStep(fixedDt, collisionOutcome);
 
           const after = this.flight.position();
 
@@ -3284,13 +3333,73 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       liveryId: this.selectedAircraft.preferredLiveryId(),
       appliedConfig: applied,
     });
+
+    const sourceType = this.missionAircraftCapabilitiesAdapter.resolveSourceType(definition);
+    this.activeAircraftSourceType = sourceType;
+    this.activeDefinitionVersion = definition.definitionVersion ?? null;
+    this.activePhysicsProfileVersion = definition.physicsProfileVersion ?? null;
+
+    const rig = this.flightCameraSnapshotAdapter.resolveAndActivate({
+      aircraft: definition,
+      appliedFpvCameraTiltRad: applied.fpvCameraTilt,
+      templateDerivedCamera: sourceType === 'user-compiled',
+    });
+    this.renderer.setResolvedFlightCameraRig(rig);
+
+    // New flight mount always begins a fresh runtime session (tick 0).
+    this.flightSimClock.beginSession();
+
     if (warnings.length) {
       console.warn('[aircraft]', warnings.join(' | '));
     }
   }
 
+  /**
+   * Authoritative completed fixed-step seam.
+   * Invoked once after collision correction; increments tick then notifies observers.
+   */
+  private publishAuthoritativeFixedStep(
+    fixedDt: number,
+    collisionOutcome: AuthoritativeCollisionOutcomeSummary,
+  ): void {
+    if (!this.flightSimClock.isStarted()) {
+      this.flightSimClock.beginSession(fixedDt);
+    }
+    const tick = this.authoritativeStepPublisher.completeFixedStep();
+    const definitionId = this.flight.getAppliedAircraftId();
+
+    const adapted = this.missionAircraftSnapshotAdapter.adapt({
+      simulationTick: tick,
+      fixedStepSeconds: fixedDt,
+      sessionGeneration: this.flightSimClock.sessionGeneration(),
+      position: this.flight.position(),
+      orientation: this.flight.orientation(),
+      linearVelocity: this.flight.velocity(),
+      bodyAngularVelocity: this.flight.angularVelocity(),
+      armed: this.flight.armed(),
+      crashed: this.flight.crashed(),
+      altitudeMeters: this.flight.altitude(),
+      speedMps: this.flight.speed(),
+      aircraftId: definitionId,
+      aircraftSourceType: this.activeAircraftSourceType,
+      definitionVersion: this.activeDefinitionVersion,
+      physicsProfileVersion: this.activePhysicsProfileVersion,
+      collisionOutcome,
+    });
+
+    if (!adapted.ok) {
+      console.error('[AuthoritativeFlightStep]', adapted.reason);
+      return;
+    }
+    this.authoritativeStepPublisher.publish(adapted.snapshot);
+  }
+
   private teardown(): void {
     this.guidance.stop();
+    void this.missionRuntimeCoordinator.exitAndTeardown();
+    this.missionSessionFacade.reset();
+    this.authoritativeStepPublisher.clearObservers();
+    this.flightCameraSnapshotAdapter.clearActiveRig();
     this.physicsIntegrity.clearLock();
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
