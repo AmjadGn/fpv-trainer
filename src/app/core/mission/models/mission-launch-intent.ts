@@ -20,6 +20,8 @@ export interface MissionFlightLaunchIntent {
   readonly developmentFlags?: {
     readonly skipLocationLoad?: boolean;
     readonly forceUnavailableSpatialQuery?: boolean;
+    /** Presentation-only framing guide preview (Checkpoint 4). */
+    readonly framingGuidePreview?: boolean;
   };
 }
 

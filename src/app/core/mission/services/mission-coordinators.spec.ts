@@ -13,6 +13,12 @@ import {
   NullLocationDefinitionSource,
   NullLocationRuntimeInstallPort,
 } from '../adapters/null-location.adapters';
+import {
+  LOCATION_ASSET_LOAD,
+  LOCATION_DEFINITION_SOURCE,
+  LOCATION_RUNTIME_INSTALL,
+} from '../ports/location-definition-source.port';
+import { MISSION_SPATIAL_QUERY } from '../ports/mission-spatial-query.token';
 import { createMissionFlightLaunchIntent } from '../models/mission-launch-intent';
 import { MissionSessionFacade } from '../services/mission-session.facade';
 import { MissionLaunchCoordinator } from '../services/mission-launch-coordinator.service';
@@ -43,6 +49,10 @@ describe('Mission coordinators foundations', () => {
         NullLocationDefinitionSource,
         NullLocationAssetLoadPort,
         NullLocationRuntimeInstallPort,
+        { provide: LOCATION_DEFINITION_SOURCE, useExisting: NullLocationDefinitionSource },
+        { provide: LOCATION_ASSET_LOAD, useExisting: NullLocationAssetLoadPort },
+        { provide: LOCATION_RUNTIME_INSTALL, useExisting: NullLocationRuntimeInstallPort },
+        { provide: MISSION_SPATIAL_QUERY, useExisting: UnavailableMissionSpatialQueryAdapter },
         AircraftCatalogService,
         SelectedAircraftService,
       ],
@@ -83,7 +93,7 @@ describe('Mission coordinators foundations', () => {
     if (result.ok) {
       return;
     }
-    expect(result.diagnostic.code).toBe('LOCATION_DEFINITION_UNAVAILABLE');
+    expect(result.diagnostic.code).toBe('LOCATION_PACKAGE_NOT_FOUND');
   });
 
   it('supports development skipLocationLoad preparation path', async () => {

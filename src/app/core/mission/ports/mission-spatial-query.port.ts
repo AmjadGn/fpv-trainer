@@ -23,6 +23,13 @@ export interface MissionLineOfSightQuery {
   readonly startWorld: Vec3;
   readonly endWorld: Vec3;
   readonly filter?: MissionSpatialQueryFilter;
+  /**
+   * When set, only colliders authored for this photography subject are ignored
+   * (target endpoint / self-geometry). Other subject geometry still obstructs.
+   * Prefer this over the legacy subjectId alias.
+   */
+  readonly targetSubjectId?: string;
+  /** @deprecated Prefer targetSubjectId. Kept as a compatibility alias. */
   readonly subjectId?: string;
   readonly queryReferenceId?: string;
   readonly expectedLocationGeneration?: number;
@@ -33,6 +40,11 @@ export interface MissionSegmentObstructionQuery {
   readonly startWorld: Vec3;
   readonly endWorld: Vec3;
   readonly filter?: MissionSpatialQueryFilter;
+  /**
+   * Optional explicit target exclusion. Segment queries include subject geometry
+   * by default; a matching targetSubjectId is ignored only when supplied.
+   */
+  readonly targetSubjectId?: string;
   readonly expectedLocationGeneration?: number;
   readonly expectedSessionGeneration?: number;
 }
@@ -41,6 +53,8 @@ export interface MissionVisibilitySampleQuery {
   readonly originWorld: Vec3;
   readonly samplePointsWorld: readonly Vec3[];
   readonly filter?: MissionSpatialQueryFilter;
+  readonly targetSubjectId?: string;
+  readonly subjectId?: string;
   readonly expectedLocationGeneration?: number;
   readonly expectedSessionGeneration?: number;
 }

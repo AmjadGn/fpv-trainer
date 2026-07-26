@@ -50,6 +50,13 @@
       (pointerdown)="onViewportPointer()"
     ></div>
 
+    <app-mission-framing-guide
+      [viewportWidth]="viewportCssSize().width"
+      [viewportHeight]="viewportCssSize().height"
+      [active]="photographyObjectiveActive()"
+      [preview]="missionFramingPreview()"
+    />
+
     @if (showFrameDebug() && frameDebug(); as fd) {
       <aside class="hud-panel hud-panel--frame-debug" aria-label="Body-frame diagnostics">
         <h2 class="hud-panel__title">Frame Debug <span class="frame-debug__hint">B toggles</span></h2>

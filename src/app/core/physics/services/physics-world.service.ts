@@ -30,6 +30,38 @@ export interface RegisteredBody {
   };
 }
 
+/** Plain snapshot of a registered non-drone body (no Rapier handles). */
+export interface RegisteredEnvironmentCollisionEntry {
+  readonly definition: EnvironmentColliderDefinition;
+  readonly isDebris: boolean;
+}
+
+/**
+ * Opaque ownership token for a suspended previous-environment collision set.
+ * Rapier handles are never exposed through this handle.
+ */
+export interface SuspendedEnvironmentCollisionHandle {
+  readonly token: number;
+}
+
+export type SuspendRegisteredBodiesResult =
+  | { readonly ok: true; readonly handle: SuspendedEnvironmentCollisionHandle }
+  | { readonly ok: false; readonly reason: 'already-suspended' | 'world-unavailable' };
+
+export type RestoreSuspendedBodiesResult =
+  | { readonly ok: true; readonly restoredCount: number; readonly alreadyRestored: boolean }
+  | {
+      readonly ok: false;
+      readonly reason:
+        | 'unknown-handle'
+        | 'discarded'
+        | 'already-restored'
+        | 'world-unavailable'
+        | 'register-failed';
+      readonly message: string;
+      readonly failedBodyId?: string;
+    };
+
 const EMPTY_TELEMETRY: PhysicsTelemetry = {
   stepMs: 0,
   activeBodies: 0,
@@ -66,6 +98,14 @@ export class PhysicsWorldService {
   private maxDynamicProps = 48;
   private maxDebris = 24;
   private particleCount = 0;
+
+  private nextSuspendToken = 1;
+  private suspended: {
+    readonly token: number;
+    readonly entries: readonly RegisteredEnvironmentCollisionEntry[];
+    restored: boolean;
+    discarded: boolean;
+  } | null = null;
 
   private readonly _ready = signal(false);
   private readonly _fallback = signal(true);
@@ -171,6 +211,35 @@ export class PhysicsWorldService {
 
   getMaxDebris(): number {
     return this.maxDebris;
+  }
+
+  /**
+   * Refresh Rapier scene-query acceleration after bulk collider register/remove.
+   * Uses a zero-timestep world update so query consumers see new colliders without
+   * advancing flight-authoritative simulation time. Location adapters must not
+   * call the fixed-step flight seam; this is physics-infrastructure only.
+   */
+  refreshSceneQueries(): void {
+    if (!this.world) {
+      return;
+    }
+    const prev = this.world.timestep;
+    try {
+      this.world.timestep = 0;
+      if (this.eventQueue) {
+        this.world.step(this.eventQueue);
+      } else {
+        this.world.step();
+      }
+    } catch (err) {
+      this._warning.set(
+        err instanceof Error
+          ? `Physics query refresh error: ${err.message}`
+          : 'Physics query refresh error',
+      );
+    } finally {
+      this.world.timestep = prev;
+    }
   }
 
   /**
@@ -416,6 +485,141 @@ export class PhysicsWorldService {
     this.publishTelemetry();
   }
 
+  /** Removes registered environment/prop bodies; keeps the drone body intact. */
+  clearRegisteredBodiesKeepingDrone(): void {
+    for (const id of [...this.bodies.keys()]) {
+      this.removeBody(id);
+    }
+  }
+
+  /**
+   * Captures then removes all registered non-drone bodies for reversible curated install.
+   * Preserves exact definitions (ids, poses, materials, groups, sensors, body types).
+   * Rejects a second active suspension until restore/discard.
+   */
+  suspendRegisteredBodiesKeepingDrone(): SuspendRegisteredBodiesResult {
+    if (this.suspended && !this.suspended.restored && !this.suspended.discarded) {
+      return { ok: false, reason: 'already-suspended' };
+    }
+
+    const entries: RegisteredEnvironmentCollisionEntry[] = [...this.bodies.values()]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((body) => ({
+        definition: cloneEnvironmentColliderDefinition(body.definition),
+        isDebris: body.isDebris,
+      }));
+
+    for (const id of [...this.bodies.keys()].sort((a, b) => a.localeCompare(b))) {
+      this.removeBody(id);
+    }
+
+    const token = this.nextSuspendToken++;
+    this.suspended = {
+      token,
+      entries,
+      restored: false,
+      discarded: false,
+    };
+    this.refreshSceneQueries();
+    return { ok: true, handle: { token } };
+  }
+
+  /**
+   * Restores a previously suspended environment collision set in deterministic id order.
+   * Rejects unknown/discarded handles. Second restore of the same handle is rejected
+   * (callers may treat already-restored as idempotent unload success after clearing ownership).
+   */
+  restoreSuspendedBodies(
+    handle: SuspendedEnvironmentCollisionHandle,
+  ): RestoreSuspendedBodiesResult {
+    if (!this.suspended || this.suspended.token !== handle.token) {
+      return {
+        ok: false,
+        reason: 'unknown-handle',
+        message: 'Suspended collision handle is unknown or stale',
+      };
+    }
+    if (this.suspended.discarded) {
+      return {
+        ok: false,
+        reason: 'discarded',
+        message: 'Suspended collision snapshot was discarded',
+      };
+    }
+    if (this.suspended.restored) {
+      return {
+        ok: false,
+        reason: 'already-restored',
+        message: 'Suspended collision snapshot was already restored',
+      };
+    }
+    if (!this.world || !this.R) {
+      return {
+        ok: false,
+        reason: 'world-unavailable',
+        message: 'Rapier world unavailable during collision restore',
+      };
+    }
+
+    const entries = this.suspended.entries;
+    for (const entry of entries) {
+      if (this.bodies.has(entry.definition.id)) {
+        return {
+          ok: false,
+          reason: 'register-failed',
+          message: `Duplicate body id before restore: ${entry.definition.id}`,
+          failedBodyId: entry.definition.id,
+        };
+      }
+      const registered = this.registerBody(entry.definition, {
+        isDebris: entry.isDebris,
+      });
+      if (!registered) {
+        // Roll back partial restore to avoid a mixed world.
+        for (const created of entries) {
+          if (this.bodies.has(created.definition.id)) {
+            this.removeBody(created.definition.id);
+          }
+        }
+        return {
+          ok: false,
+          reason: 'register-failed',
+          message: `Failed to restore body: ${entry.definition.id}`,
+          failedBodyId: entry.definition.id,
+        };
+      }
+    }
+
+    this.suspended.restored = true;
+    this.suspended = null;
+    this.refreshSceneQueries();
+    return { ok: true, restoredCount: entries.length, alreadyRestored: false };
+  }
+
+  /** Drops a suspended snapshot without restoring bodies. Rejects double discard. */
+  discardSuspendedBodies(handle: SuspendedEnvironmentCollisionHandle): boolean {
+    if (!this.suspended || this.suspended.token !== handle.token) {
+      return false;
+    }
+    if (this.suspended.restored || this.suspended.discarded) {
+      return false;
+    }
+    this.suspended.discarded = true;
+    this.suspended = null;
+    return true;
+  }
+
+  hasActiveSuspendedEnvironmentCollision(): boolean {
+    return !!this.suspended && !this.suspended.restored && !this.suspended.discarded;
+  }
+
+  suspendedEnvironmentBodyIds(): readonly string[] {
+    if (!this.suspended || this.suspended.restored || this.suspended.discarded) {
+      return [];
+    }
+    return this.suspended.entries.map((e) => e.definition.id);
+  }
+
   resetDynamicProps(): void {
     for (const entry of this.bodies.values()) {
       if (!entry.isDynamic) {
@@ -547,4 +751,58 @@ export class PhysicsWorldService {
       fallbackLegacyGround: this._fallback(),
     });
   }
+}
+
+function cloneEnvironmentColliderDefinition(
+  definition: EnvironmentColliderDefinition,
+): EnvironmentColliderDefinition {
+  return {
+    ...definition,
+    shape: cloneColliderShape(definition.shape),
+    additionalShapes: definition.additionalShapes?.map(cloneColliderShape),
+    position: { ...definition.position },
+    rotation: { ...definition.rotation },
+    scale: definition.scale ? { ...definition.scale } : undefined,
+    dynamicProperties: definition.dynamicProperties
+      ? {
+          ...definition.dynamicProperties,
+          centerOfMass: definition.dynamicProperties.centerOfMass
+            ? { ...definition.dynamicProperties.centerOfMass }
+            : undefined,
+        }
+      : definition.dynamicProperties,
+  };
+}
+
+function cloneColliderShape(
+  shape: EnvironmentColliderDefinition['shape'],
+): EnvironmentColliderDefinition['shape'] {
+  return {
+    ...shape,
+    halfExtents: shape.halfExtents ? { ...shape.halfExtents } : undefined,
+    translation: shape.translation ? { ...shape.translation } : undefined,
+    rotation: shape.rotation ? { ...shape.rotation } : undefined,
+    heightfield: shape.heightfield
+      ? {
+          ...shape.heightfield,
+          heights:
+            shape.heightfield.heights instanceof Float32Array
+              ? new Float32Array(shape.heightfield.heights)
+              : [...shape.heightfield.heights],
+          scale: { ...shape.heightfield.scale },
+        }
+      : undefined,
+    vertices:
+      shape.vertices instanceof Float32Array
+        ? new Float32Array(shape.vertices)
+        : shape.vertices
+          ? [...shape.vertices]
+          : undefined,
+    indices:
+      shape.indices instanceof Uint32Array
+        ? new Uint32Array(shape.indices)
+        : shape.indices
+          ? [...shape.indices]
+          : undefined,
+  };
 }

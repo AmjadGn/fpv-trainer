@@ -235,6 +235,7 @@ export class ThreeRendererService {
 
   private courseGroup: Group | null = null;
   private environmentGroup: Group | null = null;
+  private curatedLocationGroup: Group | null = null;
   private gateHandles: GateHandle[] = [];
   private sharedFrameGeo: BoxGeometry | null = null;
   private sharedPostGeo: CylinderGeometry | null = null;
@@ -311,6 +312,33 @@ export class ThreeRendererService {
   /** Expose scene for impact particle attachment (render-only consumers). */
   getScene(): Scene | null {
     return this.scene;
+  }
+
+  /**
+   * Install a curated-location visual root into the shared scene.
+   * Narrow seam — does not parse location packages.
+   */
+  installCuratedLocationGroup(group: Group): void {
+    this.uninstallCuratedLocationGroup();
+    if (!this.scene) {
+      return;
+    }
+    this.curatedLocationGroup = group;
+    this.scene.add(group);
+  }
+
+  uninstallCuratedLocationGroup(): void {
+    if (this.curatedLocationGroup) {
+      this.curatedLocationGroup.removeFromParent();
+      this.curatedLocationGroup = null;
+    }
+  }
+
+  /** Hide/show trainer procedural environment while curated location is active. */
+  setTrainerEnvironmentVisible(visible: boolean): void {
+    if (this.environmentGroup) {
+      this.environmentGroup.visible = visible;
+    }
   }
 
   mount(
@@ -955,6 +983,7 @@ export class ThreeRendererService {
     this.gateHandles = [];
     this.courseGroup = null;
     this.environmentGroup = null;
+    this.curatedLocationGroup = null;
     this.sharedFrameGeo = null;
     this.sharedPostGeo = null;
     this.sharedChevronGeo = null;

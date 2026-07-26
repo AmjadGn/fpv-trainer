@@ -83,8 +83,14 @@ import type { AuthoritativeCollisionOutcomeSummary } from '../../core/flight-run
 import { MissionAircraftSnapshotAdapter } from '../../core/mission/adapters/mission-aircraft-snapshot.adapter';
 import { MissionAircraftCapabilitiesAdapter } from '../../core/mission/adapters/mission-aircraft-capabilities.adapter';
 import { FlightCameraSnapshotAdapter } from '../../core/camera/services/flight-camera-snapshot-adapter.service';
+import { MissionLaunchCoordinator } from '../../core/mission/services/mission-launch-coordinator.service';
 import { MissionRuntimeCoordinator } from '../../core/mission/services/mission-runtime-coordinator.service';
 import { MissionSessionFacade } from '../../core/mission/services/mission-session.facade';
+import { MissionFramingGuideComponent } from '../missions/components/mission-framing-guide.component';
+import {
+  getMediterraneanExpeditionRegionLocation,
+  SPAWN_IDS,
+} from '../../content/locations/mediterranean-expedition-region';
 import { AccountPromptService } from '../../core/online/services/account-prompt.service';
 import { RankedRaceService } from '../../core/online/services/ranked-race.service';
 import { PhysicsSessionService } from '../../core/physics/services/physics-session.service';
@@ -149,7 +155,7 @@ export type FlightHudMode = 'full' | 'compact' | 'minimal';
 
 @Component({
   selector: 'app-flight',
-  imports: [DecimalPipe, UpperCasePipe, EnvironmentSettingsComponent],
+  imports: [DecimalPipe, UpperCasePipe, EnvironmentSettingsComponent, MissionFramingGuideComponent],
   templateUrl: './flight.component.html',
   styleUrl: './flight.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -209,6 +215,7 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   private readonly flightCameraSnapshotAdapter = inject(FlightCameraSnapshotAdapter);
   private readonly missionRuntimeCoordinator = inject(MissionRuntimeCoordinator);
   private readonly missionSessionFacade = inject(MissionSessionFacade);
+  private readonly missionLaunchCoordinator = inject(MissionLaunchCoordinator);
 
   /** Cached metadata for authoritative step snapshots (updated on aircraft apply). */
   private activeAircraftSourceType: 'factory' | 'user-compiled' = 'factory';
@@ -264,6 +271,17 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   protected readonly playMode = signal<PlayMode>('course');
   protected readonly audioMuted = signal(false);
   protected readonly paused = signal(false);
+  protected readonly missionActive = signal(false);
+  /**
+   * Checkpoint 4: remains false until Checkpoint 5 wires real photography objectives.
+   * Framing guide shipping rule: visible only while a photography objective is active,
+   * unless an explicit development preview flag is set.
+   */
+  protected readonly photographyObjectiveActive = signal(false);
+  protected readonly missionFramingPreview = signal(false);
+  /** Invalidates in-flight mission preparation after teardown / newer launch. */
+  private missionPrepareGeneration = 0;
+  protected readonly viewportCssSize = signal({ width: 1280, height: 720 });
   protected readonly settingsOpen = signal(false);
   protected readonly rateMenuOpen = signal(false);
   protected readonly celebratingGate = signal<number | null>(null);
@@ -1876,11 +1894,14 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
 
     if (intent.kind === 'mission') {
       // Mission flights reuse the shared free-flight runtime path.
-      // Full mission scoring / location install is Checkpoint 4+.
+      // Do not mark missionActive until preparation succeeds.
       this.playMode.set('free');
       this.pendingLaunchIntent = intent;
       this.selectedAircraft.select(intent.aircraftId);
       this.guidance.stop();
+      this.missionActive.set(false);
+      this.photographyObjectiveActive.set(false);
+      this.missionFramingPreview.set(false);
       return;
     }
   }
@@ -1929,15 +1950,82 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
         }
         break;
       case 'mission': {
-        // Shared free-flight runtime; mission coordinator observes fixed steps.
-        this.flight.reset();
-        this.syncRendererPose();
-        this.missionRuntimeCoordinator.attach(
-          this.flightSimClock.sessionGeneration(),
-        );
+        // Shared free-flight runtime; prepare curated location then observe fixed steps.
+        void this.prepareMissionLaunch(intent);
         break;
       }
     }
+  }
+
+  private syncViewportCssSize(): void {
+    try {
+      const el = this.canvasHost().nativeElement;
+      const rect = el.getBoundingClientRect();
+      this.viewportCssSize.set({
+        width: Math.max(1, Math.round(rect.width)),
+        height: Math.max(1, Math.round(rect.height)),
+      });
+    } catch {
+      /* host may be unavailable during teardown */
+    }
+  }
+
+  private async prepareMissionLaunch(intent: {
+    kind: 'mission';
+    missionId: string;
+    locationId: string;
+    aircraftId: string;
+    aircraftSourceType: 'factory' | 'user-compiled';
+    spawnPointId?: string;
+    developmentFlags?: {
+      skipLocationLoad?: boolean;
+      forceUnavailableSpatialQuery?: boolean;
+      framingGuidePreview?: boolean;
+    };
+  }): Promise<void> {
+    const prepareGeneration = ++this.missionPrepareGeneration;
+    this.missionActive.set(false);
+    this.photographyObjectiveActive.set(false);
+    this.missionFramingPreview.set(false);
+
+    const prepared = await this.missionLaunchCoordinator.prepareLaunch(intent);
+    if (prepareGeneration !== this.missionPrepareGeneration) {
+      // Stale async completion after teardown or a newer mission launch.
+      return;
+    }
+    if (!prepared.ok) {
+      this.missionActive.set(false);
+      this.photographyObjectiveActive.set(false);
+      this.missionFramingPreview.set(false);
+      this.missionRuntimeCoordinator.detach();
+      this.environmentError.set(prepared.diagnostic.message);
+      return;
+    }
+
+    const location = getMediterraneanExpeditionRegionLocation();
+    const spawnId = intent.spawnPointId ?? SPAWN_IDS.main;
+    const spawn =
+      location.gameplaySpatial.spawnPoints.find((s) => String(s.id) === spawnId) ??
+      location.gameplaySpatial.spawnPoints[0];
+    if (spawn) {
+      this.flight.reset({
+        position: { ...spawn.pose.position },
+        orientation: { ...spawn.pose.orientation },
+      });
+    } else {
+      this.flight.reset();
+    }
+    this.syncRendererPose();
+
+    if (prepareGeneration !== this.missionPrepareGeneration) {
+      return;
+    }
+
+    this.missionRuntimeCoordinator.attach(prepared.sessionGeneration);
+    // Checkpoint 4: no objective runtime yet — guide only via explicit preview.
+    this.photographyObjectiveActive.set(false);
+    this.missionFramingPreview.set(!!intent.developmentFlags?.framingGuidePreview);
+    this.missionActive.set(true);
   }
 
   private startTrainingModule(module: TrainingModuleDefinition): void {
@@ -2265,6 +2353,7 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       this.environmentLoading.set(false);
       this.environmentStage.set('ready');
       this.paused.set(false);
+      this.syncViewportCssSize();
       if (useFallback) {
         this.environmentRetryCount.update((n) => n + 1);
       } else {
@@ -3396,6 +3485,10 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
 
   private teardown(): void {
     this.guidance.stop();
+    this.missionPrepareGeneration += 1;
+    this.missionActive.set(false);
+    this.photographyObjectiveActive.set(false);
+    this.missionFramingPreview.set(false);
     void this.missionRuntimeCoordinator.exitAndTeardown();
     this.missionSessionFacade.reset();
     this.authoritativeStepPublisher.clearObservers();
