@@ -34,6 +34,11 @@ import { FpvButtonDirective } from '../../shared/ui/fpv-button.directive';
               Start Free Flight
             </button>
           </fpv-panel>
+          <fpv-panel title="Expeditions" subtitle="Photography missions in curated locations.">
+            <button type="button" fpvButton variant="secondary" size="sm" (click)="expeditions()">
+              Open Expeditions
+            </button>
+          </fpv-panel>
           <fpv-panel title="Hangar" subtitle="Choose aircraft, compare, and launch Test Flight.">
             <button type="button" fpvButton variant="secondary" size="sm" (click)="hangar()">
               Open Hangar
@@ -119,6 +124,10 @@ export class FlyHubComponent {
       environmentId: this.settings.environmentSettings().selectedEnvironmentId,
     });
     this.shell.showFlight({ kind: 'free' });
+  }
+
+  protected expeditions(): void {
+    this.shell.showExpeditions();
   }
 
   protected hangar(): void {

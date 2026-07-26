@@ -1,9 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 
+import type { MissionFlightLaunchIntent } from '../mission/models/mission-launch-intent';
+
 export type AppView =
   | 'home'
   | 'learn'
   | 'fly'
+  | 'missions'
   | 'courses'
   | 'environments'
   | 'challenges'
@@ -23,6 +26,10 @@ export type AppView =
   | 'builder'
   | 'flight';
 
+/**
+ * Launch intents for the shared flight runtime.
+ * Mission kind reuses the same flight view — no second flight loop.
+ */
 export type FlightLaunchIntent =
   | { kind: 'free'; aircraftId?: string }
   | {
@@ -36,7 +43,8 @@ export type FlightLaunchIntent =
     }
   | { kind: 'training'; moduleId: string; aircraftId?: string }
   | { kind: 'replay' }
-  | { kind: 'test-flight'; aircraftId: string };
+  | { kind: 'test-flight'; aircraftId: string }
+  | MissionFlightLaunchIntent;
 
 /**
  * Shell navigation for the trainer SPA (no feature routes).
@@ -57,6 +65,19 @@ export class AppShellService {
 
   showFly(): void {
     this.view.set('fly');
+  }
+
+  /**
+   * Fly → Expeditions (internal view id: `missions`).
+   * Not a new top-level product section.
+   */
+  showExpeditions(): void {
+    this.view.set('missions');
+  }
+
+  /** @deprecated Prefer showExpeditions(); kept as alias for internal callers. */
+  showMissions(): void {
+    this.showExpeditions();
   }
 
   showOnboarding(): void {

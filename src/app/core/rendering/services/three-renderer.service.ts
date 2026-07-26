@@ -75,6 +75,17 @@ import type { AppliedFlightConfig } from '../../aircraft/adapters/flight-profile
 import { PropellerAnimationService } from '../../drone/visual/propeller-animation.service';
 import { DroneDamageVisualService } from '../../drone/visual/drone-damage-visual.service';
 import type { DroneDamageState } from '../../physics/models/collision.models';
+import { threeFlightCameraViewAdapter } from '../../camera/adapters/three-flight-camera-view.adapter';
+import type { ResolvedFlightCameraRig } from '../../camera/models/resolved-flight-camera-rig';
+import {
+  LEGACY_FPV_BASE_FOV_DEGREES,
+  LEGACY_FPV_FAR_METERS,
+  LEGACY_FPV_MOUNT_POSITION,
+  LEGACY_FPV_NEAR_METERS,
+  DEFAULT_MISSION_CAPTURE_ASPECT,
+  DEFAULT_PROJECTION_MODEL_VERSION,
+  RESOLVED_FLIGHT_CAMERA_RIG_VERSION,
+} from '../../camera/models/resolved-flight-camera-rig';
 
 export interface RenderFlightState {
   position: Vec3;
@@ -265,6 +276,10 @@ export class ThreeRendererService {
 
   private cameraEffects: CameraEffectsOutput | null = null;
   private baseFov = 75;
+  /** Canonical FPV base-camera rig; cosmetics applied after this base. */
+  private resolvedFpvRig: ResolvedFlightCameraRig = createDefaultLegacyResolvedRig(
+    FLIGHT_CONFIG.fpvCameraTilt,
+  );
   private replayCameraMode: ReplayCameraMode = 'fpv';
   private replayMode = false;
   private chaseStiffness = 6 as number;
@@ -576,13 +591,38 @@ export class ThreeRendererService {
       return;
     }
     this.cameraEffects = state.effects;
-    this.baseFov = state.baseFov;
+    // Cosmetic dynamic FOV uses baseFov from the active resolved rig when present.
+    this.baseFov = this.resolvedFpvRig.baseVerticalFovDegrees;
+    if (Math.abs(state.baseFov - this.baseFov) > 1e-6) {
+      // Presentation path may still pass the historical 75; prefer resolved rig.
+      this.baseFov = this.resolvedFpvRig.baseVerticalFovDegrees;
+    }
     this.replayMode = state.replayMode;
     this.chaseStiffness = state.chaseStiffness;
     this.chaseDistanceScale = state.chaseDistanceScale;
     if (state.replayMode) {
       this.replayCameraMode = state.mode as ReplayCameraMode;
     }
+  }
+
+  /**
+   * Install the session's canonical ResolvedFlightCameraRig.
+   * FPV rendering consumes this for base mount/tilt/FOV; cosmetics remain frame-only.
+   */
+  setResolvedFlightCameraRig(rig: ResolvedFlightCameraRig): void {
+    this.resolvedFpvRig = rig;
+    this.baseFov = rig.baseVerticalFovDegrees;
+    this.cfg.fpvCameraTilt = rig.localCameraTiltRad;
+    if (this.camera) {
+      this.camera.near = rig.nearMeters;
+      this.camera.far = rig.farMeters;
+      this.camera.fov = this.baseFov;
+      this.camera.updateProjectionMatrix();
+    }
+  }
+
+  getResolvedFlightCameraRig(): ResolvedFlightCameraRig {
+    return this.resolvedFpvRig;
   }
 
   setReplayCameraMode(mode: ReplayCameraMode): void {
@@ -1067,49 +1107,43 @@ export class ThreeRendererService {
     }
 
     if (mode === 'fpv') {
-      this.scratchOffset.set(0, 0.12, -0.18);
-      this.scratchOffset.applyQuaternion(drone.quaternion);
-
-      if (fx) {
-        this.scratchRight.set(1, 0, 0).applyQuaternion(drone.quaternion);
-        this.scratchUp.set(0, 1, 0).applyQuaternion(drone.quaternion);
-        this.scratchForward.set(0, 0, -1).applyQuaternion(drone.quaternion);
-        this.scratchOffset.addScaledVector(
-          this.scratchRight,
-          fx.positionOffset.x,
-        );
-        this.scratchOffset.addScaledVector(this.scratchUp, fx.positionOffset.y);
-        this.scratchOffset.addScaledVector(
-          this.scratchForward,
-          fx.positionOffset.z,
-        );
-      }
-
-      this.camera.position.copy(drone.position).add(this.scratchOffset);
-
-      this.scratchForward.set(0, 0, -1).applyQuaternion(drone.quaternion);
-      this.scratchUp.set(0, 1, 0).applyQuaternion(drone.quaternion);
-
-      const tilt =
-        this.cfg.fpvCameraTilt + (fx?.lookLagPitch ?? 0);
-      this.scratchForward
-        .multiplyScalar(Math.cos(tilt))
-        .addScaledVector(this.scratchUp, Math.sin(tilt))
-        .normalize();
-
-      if (fx) {
-        this.scratchRight.set(1, 0, 0).applyQuaternion(drone.quaternion);
-        this.scratchForward
-          .addScaledVector(this.scratchRight, fx.lookLagYaw)
-          .normalize();
-        this.scratchUp
-          .addScaledVector(this.scratchRight, fx.lookLagRoll)
-          .normalize();
-      }
-
-      this.scratchTarget.copy(this.camera.position).add(this.scratchForward);
-      this.camera.up.copy(this.scratchUp);
-      this.camera.lookAt(this.scratchTarget);
+      const aircraftPosition = {
+        x: drone.position.x,
+        y: drone.position.y,
+        z: drone.position.z,
+      };
+      const aircraftOrientation = {
+        x: drone.quaternion.x,
+        y: drone.quaternion.y,
+        z: drone.quaternion.z,
+        w: drone.quaternion.w,
+      };
+      const cosmetics = fx
+        ? {
+            positionOffset: fx.positionOffset,
+            lookLagPitch: fx.lookLagPitch,
+            lookLagYaw: fx.lookLagYaw,
+            lookLagRoll: fx.lookLagRoll,
+            fovOffsetDegrees: fx.fovOffsetDegrees,
+          }
+        : null;
+      const applied = threeFlightCameraViewAdapter.applyFpvBaseThenCosmetics(
+        this.camera,
+        {
+          aircraftPosition,
+          aircraftOrientation,
+          rig: this.resolvedFpvRig,
+          cosmetics,
+        },
+        {
+          offset: this.scratchOffset,
+          forward: this.scratchForward,
+          up: this.scratchUp,
+          right: this.scratchRight,
+          target: this.scratchTarget,
+        },
+      );
+      this.baseFov = applied.baseFovDegrees;
       return;
     }
 
@@ -2285,6 +2319,11 @@ export class ThreeRendererService {
       this.cfg.fpvCameraTilt = options.appliedConfig.fpvCameraTilt;
       this.cfg.chaseOffset = { ...options.appliedConfig.chaseOffset };
       this.cfg.chaseSmoothing = options.appliedConfig.chaseSmoothing;
+      // Keep tilt on the active resolved rig in sync with applied aircraft config.
+      this.resolvedFpvRig = {
+        ...this.resolvedFpvRig,
+        localCameraTiltRad: options.appliedConfig.fpvCameraTilt,
+      };
     }
 
     if (!this.scene || !this.drone) {
@@ -2549,4 +2588,30 @@ function applyGateMaterials(handle: GateHandle, visual: GateVisualState): void {
   }
   handle.frameMat.needsUpdate = true;
   handle.chevronMat.needsUpdate = true;
+}
+
+function createDefaultLegacyResolvedRig(tiltRad: number): ResolvedFlightCameraRig {
+  return {
+    rigId: 'legacy-fpv:default',
+    rigVersion: RESOLVED_FLIGHT_CAMERA_RIG_VERSION,
+    resolutionStrategy: 'legacy-renderer-compatible-v1',
+    localMountPosition: { ...LEGACY_FPV_MOUNT_POSITION },
+    localCameraTiltRad: tiltRad,
+    baseVerticalFovDegrees: LEGACY_FPV_BASE_FOV_DEGREES,
+    missionCaptureAspectRatio: DEFAULT_MISSION_CAPTURE_ASPECT,
+    nearMeters: LEGACY_FPV_NEAR_METERS,
+    farMeters: LEGACY_FPV_FAR_METERS,
+    projectionModelVersion: DEFAULT_PROJECTION_MODEL_VERSION,
+    sourceCameraProfile: {
+      profileId: null,
+      profileVersion: null,
+      sourceLocalPosition: null,
+      sourceCameraAngleDeg: null,
+      sourceDefaultFov: null,
+      mismatchDiagnostics: ['default renderer bootstrap rig'],
+    },
+    legacyCompatibilityUsed: true,
+    templateDerivedCamera: false,
+    cosmeticEffectsExcluded: true,
+  };
 }
