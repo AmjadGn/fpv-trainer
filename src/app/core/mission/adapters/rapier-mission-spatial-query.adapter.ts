@@ -30,6 +30,12 @@ const DEFAULT_LOS_EXCLUDE: readonly MissionSpatialQueryFilterCategory[] = [
 ];
 
 /**
+ * Endpoint tolerance (meters) for rays that terminate exactly on target geometry.
+ * Combined with authored targetSubjectId exclusion — not a large distance fudge.
+ */
+export const MISSION_LOS_ENDPOINT_EPSILON_METERS = 1e-3;
+
+/**
  * Rapier-backed mission spatial queries.
  * Never returns "clear" when infrastructure is unavailable or stale.
  * Does not expose Rapier handles through the port.
@@ -41,20 +47,14 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
 
   private locationGeneration = 0;
   private installed = false;
-  private subjectColliderBodyIds = new Set<string>();
 
-  install(options: {
-    readonly locationGeneration: number;
-    readonly subjectBodyIds?: readonly string[];
-  }): void {
+  install(options: { readonly locationGeneration: number }): void {
     this.locationGeneration = options.locationGeneration;
-    this.subjectColliderBodyIds = new Set(options.subjectBodyIds ?? []);
     this.installed = this.collision.isInstalled() && this.worldService.isInitialized();
   }
 
   uninstall(): void {
     this.installed = false;
-    this.subjectColliderBodyIds.clear();
     this.locationGeneration = 0;
   }
 
@@ -90,8 +90,8 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
     }
 
     const hit = this.castFirstHit(query.startWorld, query.endWorld, query.filter, {
-      ignoreSubjectGeometry: true,
       ignoreDrone: true,
+      targetSubjectId: query.targetSubjectId ?? query.subjectId,
     });
     if (!hit) {
       return {
@@ -134,8 +134,8 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
     }
 
     const hit = this.castFirstHit(query.startWorld, query.endWorld, query.filter, {
-      ignoreSubjectGeometry: false,
       ignoreDrone: true,
+      targetSubjectId: query.targetSubjectId,
     });
     if (!hit) {
       return {
@@ -185,6 +185,7 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
     }
 
     let visible = 0;
+    const targetSubjectId = query.targetSubjectId ?? query.subjectId;
     for (let i = 0; i < samples.length; i++) {
       const sample = samples[i]!;
       if (!this.isFiniteVec3(sample)) {
@@ -196,8 +197,8 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
         };
       }
       const hit = this.castFirstHit(query.originWorld, sample, query.filter, {
-        ignoreSubjectGeometry: true,
         ignoreDrone: true,
+        targetSubjectId,
       });
       if (!hit) {
         visible += 1;
@@ -243,7 +244,7 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
     start: Vec3,
     end: Vec3,
     filter: MissionSpatialQueryFilter | undefined,
-    options: { ignoreSubjectGeometry: boolean; ignoreDrone: boolean },
+    options: { ignoreDrone: boolean; targetSubjectId?: string },
   ): { distance: number; category: MissionObstructionCategory } | null {
     const world = this.worldService.getWorld();
     const R = this.worldService.getRapier();
@@ -265,10 +266,10 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
     const exclude = new Set([
       ...(filter?.exclude ?? DEFAULT_LOS_EXCLUDE),
       ...(options.ignoreDrone ? (['drone'] as const) : []),
-      ...(options.ignoreSubjectGeometry ? (['subject-geometry'] as const) : []),
     ]);
 
     const droneBody = this.worldService.getDroneBody();
+    const targetSubjectId = options.targetSubjectId;
 
     // Collect hits via intersectionsWithRay for stable ordering by toi.
     const hits: Array<{ toi: number; category: MissionObstructionCategory }> = [];
@@ -284,8 +285,14 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
         if (droneBody && collider.parent()?.handle === droneBody.handle) {
           return true;
         }
-        const body = this.worldService.findBodyByColliderHandle(collider.handle);
+        if (collider.isSensor()) {
+          return true;
+        }
+
         const curatedCategory = this.collision.categoryForColliderHandle(collider.handle);
+        const curatedSubject = this.collision.subjectIdForColliderHandle(collider.handle);
+        const body = this.worldService.findBodyByColliderHandle(collider.handle);
+
         let spatialCategory: MissionSpatialQueryFilterCategory;
         if (curatedCategory) {
           spatialCategory = this.collision.toSpatialCategory(curatedCategory);
@@ -299,6 +306,16 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
           return true;
         }
         if (!include.has(spatialCategory)) {
+          return true;
+        }
+
+        if (
+          targetSubjectId &&
+          curatedSubject !== undefined &&
+          curatedSubject === targetSubjectId
+        ) {
+          // Target-subject exclusion also covers endpoint-on-target cases
+          // (MISSION_LOS_ENDPOINT_EPSILON_METERS documents the surface tolerance policy).
           return true;
         }
 

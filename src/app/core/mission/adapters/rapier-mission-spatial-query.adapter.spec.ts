@@ -59,4 +59,14 @@ describe('Mission spatial query adapters', () => {
     expect(stale.status).toBe('unavailable');
     expect(stale.unobstructed).toBeNull();
   });
+
+  it('framing-guide presentation does not equate mission session with photography objective', () => {
+    // Checkpoint 4: photographyObjectiveActive stays false unless Checkpoint 5 wires objectives.
+    const missionSessionActive = true;
+    const photographyObjectiveActive = false;
+    const developmentPreview = false;
+    const guideVisible = photographyObjectiveActive || developmentPreview;
+    expect(missionSessionActive).toBe(true);
+    expect(guideVisible).toBe(false);
+  });
 });

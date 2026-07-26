@@ -193,10 +193,15 @@ export class LocationLoadCoordinator {
       try {
         await this.runtime.unload(this.activeHandleId);
       } catch (err) {
-        this.facade.reportFailure({
-          code: 'LOCATION_UNLOAD_FAILED',
-          message: err instanceof Error ? err.message : 'Location unload failed',
-        });
+        const message = err instanceof Error ? err.message : 'Location unload failed';
+        const code = message.includes('LOCATION_PREVIOUS_COLLISION_RESTORE_FAILED')
+          ? 'LOCATION_PREVIOUS_COLLISION_RESTORE_FAILED'
+          : 'LOCATION_UNLOAD_FAILED';
+        this.facade.reportFailure({ code, message });
+        this.activeHandleId = null;
+        // Restoration failure must not be reported as a successful unload.
+        this.setProgress({ stage: 'failed', fraction: 0, message });
+        return;
       }
       this.activeHandleId = null;
     }

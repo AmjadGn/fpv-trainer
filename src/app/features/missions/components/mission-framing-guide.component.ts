@@ -90,8 +90,9 @@ export class MissionFramingGuideComponent {
   readonly viewportWidth = input.required<number>();
   /** Viewport height in CSS pixels (not device pixels). */
   readonly viewportHeight = input.required<number>();
-  /** Active photography objective or explicit development preview. */
+  /** Active photography objective (Checkpoint 5+). Not the same as mission session active. */
   readonly active = input(false);
+  /** Explicit development preview — Checkpoint 4 shipping path keeps this off unless flagged. */
   readonly preview = input(false);
 
   protected readonly visible = computed(() => this.active() || this.preview());

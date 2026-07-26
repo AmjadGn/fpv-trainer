@@ -17,6 +17,8 @@ export default defineConfig({
     include: [
       'packages/**/*.spec.ts',
       'src/app/core/engineering/**/*.spec.ts',
+      'src/app/core/physics/services/physics-world.suspension.spec.ts',
+      'src/app/core/mission/adapters/curated-location-runtime-install.rollback.spec.ts',
     ],
     setupFiles: [],
   },

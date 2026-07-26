@@ -14,6 +14,7 @@ export interface CuratedLocationCollisionHandle {
   readonly bodyIds: readonly string[];
   readonly colliderCount: number;
   readonly categoryByBodyId: ReadonlyMap<string, CuratedColliderCategory>;
+  readonly subjectIdByBodyId: ReadonlyMap<string, string | null>;
 }
 
 /**
@@ -26,7 +27,9 @@ export class RapierCuratedLocationCollisionAdapter {
 
   private ownedBodyIds: string[] = [];
   private categoryByBodyId = new Map<string, CuratedColliderCategory>();
+  private subjectIdByBodyId = new Map<string, string | null>();
   private categoryByColliderHandle = new Map<number, CuratedColliderCategory>();
+  private subjectIdByColliderHandle = new Map<number, string | null>();
   private installed = false;
 
   buildDescriptors(locationId: string): readonly CuratedCollisionDescriptor[] {
@@ -57,17 +60,21 @@ export class RapierCuratedLocationCollisionAdapter {
       bodyIds.push(registered.id);
       this.ownedBodyIds.push(registered.id);
       this.categoryByBodyId.set(registered.id, desc.category);
+      this.subjectIdByBodyId.set(registered.id, desc.subjectId ?? null);
       for (const col of registered.colliders) {
         this.categoryByColliderHandle.set(col.handle, desc.category);
+        this.subjectIdByColliderHandle.set(col.handle, desc.subjectId ?? null);
       }
     }
 
     this.installed = true;
+    this.world.refreshSceneQueries();
     return {
       locationId,
       bodyIds,
       colliderCount: bodyIds.length,
       categoryByBodyId: new Map(this.categoryByBodyId),
+      subjectIdByBodyId: new Map(this.subjectIdByBodyId),
     };
   }
 
@@ -77,8 +84,13 @@ export class RapierCuratedLocationCollisionAdapter {
     }
     this.ownedBodyIds = [];
     this.categoryByBodyId.clear();
+    this.subjectIdByBodyId.clear();
     this.categoryByColliderHandle.clear();
+    this.subjectIdByColliderHandle.clear();
     this.installed = false;
+    if (this.world.isInitialized()) {
+      this.world.refreshSceneQueries();
+    }
   }
 
   isInstalled(): boolean {
@@ -91,6 +103,18 @@ export class RapierCuratedLocationCollisionAdapter {
 
   categoryForColliderHandle(handle: number): CuratedColliderCategory | null {
     return this.categoryByColliderHandle.get(handle) ?? null;
+  }
+
+  /**
+   * Authored subject ownership for a curated collider handle.
+   * Returns null when the collider is not subject-owned (terrain/walls/etc.).
+   * Unknown handles return undefined.
+   */
+  subjectIdForColliderHandle(handle: number): string | null | undefined {
+    if (!this.subjectIdByColliderHandle.has(handle)) {
+      return undefined;
+    }
+    return this.subjectIdByColliderHandle.get(handle) ?? null;
   }
 
   toSpatialCategory(

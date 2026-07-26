@@ -14,7 +14,7 @@ import type {
   EnvironmentColliderDefinition,
 } from '../../../core/physics/models/collision.models';
 
-import { ASSET_IDS } from './identity';
+import { ASSET_IDS, SUBJECT_IDS } from './identity';
 import { COASTAL_RUINS_LAYOUT, IDENTITY_QUAT } from './layout';
 
 export type CuratedColliderCategory =
@@ -30,6 +30,10 @@ export interface CuratedCollisionDescriptor {
   readonly assetRefId: string;
   readonly category: CuratedColliderCategory;
   readonly definition: EnvironmentColliderDefinition;
+  /** Photography subject ownership for target-specific LOS filtering. */
+  readonly subjectId?: string;
+  /** Optional stable query reference for the authored target surface. */
+  readonly queryTargetId?: string;
 }
 
 const L = COASTAL_RUINS_LAYOUT;
@@ -120,6 +124,8 @@ export function buildCoastalRuinsCollisionDescriptors(): readonly CuratedCollisi
     id: 'curated:arch-pillar-l',
     assetRefId: ASSET_IDS.archCollision,
     category: 'subject-geometry',
+    subjectId: SUBJECT_IDS.stoneSeaArch,
+    queryTargetId: SUBJECT_IDS.stoneSeaArch,
     definition: box(
       'curated:arch-pillar-l',
       'mer-arch',
@@ -142,6 +148,8 @@ export function buildCoastalRuinsCollisionDescriptors(): readonly CuratedCollisi
     id: 'curated:arch-pillar-r',
     assetRefId: ASSET_IDS.archCollision,
     category: 'subject-geometry',
+    subjectId: SUBJECT_IDS.stoneSeaArch,
+    queryTargetId: SUBJECT_IDS.stoneSeaArch,
     definition: box(
       'curated:arch-pillar-r',
       'mer-arch',
@@ -164,6 +172,8 @@ export function buildCoastalRuinsCollisionDescriptors(): readonly CuratedCollisi
     id: 'curated:arch-lintel',
     assetRefId: ASSET_IDS.archCollision,
     category: 'subject-geometry',
+    subjectId: SUBJECT_IDS.stoneSeaArch,
+    queryTargetId: SUBJECT_IDS.stoneSeaArch,
     definition: box(
       'curated:arch-lintel',
       'mer-arch',
@@ -189,6 +199,8 @@ export function buildCoastalRuinsCollisionDescriptors(): readonly CuratedCollisi
     id: 'curated:tower-base',
     assetRefId: ASSET_IDS.towerCollision,
     category: 'subject-geometry',
+    subjectId: SUBJECT_IDS.ruinedLookout,
+    queryTargetId: SUBJECT_IDS.ruinedLookout,
     definition: box(
       'curated:tower-base',
       'mer-tower',
@@ -207,6 +219,8 @@ export function buildCoastalRuinsCollisionDescriptors(): readonly CuratedCollisi
     id: 'curated:tower-shaft',
     assetRefId: ASSET_IDS.towerCollision,
     category: 'subject-geometry',
+    subjectId: SUBJECT_IDS.ruinedLookout,
+    queryTargetId: SUBJECT_IDS.ruinedLookout,
     definition: box(
       'curated:tower-shaft',
       'mer-tower',
@@ -228,6 +242,8 @@ export function buildCoastalRuinsCollisionDescriptors(): readonly CuratedCollisi
     id: 'curated:cliffside-wall',
     assetRefId: ASSET_IDS.wallsCollision,
     category: 'subject-geometry',
+    subjectId: SUBJECT_IDS.cliffsideRuin,
+    queryTargetId: SUBJECT_IDS.cliffsideRuin,
     definition: box(
       'curated:cliffside-wall',
       'mer-cliffside',

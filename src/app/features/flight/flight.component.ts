@@ -272,7 +272,15 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   protected readonly audioMuted = signal(false);
   protected readonly paused = signal(false);
   protected readonly missionActive = signal(false);
+  /**
+   * Checkpoint 4: remains false until Checkpoint 5 wires real photography objectives.
+   * Framing guide shipping rule: visible only while a photography objective is active,
+   * unless an explicit development preview flag is set.
+   */
+  protected readonly photographyObjectiveActive = signal(false);
   protected readonly missionFramingPreview = signal(false);
+  /** Invalidates in-flight mission preparation after teardown / newer launch. */
+  private missionPrepareGeneration = 0;
   protected readonly viewportCssSize = signal({ width: 1280, height: 720 });
   protected readonly settingsOpen = signal(false);
   protected readonly rateMenuOpen = signal(false);
@@ -1886,12 +1894,14 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
 
     if (intent.kind === 'mission') {
       // Mission flights reuse the shared free-flight runtime path.
+      // Do not mark missionActive until preparation succeeds.
       this.playMode.set('free');
       this.pendingLaunchIntent = intent;
       this.selectedAircraft.select(intent.aircraftId);
       this.guidance.stop();
-      this.missionFramingPreview.set(!!intent.developmentFlags?.framingGuidePreview);
-      this.missionActive.set(true);
+      this.missionActive.set(false);
+      this.photographyObjectiveActive.set(false);
+      this.missionFramingPreview.set(false);
       return;
     }
   }
@@ -1973,8 +1983,21 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       framingGuidePreview?: boolean;
     };
   }): Promise<void> {
+    const prepareGeneration = ++this.missionPrepareGeneration;
+    this.missionActive.set(false);
+    this.photographyObjectiveActive.set(false);
+    this.missionFramingPreview.set(false);
+
     const prepared = await this.missionLaunchCoordinator.prepareLaunch(intent);
+    if (prepareGeneration !== this.missionPrepareGeneration) {
+      // Stale async completion after teardown or a newer mission launch.
+      return;
+    }
     if (!prepared.ok) {
+      this.missionActive.set(false);
+      this.photographyObjectiveActive.set(false);
+      this.missionFramingPreview.set(false);
+      this.missionRuntimeCoordinator.detach();
       this.environmentError.set(prepared.diagnostic.message);
       return;
     }
@@ -1993,9 +2016,16 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       this.flight.reset();
     }
     this.syncRendererPose();
+
+    if (prepareGeneration !== this.missionPrepareGeneration) {
+      return;
+    }
+
+    this.missionRuntimeCoordinator.attach(prepared.sessionGeneration);
+    // Checkpoint 4: no objective runtime yet — guide only via explicit preview.
+    this.photographyObjectiveActive.set(false);
     this.missionFramingPreview.set(!!intent.developmentFlags?.framingGuidePreview);
     this.missionActive.set(true);
-    this.missionRuntimeCoordinator.attach(prepared.sessionGeneration);
   }
 
   private startTrainingModule(module: TrainingModuleDefinition): void {
@@ -3455,10 +3485,12 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
 
   private teardown(): void {
     this.guidance.stop();
+    this.missionPrepareGeneration += 1;
+    this.missionActive.set(false);
+    this.photographyObjectiveActive.set(false);
+    this.missionFramingPreview.set(false);
     void this.missionRuntimeCoordinator.exitAndTeardown();
     this.missionSessionFacade.reset();
-    this.missionActive.set(false);
-    this.missionFramingPreview.set(false);
     this.authoritativeStepPublisher.clearObservers();
     this.flightCameraSnapshotAdapter.clearActiveRig();
     this.physicsIntegrity.clearLock();
