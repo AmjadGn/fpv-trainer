@@ -51,10 +51,19 @@
         Readiness:
         <strong>{{ readinessLabel() }}</strong>
       </span>
-      @if (snapshot().dirty) {
+      @if (snapshot().dirty || snapshot().saveState === 'unsaved') {
         <span class="builder__dirty">Unsaved changes</span>
-      } @else if (snapshot().sessionSaved) {
-        <span class="builder__saved">Draft saved for this session</span>
+      } @else if (snapshot().saveState === 'saving') {
+        <span class="builder__saved">Saving…</span>
+      } @else if (snapshot().saveState === 'save-failed') {
+        <span class="builder__dirty">Saving failed — retry</span>
+      } @else if (snapshot().saveState === 'storage-unavailable') {
+        <span class="builder__dirty">Session-only save</span>
+      } @else if (snapshot().saveState === 'saved') {
+        <span class="builder__saved">Saved locally on this device</span>
+      }
+      @if (snapshot().lastSavedAtIso && snapshot().saveState === 'saved') {
+        <span class="builder__saved">Last saved at {{ lastSavedClock() }}</span>
       }
       @if (snapshot().compileStale) {
         <span class="builder__stale">Compile outdated</span>
@@ -806,17 +815,21 @@
     <div class="builder__actions" role="region" aria-label="Save and compile actions">
       <div class="builder__actions-copy">
         <p>
-          <strong>Save Draft Session</strong>
-          keeps the current build in memory for this browser session.
-          Permanent saved builds are coming in a later milestone.
+          <strong>Save Draft</strong>
+          stores this build on this device so you can reopen it from the Hangar after refresh.
         </p>
+        @if (snapshot().persistenceBackend === 'memory-fallback') {
+          <p class="builder__blocked">
+            Persistent storage is unavailable. Your changes are currently saved only for this session.
+          </p>
+        }
         @if (compileDisabledReason(); as reason) {
           <p class="builder__blocked" id="compile-disabled-reason">{{ reason }}</p>
         }
       </div>
       <div class="builder__actions-buttons">
         <button type="button" fpvButton variant="secondary" size="sm" (click)="save()">
-          Save Draft Session
+          Save Draft
         </button>
         <button
           type="button"

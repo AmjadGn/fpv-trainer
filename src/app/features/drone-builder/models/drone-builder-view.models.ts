@@ -51,6 +51,13 @@ export type BuildReadinessState =
   | 'ready-to-compile'
   | 'compiled';
 
+/** Explicit save lifecycle — avoid contradictory booleans. */
+export type BuilderSaveState =
+  | 'unsaved'
+  | 'saving'
+  | 'saved'
+  | 'save-failed'
+  | 'storage-unavailable';
 export type CompatibilitySummaryLevel =
   | 'cannot-compile'
   | 'needs-attention'
@@ -207,7 +214,9 @@ export interface BuilderSessionSnapshot {
   readonly buildName: string;
   readonly nameManuallySet: boolean;
   readonly dirty: boolean;
-  readonly sessionSaved: boolean;
+  readonly saveState: BuilderSaveState;
+  readonly lastSavedAtIso: string | null;
+  readonly persistenceBackend: 'indexeddb' | 'memory-fallback' | 'unknown';
   readonly activeCategory: ComponentType;
   readonly selectedRevisionIdsBySlot: Readonly<Record<string, string>>;
   readonly canCompile: boolean;
@@ -217,4 +226,5 @@ export interface BuilderSessionSnapshot {
   readonly launchAircraftName: string | null;
   readonly readiness: BuildReadinessState;
   readonly compatibilityLevel: CompatibilitySummaryLevel;
+  readonly hasMissingComponents: boolean;
 }

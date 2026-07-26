@@ -200,7 +200,7 @@ describe('DroneBuilderFacadeService Simple Builder (CP2)', () => {
     it('registers a selectable aircraft on success and marks compile stale after edits', async () => {
       await facade.bootstrap();
       facade.startFromIntent('long-range');
-      facade.compile();
+      await facade.compile();
       expect(session.phase()).toBe('compiled');
       const aircraftId = session.lastCompile()?.aircraftId;
       expect(aircraftId).toBeTruthy();
@@ -220,14 +220,14 @@ describe('DroneBuilderFacadeService Simple Builder (CP2)', () => {
     it('does not replace the selected aircraft when compile is blocked', async () => {
       await facade.bootstrap();
       const previousId = selected.selectedAircraftId();
-      facade.compile();
+      await facade.compile();
       expect(selected.selectedAircraftId()).toBe(previousId);
     });
 
     it('compileAndFly selects the exact compiled aircraft through the flight shell', async () => {
       await facade.bootstrap();
       facade.startFromIntent('racing');
-      const ok = facade.compileAndFly();
+      const ok = await facade.compileAndFly();
       expect(ok).toBe(true);
       expect(shell.view()).toBe('flight');
       const intent = shell.flightIntent();
@@ -242,7 +242,7 @@ describe('DroneBuilderFacadeService Simple Builder (CP2)', () => {
     it('refuses to launch a stale compilation without recompiling', async () => {
       await facade.bootstrap();
       facade.startFromIntent('freestyle');
-      facade.compile();
+      await facade.compile();
       const compiledId = session.lastCompile()?.aircraftId;
       facade.setActiveCategory('propeller');
       const current = session.selectedRevisionIdsBySlot()['propeller'];
@@ -253,7 +253,7 @@ describe('DroneBuilderFacadeService Simple Builder (CP2)', () => {
       expect(session.compileStale()).toBe(true);
 
       // canCompile may still be true; compileAndFly should recompile rather than launch stale.
-      const ok = facade.compileAndFly();
+      const ok = await facade.compileAndFly();
       expect(ok).toBe(true);
       expect(session.compileStale()).toBe(false);
       expect(session.lastCompile()?.aircraftId).toBeTruthy();

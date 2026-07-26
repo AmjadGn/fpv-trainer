@@ -26,8 +26,11 @@ import {
   type ValidationReport,
 } from '@fpv/compatibility-engine';
 import {
-  createMemoryBuildRepository,
-  type DroneBuildRepository,
+  createCompiledRevisionEnvelope,
+  createDraftEnvelope,
+  type PersistedCompiledRevisionRecord,
+  type PersistedDraftRecord,
+  type PersistedSourceType,
 } from '@fpv/drone-build-persistence';
 import {
   getFactoryManifest,
@@ -37,11 +40,13 @@ import {
 import {
   asCatalogReleaseId,
   asDroneBuildId,
+  V1_1_VERSION_MANIFEST,
 } from '@fpv/engineering-kernel';
 
 import { AircraftCatalogService } from '../../../core/aircraft/services/aircraft-catalog.service';
 import { SelectedAircraftService } from '../../../core/aircraft/services/selected-aircraft.service';
 import { AppShellService } from '../../../core/shell/app-shell.service';
+import { DroneBuildPersistenceService } from '../../../core/drone-build/drone-build-persistence.service';
 import {
   BUILD_INTENT_PROFILES,
   defaultBuildNameForIntent,
@@ -123,16 +128,19 @@ export class DroneBuilderFacadeService {
   private readonly aircraftCatalog = inject(AircraftCatalogService);
   private readonly selectedAircraft = inject(SelectedAircraftService);
   private readonly shell = inject(AppShellService);
+  private readonly persistence = inject(DroneBuildPersistenceService);
 
   private catalogSnapshot: ComponentCatalogSnapshot | null = null;
   private draft: DroneBuildDraft | null = null;
   private lastPublishedRevision: DroneBuildRevision | null = null;
   private lastCompilation: CompilationResult | null = null;
   private lastEngineeringPreview: CompilationResult | null = null;
-  private buildRepo: DroneBuildRepository = createMemoryBuildRepository();
   private readonly policy: ValidationPolicy = FREE_FLIGHT_POLICY;
   private pendingIntentId: BuildIntentId | null = null;
   private baselineSlots: SlotMap = {};
+  private draftCreatedAtIso: string | null = null;
+  private draftSourceType: PersistedSourceType = 'user-draft';
+  private compileSequence = 0;
 
   private readonly _validationIssues = signal<BuilderCompatibilityIssueView[]>(
     [],
@@ -224,6 +232,12 @@ export class DroneBuilderFacadeService {
     this.session.setPhase('loadingCatalog');
     this._errorMessage.set(null);
     try {
+      await this.persistence.ensureReady();
+      this.session.setPersistenceBackend(this.persistence.backend());
+      if (this.persistence.backend() === 'memory-fallback') {
+        this.session.setSaveState('storage-unavailable');
+        this._saveNotice.set(this.persistence.userMessage());
+      }
       this.catalogSnapshot = buildOfficialCatalogSnapshot();
       this._catalogLoaded.set(true);
       if (!this.draft) {
@@ -336,13 +350,21 @@ export class DroneBuilderFacadeService {
     this.lastEngineeringPreview = null;
     this.baselineSlots = {};
     this.pendingIntentId = null;
+    this.draftCreatedAtIso = null;
+    this.draftSourceType = 'user-draft';
+    this.compileSequence = 0;
     this._validationIssues.set([]);
     this._engineeringStats.set([]);
     this._saveNotice.set(null);
     this._errorMessage.set(null);
     const mode = this.session.mode();
+    const backend = this.session.persistenceBackend();
     this.session.resetSession();
     this.session.setMode(mode);
+    this.session.setPersistenceBackend(backend);
+    if (backend === 'memory-fallback') {
+      this.session.setSaveState('storage-unavailable');
+    }
   }
 
   selectComponentForActiveCategory(revisionId: string): void {
@@ -467,6 +489,12 @@ export class DroneBuilderFacadeService {
       return null;
     }
     this.ensureCatalog();
+    this.refreshMissingComponentState();
+    if (this.session.hasMissingComponents()) {
+      this.session.setPhase('invalid');
+      this.updateReadiness();
+      return null;
+    }
     this.session.setPhase('validating');
 
     const missing = this.missingRequiredSlots();
@@ -521,40 +549,244 @@ export class DroneBuilderFacadeService {
       return false;
     }
     this.session.setPhase('saving');
+    this.session.setSaveState('saving');
     this._saveNotice.set(null);
+    this._errorMessage.set(null);
     try {
-      const existing = await this.buildRepo.getBuild(this.draft.buildId);
+      await this.persistence.ensureReady();
+      const now = new Date().toISOString();
+      const existing = await this.persistence.getDraftRecord(this.draft.buildId);
+      const createdAtIso =
+        existing?.ok === true
+          ? existing.record.createdAtIso
+          : (this.draftCreatedAtIso ?? now);
+      this.draftCreatedAtIso = createdAtIso;
+
+      const compiledForBuild =
+        await this.persistence.listCompiledRevisionRecordsForBuild(
+          this.draft.buildId,
+        );
+      const hasCompiled = compiledForBuild.valid.length > 0;
+
+      const envelope = createDraftEnvelope({
+        draft: this.draft,
+        intentId: this.session.intentId(),
+        sourceType: this.draftSourceType,
+        createdAtIso,
+        updatedAtIso: now,
+        compileStatus: hasCompiled
+          ? this.session.compileStale() || !this.session.lastCompile()?.ok
+            ? 'stale-vs-draft'
+            : 'compiled'
+          : 'never-compiled',
+        attentionStatus: this.session.hasMissingComponents()
+          ? 'missing-components'
+          : 'ok',
+      });
+
       const build = {
         buildId: this.draft.buildId,
         name: this.draft.name,
         description: this.draft.description,
         status: 'draft' as const,
         draft: this.draft,
-        publishedRevisionIds: existing?.publishedRevisionIds ?? [],
-        latestPublishedRevisionId: existing?.latestPublishedRevisionId ?? null,
+        publishedRevisionIds: (
+          await this.persistence.getBuild(this.draft.buildId)
+        )?.publishedRevisionIds ??
+          compiledForBuild.valid.map((r) => r.revisionId),
+        latestPublishedRevisionId:
+          (await this.persistence.getBuild(this.draft.buildId))
+            ?.latestPublishedRevisionId ??
+          compiledForBuild.valid[compiledForBuild.valid.length - 1]
+            ?.revisionId ??
+          null,
       };
-      await this.buildRepo.saveBuild(build);
-      await this.buildRepo.saveDraft(this.draft);
-      this.session.setDirty(false);
-      this.session.setSessionSaved(true);
-      this._saveNotice.set(
-        'Draft saved for this session. Permanent saved builds are coming in a later milestone.',
-      );
+
+      await this.persistence.saveBuild(build);
+      await this.persistence.saveDraftRecord(envelope);
+
+      const persistent = this.persistence.backend() === 'indexeddb';
+      this.session.setPersistenceBackend(this.persistence.backend());
+      if (persistent) {
+        this.session.setSaveState('saved', now);
+        this._saveNotice.set(
+          `Saved locally on this device · Last saved at ${formatSaveClock(now)}`,
+        );
+      } else {
+        this.session.setSaveState('storage-unavailable', now);
+        this._saveNotice.set(
+          this.persistence.userMessage() ??
+            'Persistent storage is unavailable. Your changes are currently saved only for this session.',
+        );
+      }
       this.session.setPhase(this.session.canCompile() ? 'valid' : 'invalid');
       this.updateReadiness();
       return true;
     } catch (error) {
+      this.session.setSaveState('save-failed');
       this._errorMessage.set(
         error instanceof Error ? error.message : String(error),
       );
+      this._saveNotice.set('Saving failed — retry');
       this.session.setPhase(this.session.canCompile() ? 'valid' : 'invalid');
       return false;
     }
   }
 
-  compile(): BuilderCompatibilityIssueView[] | CompilationResult {
+  /** Reopen a persisted draft into the shared builder session. */
+  async openDraft(buildId: string): Promise<boolean> {
+    await this.persistence.ensureReady();
+    this.ensureCatalog();
+    const result = await this.persistence.getDraftRecord(buildId);
+    if (!result) {
+      this._errorMessage.set('Saved draft was not found.');
+      return false;
+    }
+    if (!result.ok) {
+      this._errorMessage.set(
+        result.attentionStatus === 'unsupported-schema'
+          ? 'This saved draft uses an unsupported schema and cannot be opened safely.'
+          : 'This saved draft is damaged and cannot be opened. It was preserved for recovery.',
+      );
+      return false;
+    }
+
+    const record = result.record;
+    this.applyPersistedDraft(record);
+    this.revalidate();
+    this.session.setSaveState(
+      this.persistence.backend() === 'indexeddb' ? 'saved' : 'storage-unavailable',
+      record.updatedAtIso,
+    );
+    this._saveNotice.set(
+      this.persistence.backend() === 'indexeddb'
+        ? `Saved locally on this device · Last saved at ${formatSaveClock(record.updatedAtIso)}`
+        : this.persistence.userMessage(),
+    );
+    return true;
+  }
+
+  /** Duplicate the current draft or a persisted draft into a new build ID. */
+  async duplicateDraft(sourceBuildId?: string): Promise<string | null> {
+    await this.persistence.ensureReady();
+    let source: PersistedDraftRecord | null = null;
+    if (sourceBuildId) {
+      const loaded = await this.persistence.getDraftRecord(sourceBuildId);
+      if (!loaded?.ok) {
+        this._errorMessage.set('Could not duplicate — source draft unavailable.');
+        return null;
+      }
+      source = loaded.record;
+    } else if (this.draft) {
+      source = createDraftEnvelope({
+        draft: this.draft,
+        intentId: this.session.intentId(),
+        sourceType: this.draftSourceType,
+        createdAtIso: this.draftCreatedAtIso ?? new Date().toISOString(),
+      });
+    }
+    if (!source) {
+      this._errorMessage.set('Nothing to duplicate.');
+      return null;
+    }
+
+    const newBuildId = `user-copy-${Date.now().toString(36)}`;
+    const copyName = `Copy of ${source.displayName}`;
+    const copiedDraft = createDraft({
+      buildId: newBuildId,
+      name: copyName,
+      description: source.draft.description,
+      catalogReleaseId: source.draft.catalogReleaseId,
+      selections: source.draft.selections.map((s) => ({ ...s })),
+      topology: source.draft.topology.map((e) => ({ ...e })),
+      tuning: { ...source.draft.tuning },
+    });
+    const now = new Date().toISOString();
+    const envelope = createDraftEnvelope({
+      draft: copiedDraft,
+      intentId: source.intentId,
+      sourceType: 'user-draft',
+      createdAtIso: now,
+      updatedAtIso: now,
+      compileStatus: 'never-compiled',
+    });
+    await this.persistence.saveDraftRecord(envelope);
+    await this.persistence.saveBuild({
+      buildId: copiedDraft.buildId,
+      name: copiedDraft.name,
+      description: copiedDraft.description,
+      status: 'draft',
+      draft: copiedDraft,
+      publishedRevisionIds: [],
+      latestPublishedRevisionId: null,
+    });
+    this.applyPersistedDraft(envelope);
+    this.revalidate();
+    this.session.setSaveState(
+      this.persistence.backend() === 'indexeddb' ? 'saved' : 'storage-unavailable',
+      now,
+    );
+    this._saveNotice.set(`Duplicated as “${copyName}”.`);
+    return newBuildId;
+  }
+
+  /**
+   * Delete a draft. Compiled revisions are preserved by design.
+   * UI must confirm before calling.
+   */
+  async deleteDraft(buildId: string): Promise<boolean> {
+    await this.persistence.ensureReady();
+    try {
+      await this.persistence.deleteDraftRecord(buildId);
+      await this.persistence.deleteBuild(buildId);
+      if (this.draft?.buildId === buildId) {
+        this.resetBuild();
+      }
+      this._saveNotice.set(
+        'Draft deleted. Compiled revisions (if any) remain flyable in the Hangar.',
+      );
+      return true;
+    } catch (error) {
+      this._errorMessage.set(
+        error instanceof Error ? error.message : String(error),
+      );
+      return false;
+    }
+  }
+
+  async renameCurrentDraft(name: string): Promise<boolean> {
+    this.setBuildName(name);
+    return this.saveDraft();
+  }
+
+  async listPersistedDrafts(): Promise<readonly PersistedDraftRecord[]> {
+    await this.persistence.ensureReady();
+    const listed = await this.persistence.listDraftRecords();
+    return listed.valid;
+  }
+
+  async listCompiledRevisionsForCurrentBuild(): Promise<
+    readonly PersistedCompiledRevisionRecord[]
+  > {
+    if (!this.draft) return [];
+    await this.persistence.ensureReady();
+    const listed =
+      await this.persistence.listCompiledRevisionRecordsForBuild(
+        this.draft.buildId,
+      );
+    return listed.valid;
+  }
+
+  async compile(): Promise<BuilderCompatibilityIssueView[] | CompilationResult> {
     if (!this.draft) {
       this._errorMessage.set('Choose a flying style before compiling.');
+      return this._validationIssues();
+    }
+    if (this.session.hasMissingComponents()) {
+      this._errorMessage.set(
+        'Replace outdated or missing components before compiling.',
+      );
+      this.session.setPhase('compileFailed');
       return this._validationIssues();
     }
     const previouslySelected = this.selectedAircraft.selectedAircraftId();
@@ -587,6 +819,7 @@ export class DroneBuilderFacadeService {
     this.session.setPhase('compiling');
     this.ensureCatalog();
 
+    this.compileSequence += 1;
     const revisionId = `${this.draft.buildId}@${Date.now().toString(36)}`;
     const published = publishRevision(
       this.draft,
@@ -608,10 +841,48 @@ export class DroneBuilderFacadeService {
       this._validationIssues.set(
         this.mapper.mapValidationReport(result.validation),
       );
-      // Failed compile must not replace the currently selected aircraft.
       if (this.selectedAircraft.selectedAircraftId() !== previouslySelected) {
         this.selectedAircraft.select(previouslySelected);
       }
+      this.updateReadiness();
+      return result;
+    }
+
+    const existingCompiled =
+      await this.persistence.listCompiledRevisionRecordsForBuild(
+        this.draft.buildId,
+      );
+    const duplicate = existingCompiled.valid.find(
+      (r) =>
+        r.artifactFingerprint === result.specification!.artifactFingerprint,
+    );
+    if (duplicate) {
+      this.lastPublishedRevision = duplicate.revision;
+      this.lastCompilation = result;
+      this._engineeringStats.set(
+        this.mapper.mapEngineeringStats(result.specification),
+      );
+      const definition = createAircraftDefinitionFromCompilation({
+        aircraftId: duplicate.aircraftId,
+        displayName: duplicate.displayNameAtCompile,
+        buildId: duplicate.buildId,
+        revisionId: duplicate.revisionId,
+        intentId: duplicate.intentId,
+        presentationTemplateAircraftId: duplicate.presentationPackRef,
+        compilation: result,
+      });
+      this.aircraftCatalog.registerCompiledAircraft(definition);
+      this.selectedAircraft.select(duplicate.aircraftId);
+      this.session.setLastCompile(
+        this.mapper.mapCompileResult(
+          result,
+          duplicate.aircraftId,
+          duplicate.displayNameAtCompile,
+        ),
+      );
+      this.session.setCompileStale(false);
+      this.session.setPhase('compiled');
+      this.session.setDirty(false);
       this.updateReadiness();
       return result;
     }
@@ -646,6 +917,75 @@ export class DroneBuilderFacadeService {
       return result;
     }
 
+    const spec = result.specification;
+    const artifact = {
+      buildFingerprint: spec.buildFingerprint,
+      compilationContextFingerprint: spec.compilationContextFingerprint,
+      runtimeCompatibilitySignature: spec.runtimeCompatibilitySignature,
+      artifactFingerprint: spec.artifactFingerprint,
+      engineeringModelVersion: spec.versionManifest.engineeringModelVersion,
+      compilerVersion: spec.versionManifest.compilerVersion,
+      specification: spec,
+      createdAtIso: new Date().toISOString(),
+      trustStatus: 'local' as const,
+    };
+
+    const revisionLabel = `Revision ${existingCompiled.valid.length + 1}`;
+    const envelope = createCompiledRevisionEnvelope({
+      revision: published,
+      displayNameAtCompile: this.draft.name,
+      revisionLabel,
+      intentId: this.session.intentId(),
+      aircraftId,
+      buildFingerprint: spec.buildFingerprint,
+      artifactFingerprint: spec.artifactFingerprint,
+      compilationContextFingerprint: spec.compilationContextFingerprint,
+      runtimeCompatibilitySignature: spec.runtimeCompatibilitySignature,
+      engineeringModelVersion: spec.versionManifest.engineeringModelVersion,
+      compilerVersion: spec.versionManifest.compilerVersion,
+      validationVersion: V1_1_VERSION_MANIFEST.validationRulesVersion,
+      runtimeAdapterVersion: V1_1_VERSION_MANIFEST.runtimeAdapterVersion,
+      confidenceSummary: `${spec.propulsion.confidence} · ${spec.propulsion.dataProvenance}`,
+      massKg: spec.physicalAssembly.totalMassKg,
+      thrustNewtons: spec.propulsion.totalMaxThrustNewtons,
+      presentationPackRef: definition.category,
+      artifact,
+    });
+
+    try {
+      await this.persistence.ensureReady();
+      await this.persistence.saveCompiledRevisionRecord(envelope);
+      const existingBuild = await this.persistence.getBuild(this.draft.buildId);
+      const publishedIds = [
+        ...(existingBuild?.publishedRevisionIds ?? []),
+        published.revisionId,
+      ];
+      await this.persistence.saveBuild({
+        buildId: this.draft.buildId,
+        name: this.draft.name,
+        description: this.draft.description,
+        status: 'compiled',
+        draft: this.draft,
+        publishedRevisionIds: publishedIds,
+        latestPublishedRevisionId: published.revisionId,
+      });
+      await this.persistence.saveDraftRecord(
+        createDraftEnvelope({
+          draft: this.draft,
+          intentId: this.session.intentId(),
+          sourceType: this.draftSourceType,
+          createdAtIso: this.draftCreatedAtIso ?? new Date().toISOString(),
+          updatedAtIso: new Date().toISOString(),
+          compileStatus: 'compiled',
+        }),
+      );
+    } catch (error) {
+      this._saveNotice.set(
+        'Compile succeeded for this session, but persistent save of the compiled revision failed.',
+      );
+      console.warn('[builder] compiled revision persist failed', error);
+    }
+
     this.aircraftCatalog.registerCompiledAircraft(definition);
     this.selectedAircraft.select(aircraftId);
 
@@ -666,7 +1006,7 @@ export class DroneBuilderFacadeService {
    * Compile (if needed) and launch the compiled aircraft into the existing simulator.
    * Stale compilations cannot launch without recompilation.
    */
-  compileAndFly(): boolean {
+  async compileAndFly(): Promise<boolean> {
     const current = this.session.lastCompile();
     const needsCompile =
       !current?.ok ||
@@ -678,7 +1018,7 @@ export class DroneBuilderFacadeService {
       if (!this.session.canCompile()) {
         return false;
       }
-      this.compile();
+      await this.compile();
       if (this.session.phase() !== 'compiled' || !this.session.lastCompile()?.ok) {
         return false;
       }
@@ -755,8 +1095,100 @@ export class DroneBuilderFacadeService {
     return false;
   }
 
-  replaceBuildRepositoryForTests(repo: DroneBuildRepository): void {
-    this.buildRepo = repo;
+  replaceBuildRepositoryForTests(): void {
+    this.persistence.replaceWithMemoryForTests();
+    this.session.setPersistenceBackend('memory-fallback');
+  }
+
+  private applyPersistedDraft(record: PersistedDraftRecord): void {
+    this.ensureCatalog();
+    this.draft = {
+      ...record.draft,
+      selections: record.draft.selections.map((s) => ({ ...s })),
+      topology: record.draft.topology.map((e) => ({ ...e })),
+      tuning: { ...record.draft.tuning },
+      mutable: true,
+    };
+    this.draftCreatedAtIso = record.createdAtIso;
+    this.draftSourceType = record.sourceType;
+    this.lastPublishedRevision = null;
+    this.lastCompilation = null;
+    this._engineeringStats.set([]);
+    this.session.setIntentId(
+      (record.intentId as BuildIntentId | null) ?? null,
+    );
+    this.session.setBuildIdentity(record.buildId, record.displayName);
+    this.session.setNameManuallySet(true);
+    const slots = this.slotsFromSelections(this.draft.selections);
+    // Preserve original revision IDs even when missing from catalog.
+    for (const selection of record.draft.selections) {
+      const slot = TYPE_TO_SLOT[
+        this.catalogSnapshot?.revisions.get(selection.componentRevisionId)
+          ?.componentType ?? ''
+      ];
+      if (!slot) {
+        // Infer slot from selectionId when catalog entry is missing.
+        const inferred = this.slotFromSelectionId(selection.selectionId);
+        if (inferred) {
+          slots[inferred] = selection.componentRevisionId;
+        }
+      }
+    }
+    this.baselineSlots = { ...slots };
+    this.session.setSelectedRevisionIdsBySlot(slots as Record<string, string>);
+    this.session.setDirty(false);
+    this.session.setLastCompile(null);
+    this.session.setCompileStale(record.compileStatus === 'stale-vs-draft');
+    this.session.setActiveCategory('frame');
+    this.refreshMissingComponentState();
+  }
+
+  private slotFromSelectionId(selectionId: string): SlotKey | null {
+    if (selectionId === 'frame') return 'frame';
+    if (selectionId.startsWith('motor-')) return 'motor';
+    if (selectionId.startsWith('prop-')) return 'propeller';
+    if (selectionId === 'battery') return 'battery';
+    if (selectionId === 'esc') return 'esc';
+    if (selectionId === 'fc') return 'fc';
+    if (selectionId === 'camera') return 'camera';
+    if (selectionId === 'vtx') return 'vtx';
+    if (selectionId === 'receiver') return 'receiver';
+    return null;
+  }
+
+  private refreshMissingComponentState(): void {
+    if (!this.draft || !this.catalogSnapshot) {
+      this.session.setHasMissingComponents(false);
+      return;
+    }
+    const missing = this.draft.selections.filter(
+      (s) => !this.catalogSnapshot!.revisions.has(s.componentRevisionId),
+    );
+    this.session.setHasMissingComponents(missing.length > 0);
+    if (missing.length > 0) {
+      const issues: BuilderCompatibilityIssueView[] = missing.map((s) => {
+        const slot = this.slotFromSelectionId(s.selectionId);
+        const category = slot ? SLOT_TO_TYPE[slot] : 'unknown';
+        return {
+          issueClass: 'blocking-error' as const,
+          title: 'Missing component revision',
+          explanation: `This build references component revision “${s.componentRevisionId}”, which is no longer in the current catalog.`,
+          suggestedAction:
+            'Choose a replacement part in this category before compiling.',
+          affectedPartLabel: s.componentRevisionId,
+          affectedCategory: category === 'unknown' ? 'unknown' : category,
+          relatedSelectionIds: [s.selectionId],
+          domainCode: 'MISSING_COMPONENT_REVISION',
+          severity: 'error' as const,
+        };
+      });
+      this._validationIssues.set(issues);
+      this.session.setCompileGate(
+        false,
+        'Replace outdated or missing components before compiling.',
+      );
+      this.session.setCompatibilityLevel('cannot-compile');
+    }
   }
 
   private applyIntentReplaceSelections(intentId: BuildIntentId): void {
@@ -798,6 +1230,8 @@ export class DroneBuilderFacadeService {
       topology: factoryRevision.topology.map((e) => ({ ...e })),
       tuning: { ...factoryRevision.tuning },
     });
+    this.draftCreatedAtIso = new Date().toISOString();
+    this.draftSourceType = 'factory-duplicate';
     this.lastPublishedRevision = null;
     this.lastCompilation = null;
     this._engineeringStats.set([]);
@@ -808,9 +1242,10 @@ export class DroneBuilderFacadeService {
     this.baselineSlots = { ...slots };
     this.session.setSelectedRevisionIdsBySlot(slots as Record<string, string>);
     this.session.setDirty(false);
-    this.session.setSessionSaved(false);
+    this.session.setSaveState('unsaved');
     this.session.setLastCompile(null);
     this.session.setCompileStale(false);
+    this.session.setHasMissingComponents(false);
     this.session.setActiveCategory('frame');
     this.revalidate();
   }
@@ -881,7 +1316,12 @@ export class DroneBuilderFacadeService {
       const selectedId = slot ? slots[slot] : undefined;
       let status: BuilderCategoryProgressView['status'] = 'missing';
       if (selectedId) {
-        if (blockingCats.has(category)) {
+        const inCatalog = !!this.catalogSnapshot?.revisions.get(
+          selectedId as ComponentRevision['revisionId'],
+        );
+        if (!inCatalog) {
+          status = 'needs-attention';
+        } else if (blockingCats.has(category)) {
           status = 'needs-attention';
         } else if (slot && recommended[slot] === selectedId) {
           status = 'recommended';
@@ -894,7 +1334,7 @@ export class DroneBuilderFacadeService {
         category,
         label: stockedCategoryLabel(category),
         status,
-        selectedName,
+        selectedName: selectedName ?? (selectedId ? 'Unavailable / outdated' : null),
         selectedRevisionId: selectedId ?? null,
         media: selectedId
           ? this.media.resolve(selectedId, category, selectedName)
@@ -1015,5 +1455,15 @@ export class DroneBuilderFacadeService {
     };
     this.session.setSelectedRevisionIdsBySlot(slots as Record<string, string>);
     this.session.setDirty(true);
+  }
+}
+
+function formatSaveClock(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return iso;
   }
 }

@@ -131,7 +131,7 @@ describe('Advanced Builder shared state (CP3)', () => {
   it('does not mark compilation stale when only switching mode', async () => {
     await facade.bootstrap();
     facade.startFromIntent('racing');
-    facade.compile();
+    await facade.compile();
     expect(session.compileStale()).toBe(false);
     facade.setMode('advanced');
     expect(session.compileStale()).toBe(false);
@@ -288,14 +288,14 @@ describe('Advanced diagnostics and engineering (CP3)', () => {
     await facade.bootstrap();
     facade.setMode('advanced');
     facade.startFromIntent('freestyle');
-    facade.compile();
+    await facade.compile();
     expect(session.phase()).toBe('compiled');
     const aircraftId = session.lastCompile()?.aircraftId;
     expect(aircraftId).toBeTruthy();
     expect(catalog.getById(aircraftId!)).toBeTruthy();
     expect(selected.selectedAircraftId()).toBe(aircraftId);
 
-    const ok = facade.compileAndFly();
+    const ok = await facade.compileAndFly();
     expect(ok).toBe(true);
     expect(shell.view()).toBe('flight');
     expect(selected.selectedAircraftId()).toBe(aircraftId);
@@ -305,7 +305,7 @@ describe('Advanced diagnostics and engineering (CP3)', () => {
     await facade.bootstrap();
     facade.setMode('advanced');
     facade.startFromIntent('racing');
-    facade.compile();
+    await facade.compile();
     const compiledId = session.lastCompile()?.aircraftId;
     expect(compiledId).toBeTruthy();
 
@@ -321,7 +321,7 @@ describe('Advanced diagnostics and engineering (CP3)', () => {
     const previous = selected.selectedAircraftId();
     // Empty build cannot compile — selected aircraft must remain unchanged.
     facade.resetBuild();
-    const result = facade.compile();
+    const result = await facade.compile();
     expect(Array.isArray(result) || (result && 'ok' in result)).toBe(true);
     expect(session.canCompile()).toBe(false);
     expect(selected.selectedAircraftId()).toBe(previous);

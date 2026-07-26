@@ -251,7 +251,7 @@ describe('ComponentPresentationMediaService (product-distinct visuals)', () => {
     expect(img.getAttribute('data-fallback')).toBe('1');
     expect(img.src).toContain(CATEGORY_FALLBACK_ASSET_PATHS.motor);
 
-    facade.compile();
+    await facade.compile();
     expect(session.phase()).toBe('compiled');
     expect(session.lastCompile()?.ok).toBe(true);
   });

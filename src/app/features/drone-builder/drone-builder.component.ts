@@ -144,6 +144,19 @@ export class DroneBuilderComponent implements OnInit {
     return `Compile & Fly: ${name}`;
   });
 
+  protected readonly lastSavedClock = computed(() => {
+    const iso = this.snapshot().lastSavedAtIso;
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
+  });
+
   protected readonly activeIntent = computed(() =>
     this.intents.find((i) => i.id === this.snapshot().intentId) ?? null,
   );
@@ -210,11 +223,11 @@ export class DroneBuilderComponent implements OnInit {
   }
 
   protected compile(): void {
-    this.facade.compile();
+    void this.facade.compile();
   }
 
   protected compileAndFly(): void {
-    this.facade.compileAndFly();
+    void this.facade.compileAndFly();
   }
 
   protected requestReset(): void {
