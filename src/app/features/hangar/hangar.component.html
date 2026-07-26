@@ -52,8 +52,15 @@
     </div>
   }
 
+  <section class="hangar__section hangar__section--factory" aria-label="Factory Aircraft">
+    <div class="hangar__section-header">
+      <h2>Factory Aircraft</h2>
+      <p class="hangar__section-support">
+        Original catalog craft. Selecting or flying here never modifies factory definitions.
+      </p>
+    </div>
   <div class="hangar__layout">
-    <aside class="hangar__list" aria-label="Aircraft list">
+    <aside class="hangar__list" aria-label="Factory aircraft list">
       <label class="hangar__search">
         <span class="fpv-sr-only">Search aircraft</span>
         <input
@@ -210,6 +217,8 @@
       </div>
 
       <div class="hangar__cta">
+        <button type="button" class="action" (click)="selectAndClose()">Select</button>
+        <button type="button" class="action" (click)="inspectFactory()">Inspect</button>
         <button type="button" class="action" (click)="customizeInBuilder()">Duplicate into Builder</button>
         <button type="button" class="action" (click)="openCompare()">Compare</button>
         <button type="button" class="action" (click)="startTestFlight()">Test Flight</button>
@@ -219,6 +228,7 @@
       </div>
     </aside>
   </div>
+  </section>
 
   <section class="hangar__section" aria-label="User build drafts">
     <div class="hangar__section-header">
@@ -276,7 +286,7 @@
             </div>
             <div class="hangar__card-actions">
               <button type="button" class="action action--sm" (click)="openDraft(card)">
-                Open in Builder
+                Edit
               </button>
               <button type="button" class="action action--sm" (click)="duplicateDraft(card)">
                 Duplicate
@@ -288,6 +298,15 @@
               >
                 Rename
               </button>
+              @if (card.hasCompiledRevisions) {
+                <button
+                  type="button"
+                  class="action action--sm"
+                  (click)="viewDraftRevisions(card)"
+                >
+                  View revisions
+                </button>
+              }
               <button
                 type="button"
                 class="action action--sm"
@@ -319,7 +338,11 @@
     }
   </section>
 
-  <section class="hangar__section" aria-label="Compiled user aircraft">
+  <section
+    id="hangar-compiled-section"
+    class="hangar__section"
+    aria-label="Compiled user aircraft"
+  >
     <div class="hangar__section-header">
       <h2>Compiled User Aircraft</h2>
     </div>
@@ -335,7 +358,11 @@
         @for (card of compiledCards(); track card.revisionId) {
           <article
             class="hangar__compiled-card"
+            [id]="'compiled-' + card.revisionId"
             [class.hangar__compiled-card--incompatible]="!card.runtimeCompatible"
+            [class.hangar__compiled-card--selected]="
+              card.isFlyable && selected.selectedAircraftId() === card.aircraftId
+            "
           >
             <div class="hangar__card-media">
               @if (card.frameMedia) {
@@ -381,6 +408,23 @@
             <div class="hangar__card-actions">
               <button
                 type="button"
+                class="action action--sm"
+                [disabled]="!card.isFlyable"
+                [attr.aria-label]="'Select ' + card.nameAtCompile"
+                (click)="selectCompiled(card)"
+              >
+                Select
+              </button>
+              <button
+                type="button"
+                class="action action--sm"
+                [attr.aria-label]="'Inspect ' + card.nameAtCompile"
+                (click)="inspectCompiled(card)"
+              >
+                Inspect
+              </button>
+              <button
+                type="button"
                 class="action action--sm action--primary"
                 [disabled]="!card.isFlyable"
                 [attr.aria-label]="'Fly ' + card.nameAtCompile"
@@ -393,14 +437,14 @@
                 class="action action--sm"
                 (click)="duplicateCompiledIntoBuilder(card)"
               >
-                Duplicate into Builder
+                Duplicate/Rebuild
               </button>
               <button
                 type="button"
                 class="action action--sm action--danger"
                 (click)="requestDeleteCompiled(card, $event)"
               >
-                Delete
+                Delete revision
               </button>
             </div>
           </article>

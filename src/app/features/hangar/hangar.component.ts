@@ -243,6 +243,15 @@ export class HangarComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selected.select(this.previewDef().id);
   }
 
+  /** Keep the details panel focused on the current factory craft (Inspect). */
+  protected inspectFactory(): void {
+    this.selectAircraft(this.previewDef());
+    this.canvasHost()?.nativeElement?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
+  }
+
   protected startTestFlight(): void {
     const id = this.selected.select(this.previewDef().id);
     this.dispose();
@@ -279,6 +288,22 @@ export class HangarComponent implements OnInit, AfterViewInit, OnDestroy {
   protected openDraft(card: HangarDraftCardView): void {
     this.dispose();
     void this.hangarLibrary.openDraftInBuilder(card.buildId);
+  }
+
+  /** Jump to compiled revisions for this draft (same Hangar page section). */
+  protected viewDraftRevisions(card: HangarDraftCardView): void {
+    const first = this.compiledCards().find((c) => c.buildId === card.buildId);
+    const el = document.getElementById(
+      first ? `compiled-${first.revisionId}` : 'hangar-compiled-section',
+    );
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (first) {
+      el?.classList.add('hangar__compiled-card--highlight');
+      window.setTimeout(
+        () => el?.classList.remove('hangar__compiled-card--highlight'),
+        1600,
+      );
+    }
   }
 
   protected duplicateDraft(card: HangarDraftCardView): void {
@@ -335,6 +360,19 @@ export class HangarComponent implements OnInit, AfterViewInit, OnDestroy {
   // ---------------------------------------------------------------------
   // Checkpoint 4 — Compiled User Aircraft actions
   // ---------------------------------------------------------------------
+
+  protected selectCompiled(card: HangarCompiledCardView): void {
+    if (!card.isFlyable) {
+      return;
+    }
+    this.selected.trySelectExact(card.aircraftId);
+  }
+
+  protected inspectCompiled(card: HangarCompiledCardView): void {
+    this.selectCompiled(card);
+    const el = document.getElementById(`compiled-${card.revisionId}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
   protected flyCompiled(card: HangarCompiledCardView): void {
     this.dispose();

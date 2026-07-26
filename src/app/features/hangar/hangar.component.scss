@@ -584,6 +584,31 @@
   color: var(--fpv-text-muted);
 }
 
+.hangar__section-support {
+  margin: 0.25rem 0 0;
+  max-width: 42rem;
+  color: var(--fpv-text-secondary);
+  font-size: var(--fpv-text-caption, 0.85rem);
+}
+
+.hangar__compiled-card--selected {
+  outline: 2px solid var(--fpv-accent);
+  outline-offset: 2px;
+}
+
+.hangar__compiled-card--highlight {
+  animation: hangar-card-flash 1.4s ease-out;
+}
+
+@keyframes hangar-card-flash {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--fpv-accent) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+
 .hangar__card-actions {
   display: flex;
   flex-wrap: wrap;
