@@ -36,7 +36,7 @@ import {
  * Shown only when Frame Debug HUD is open (`environment.diagnosticsVisible`).
  * Update the short SHA after each hotfix commit intended for manual verification.
  */
-export const FLIGHT_HOTFIX_BUILD_MARKER = 'BODY-FRAME HOTFIX c8688d0 DIRTY';
+export const FLIGHT_HOTFIX_BUILD_MARKER = 'BODY-FRAME HOTFIX 96d6ee8 CLEAN';
 
 /** Authoritative body-frame snapshot for HUD diagnostics (dev only). */
 export interface FlightFrameDiagnostics {
