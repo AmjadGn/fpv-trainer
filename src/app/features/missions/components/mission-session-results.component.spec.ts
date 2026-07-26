@@ -1,81 +1,89 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 
 import type { MissionResultsViewModel } from '../../../core/mission/services/mission-results.facade';
 import { MissionSessionResultsComponent } from './mission-session-results.component';
 
-const COMPLETED_VM: MissionResultsViewModel = {
-  available: true,
-  missionId: 'coastal-ruins-survey',
-  sessionId: 's1',
-  missionTitle: 'Coastal Ruins Survey',
-  status: 'completed',
-  failureReasonCode: null,
-  score: {
-    requiredPoints: 85,
-    optionalBonusPoints: 0,
+function viewModel(overrides: Partial<MissionResultsViewModel> = {}): MissionResultsViewModel {
+  return {
+    available: true,
+    missionId: 'coastal-ruins-survey',
+    sessionId: 'session-1',
+    missionTitle: 'Coastal Ruins Survey',
+    status: 'completed',
+    failureReasonCode: null,
+    score: { requiredPoints: 85, optionalBonusPoints: 0, timeBonusPoints: 15, finalScore: 100, maxScore: 100 },
     timeBonusPoints: 15,
-    finalScore: 100,
-    maxScore: 100,
-  },
-  timeBonusPoints: 15,
-  elapsedTicks: 1200,
-  elapsedSeconds: 20,
-  objectives: [
-    {
-      objectiveId: 'obj-photo-arch',
-      displayName: 'Photograph the stone sea arch',
-      status: 'completed',
-      scorePoints: 29,
-      maxPoints: 29,
-      evidenceRef: null,
-      normalizedScore: 1,
-      photoTotalScore: 120,
-      photoMaxScore: 120,
-      feedbackCodes: [],
-      attemptCount: 1,
-      presentationImageUrl: null,
-    },
-  ],
-  showObjectiveBreakdown: true,
-  showTimeBonus: true,
-  customResultsNote: 'Results are session-only.',
-  sessionOnly: true,
-};
+    elapsedTicks: 1_000,
+    elapsedSeconds: 8.33,
+    objectives: [],
+    showObjectiveBreakdown: true,
+    showTimeBonus: true,
+    customResultsNote: null,
+    sessionOnly: true,
+    ...overrides,
+  };
+}
 
 describe('MissionSessionResultsComponent', () => {
-  let fixture: ComponentFixture<MissionSessionResultsComponent>;
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [MissionSessionResultsComponent] });
+  });
 
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [MissionSessionResultsComponent],
-    }).compileComponents();
-    fixture = TestBed.createComponent(MissionSessionResultsComponent);
-    fixture.componentRef.setInput('viewModel', COMPLETED_VM);
+  it('always shows session-only language, never a persisted best/history claim', () => {
+    const fixture = TestBed.createComponent(MissionSessionResultsComponent);
+    fixture.componentRef.setInput('viewModel', viewModel());
     fixture.detectChanges();
-  });
 
-  it('shows session-only language and score totals', () => {
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Mission Complete');
-    expect(text).toContain('100 / 100');
-    expect(text).toContain('session only');
-    expect(text).not.toContain('personal best');
-    expect(text).not.toContain('leaderboard');
+    expect(text).toMatch(/session only/i);
+    expect(text).not.toMatch(/best score|personal best|leaderboard/i);
   });
 
-  it('emits retry and return actions', () => {
-    let retry = false;
-    let ret = false;
+  it('emits retryRequested and returnRequested from their respective buttons', () => {
+    const fixture = TestBed.createComponent(MissionSessionResultsComponent);
+    fixture.componentRef.setInput('viewModel', viewModel());
+    fixture.detectChanges();
+
+    let retried = 0;
+    let returned = 0;
     fixture.componentInstance.retryRequested.subscribe(() => {
-      retry = true;
+      retried += 1;
     });
     fixture.componentInstance.returnRequested.subscribe(() => {
-      ret = true;
+      returned += 1;
     });
-    const buttons = fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>;
+
+    const buttons = fixture.nativeElement.querySelectorAll(
+      '.results-card__actions button',
+    ) as NodeListOf<HTMLButtonElement>;
+    expect(buttons.length).toBe(2);
     buttons[0]!.click();
     buttons[1]!.click();
-    expect(retry).toBe(true);
-    expect(ret).toBe(true);
+
+    expect(retried).toBe(1);
+    expect(returned).toBe(1);
+  });
+
+  it('shows the mapped failure reason and "Mission Failed" heading for a failed attempt', () => {
+    const fixture = TestBed.createComponent(MissionSessionResultsComponent);
+    fixture.componentRef.setInput(
+      'viewModel',
+      viewModel({ status: 'failed', failureReasonCode: 'AIRCRAFT_CRASHED', score: null }),
+    );
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toMatch(/Mission Failed/);
+    expect(text).toMatch(/Aircraft crashed/);
+  });
+
+  it('shows the completed heading and score for a successful attempt', () => {
+    const fixture = TestBed.createComponent(MissionSessionResultsComponent);
+    fixture.componentRef.setInput('viewModel', viewModel());
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toMatch(/Mission Complete/);
+    expect(text).toMatch(/100 \/ 100/);
   });
 });

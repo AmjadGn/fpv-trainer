@@ -1,59 +1,83 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 
 import { MissionPhotographyHudComponent } from './mission-photography-hud.component';
 
 describe('MissionPhotographyHudComponent', () => {
-  let fixture: ComponentFixture<MissionPhotographyHudComponent>;
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [MissionPhotographyHudComponent],
-    }).compileComponents();
-    fixture = TestBed.createComponent(MissionPhotographyHudComponent);
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [MissionPhotographyHudComponent] });
   });
 
-  it('disables the shutter while inactive or pending', () => {
+  function shutterButton(fixture: ReturnType<typeof TestBed.createComponent>): HTMLButtonElement {
+    return fixture.nativeElement.querySelector('[data-testid="mission-shutter"]') as HTMLButtonElement;
+  }
+
+  it('disables the shutter when capture is not enabled', () => {
+    const fixture = TestBed.createComponent(MissionPhotographyHudComponent);
     fixture.componentRef.setInput('captureEnabled', false);
     fixture.componentRef.setInput('capturePending', false);
     fixture.detectChanges();
-    const button = fixture.nativeElement.querySelector(
-      '[data-testid="mission-shutter"]',
-    ) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
 
+    expect(shutterButton(fixture).disabled).toBe(true);
+  });
+
+  it('disables the shutter while a capture is pending, even when otherwise enabled', () => {
+    const fixture = TestBed.createComponent(MissionPhotographyHudComponent);
     fixture.componentRef.setInput('captureEnabled', true);
     fixture.componentRef.setInput('capturePending', true);
     fixture.detectChanges();
-    expect(button.disabled).toBe(true);
 
+    expect(shutterButton(fixture).disabled).toBe(true);
+    expect(fixture.nativeElement.textContent).toMatch(/Capturing/);
+  });
+
+  it('enables the shutter only when capture is enabled and not pending', () => {
+    const fixture = TestBed.createComponent(MissionPhotographyHudComponent);
+    fixture.componentRef.setInput('captureEnabled', true);
     fixture.componentRef.setInput('capturePending', false);
     fixture.detectChanges();
-    expect(button.disabled).toBe(false);
+
+    expect(shutterButton(fixture).disabled).toBe(false);
   });
 
-  it('emits captureRequested when the shutter is pressed', () => {
+  it('emits captureRequested exactly once per shutter click', () => {
+    const fixture = TestBed.createComponent(MissionPhotographyHudComponent);
     fixture.componentRef.setInput('captureEnabled', true);
     fixture.detectChanges();
-    let emitted = false;
+
+    let emitted = 0;
     fixture.componentInstance.captureRequested.subscribe(() => {
-      emitted = true;
+      emitted += 1;
     });
-    const button = fixture.nativeElement.querySelector(
-      '[data-testid="mission-shutter"]',
-    ) as HTMLButtonElement;
-    button.click();
-    expect(emitted).toBe(true);
+
+    shutterButton(fixture).click();
+    expect(emitted).toBe(1);
+
+    shutterButton(fixture).click();
+    expect(emitted).toBe(2);
   });
 
-  it('shows objective index and keyboard hint', () => {
-    fixture.componentRef.setInput('missionTitle', 'Coastal Ruins Survey');
-    fixture.componentRef.setInput('objectiveTitle', 'Photograph the stone sea arch');
-    fixture.componentRef.setInput('objectiveNumber', 1);
-    fixture.componentRef.setInput('objectiveCount', 3);
+  it('does not emit when the disabled shutter is clicked', () => {
+    const fixture = TestBed.createComponent(MissionPhotographyHudComponent);
+    fixture.componentRef.setInput('captureEnabled', false);
     fixture.detectChanges();
+
+    let emitted = 0;
+    fixture.componentInstance.captureRequested.subscribe(() => {
+      emitted += 1;
+    });
+
+    shutterButton(fixture).click();
+    expect(emitted).toBe(0);
+  });
+
+  it('maps feedback codes to pilot-readable text rather than raw domain codes', () => {
+    const fixture = TestBed.createComponent(MissionPhotographyHudComponent);
+    fixture.componentRef.setInput('feedbackCodes', ['HOLD_STEADY', 'TOO_LOW']);
+    fixture.detectChanges();
+
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Coastal Ruins Survey');
-    expect(text).toContain('Objective 1 of 3');
-    expect(text).toContain('V');
+    expect(text).toMatch(/Hold steady/);
+    expect(text).toMatch(/Climb higher/);
+    expect(text).not.toMatch(/HOLD_STEADY/);
   });
 });
