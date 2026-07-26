@@ -162,9 +162,70 @@ describe('ControllerCalibrationService', () => {
     expect(service.calibrationStatus()).toBe('uncalibrated');
   });
 
-  it('restores a valid calibration for the matching controller', () => {
+  it('migrates v1 calibrations by flipping yaw inversion', () => {
     const saved: ControllerCalibration = {
       version: 1,
+      controllerId: 'DJI Virtual Joystick',
+      controllerMapping: 'none',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      channels: {
+        throttle: {
+          axisIndex: 1,
+          min: -1,
+          center: -1,
+          max: 1,
+          inverted: false,
+          deadzone: 0,
+        },
+        yaw: {
+          axisIndex: 0,
+          min: -1,
+          center: 0,
+          max: 1,
+          inverted: false,
+          deadzone: DEFAULT_CENTERED_DEADZONE,
+        },
+        pitch: {
+          axisIndex: 3,
+          min: -1,
+          center: 0,
+          max: 1,
+          inverted: false,
+          deadzone: DEFAULT_CENTERED_DEADZONE,
+        },
+        roll: {
+          axisIndex: 2,
+          min: -1,
+          center: 0,
+          max: 1,
+          inverted: false,
+          deadzone: DEFAULT_CENTERED_DEADZONE,
+        },
+      },
+    };
+    localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(saved));
+
+    const service = createService();
+    connectController('DJI Virtual Joystick', [0.5, 0, -0.25, 1]);
+
+    expect(service.hasCalibration()).toBe(true);
+    expect(service.calibration()?.version).toBe(2);
+    expect(service.calibration()?.channels.yaw.inverted).toBe(true);
+    expect(service.calibrationStatus()).toBe('calibrated');
+    // v1→v2 flips yaw: 0.5 raw → ~0.4845 then inverted → negative
+    expect(service.calibratedInput()?.yaw).toBeCloseTo(-0.4845, 3);
+
+    const persisted = JSON.parse(
+      localStorage.getItem(CALIBRATION_STORAGE_KEY)!,
+    ) as ControllerCalibration;
+    expect(persisted.version).toBe(2);
+    expect(persisted.channels.yaw.inverted).toBe(true);
+  });
+
+  it('restores a valid calibration for the matching controller', () => {
+    const saved: ControllerCalibration = {
+      version: 2,
       controllerId: 'DJI Virtual Joystick',
       controllerMapping: 'none',
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -228,7 +289,7 @@ describe('ControllerCalibrationService', () => {
 
   it('ignores calibration belonging to another controller', () => {
     const saved: ControllerCalibration = {
-      version: 1,
+      version: 2,
       controllerId: 'Xbox Controller',
       controllerMapping: 'standard',
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -332,7 +393,7 @@ describe('ControllerCalibrationService', () => {
 
   it('resets calibration and clears storage', () => {
     const saved: ControllerCalibration = {
-      version: 1,
+      version: 2,
       controllerId: 'DJI Virtual Joystick',
       controllerMapping: 'none',
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -387,7 +448,7 @@ describe('ControllerCalibrationService', () => {
 
   it('updates calibrated live input from raw axis signals', () => {
     const saved: ControllerCalibration = {
-      version: 1,
+      version: 2,
       controllerId: 'DJI Virtual Joystick',
       controllerMapping: 'none',
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -462,8 +523,10 @@ describe('ControllerCalibrationService', () => {
     const raw = localStorage.getItem(CALIBRATION_STORAGE_KEY);
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw!) as ControllerCalibration;
+    expect(parsed.version).toBe(2);
     expect(parsed.channels.throttle.axisIndex).toBe(1);
     expect(parsed.channels.yaw.axisIndex).toBe(0);
+    expect(parsed.channels.yaw.inverted).toBe(true);
     expect(parsed.channels.pitch.axisIndex).toBe(3);
     expect(parsed.channels.roll.axisIndex).toBe(2);
   });

@@ -87,7 +87,7 @@ export class ControllerCalibrationService {
   private readonly _rangeReady = signal(false);
   private readonly _draftInversions = signal<Record<FlightChannel, boolean>>({
     throttle: false,
-    yaw: false,
+    yaw: true,
     pitch: false,
     roll: false,
   });
@@ -301,6 +301,7 @@ export class ControllerCalibrationService {
     const center = this.axisCenters[axisIndex] ?? 0;
     const extremes = this.computeIdentifyExtremes(axisIndex);
 
+    // Yaw on USB radios / sim adapters is commonly opposite stick-right-positive.
     this.draftAssignments.update((current) => ({
       ...current,
       [channel]: {
@@ -308,7 +309,7 @@ export class ControllerCalibrationService {
         min: extremes.min,
         center,
         max: extremes.max,
-        inverted: false,
+        inverted: channel === 'yaw',
       },
     }));
 
@@ -359,12 +360,12 @@ export class ControllerCalibrationService {
     const drafts = this.draftAssignments();
     const inversions: Record<FlightChannel, boolean> = {
       throttle: false,
-      yaw: false,
+      yaw: true,
       pitch: false,
       roll: false,
     };
     for (const channel of FLIGHT_CHANNELS) {
-      inversions[channel] = drafts[channel]?.inverted ?? false;
+      inversions[channel] = drafts[channel]?.inverted ?? channel === 'yaw';
     }
     this._draftInversions.set(inversions);
     this._activeStep.set('direction');
@@ -874,7 +875,7 @@ export class ControllerCalibrationService {
     this._rangeReady.set(false);
     this._draftInversions.set({
       throttle: false,
-      yaw: false,
+      yaw: true,
       pitch: false,
       roll: false,
     });
@@ -895,17 +896,50 @@ export class ControllerCalibrationService {
         return;
       }
 
-      if (parsed.version !== CALIBRATION_VERSION) {
+      const migrated = this.migrateCalibration(parsed);
+      if (!migrated) {
         this.clearStorage();
         this.persistedCalibration.set(null);
         return;
       }
 
-      this.persistedCalibration.set(parsed);
+      if (migrated !== parsed) {
+        this.writeStorage(migrated);
+      }
+      this.persistedCalibration.set(migrated);
     } catch {
       this.clearStorage();
       this.persistedCalibration.set(null);
     }
+  }
+
+  /**
+   * v1 → v2: flip yaw inversion so existing radio calibrations match
+   * stick-right-positive flight after the body-frame ω sign correction.
+   */
+  private migrateCalibration(
+    parsed: ControllerCalibration,
+  ): ControllerCalibration | null {
+    if (parsed.version === CALIBRATION_VERSION) {
+      return parsed;
+    }
+
+    if (parsed.version === 1 && CALIBRATION_VERSION === 2) {
+      return {
+        ...parsed,
+        version: 2,
+        updatedAt: new Date(this.clock.now()).toISOString(),
+        channels: {
+          ...parsed.channels,
+          yaw: {
+            ...parsed.channels.yaw,
+            inverted: !parsed.channels.yaw.inverted,
+          },
+        },
+      };
+    }
+
+    return null;
   }
 
   private writeStorage(calibration: ControllerCalibration): void {
