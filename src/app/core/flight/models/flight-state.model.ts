@@ -11,12 +11,12 @@
  * (v_world = q ⊗ v_body ⊗ q*). Local axes are recovered by rotating
  * (1,0,0), (0,1,0), and (0,0,-1) through q.
  *
- * Angular velocity is body-frame rates (rad/s):
- * - pitch: about local +X (positive = nose down / forward)
- * - yaw:   about local +Y (positive = rotate right)
- * - roll:  about local forward (-Z); positive = tilt right
+ * Angular velocity is body-frame stick rates (rad/s):
+ * - pitch: positive = nose down / forward about local +X  → ω_x = −pitch
+ * - yaw:   positive = rotate right about local +Y         → ω_y = −yaw
+ * - roll:  positive = tilt right about local forward (−Z) → ω_z = −roll
  *
- * Body-rate integration uses dq/dt = ½ q ⊗ ω_body (not ω ⊗ q).
+ * Body-rate integration uses dq/dt = ½ q ⊗ ω_body (shared quat-math helper).
  */
 
 export interface Vec3 {

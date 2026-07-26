@@ -50,6 +50,26 @@
       (pointerdown)="onViewportPointer()"
     ></div>
 
+    @if (showFrameDebug() && frameDebug(); as fd) {
+      <aside class="hud-panel hud-panel--frame-debug" aria-label="Body-frame diagnostics">
+        <h2 class="hud-panel__title">Frame Debug <span class="frame-debug__hint">B</span></h2>
+        <dl class="frame-debug">
+          <div><dt>heading°</dt><dd>{{ fd.physics.headingYawDeg | number: '1.0-1' }}</dd></div>
+          <div><dt>fwd</dt><dd>{{ fd.physics.bodyForwardWorld.x | number:'1.2-2' }}, {{ fd.physics.bodyForwardWorld.y | number:'1.2-2' }}, {{ fd.physics.bodyForwardWorld.z | number:'1.2-2' }}</dd></div>
+          <div><dt>right</dt><dd>{{ fd.physics.bodyRightWorld.x | number:'1.2-2' }}, {{ fd.physics.bodyRightWorld.y | number:'1.2-2' }}, {{ fd.physics.bodyRightWorld.z | number:'1.2-2' }}</dd></div>
+          <div><dt>up/thrust</dt><dd>{{ fd.physics.thrustDirectionWorld.x | number:'1.2-2' }}, {{ fd.physics.thrustDirectionWorld.y | number:'1.2-2' }}, {{ fd.physics.thrustDirectionWorld.z | number:'1.2-2' }}</dd></div>
+          <div><dt>pitch axis</dt><dd>{{ fd.physics.commandedPitchAxisWorld.x | number:'1.2-2' }}, {{ fd.physics.commandedPitchAxisWorld.y | number:'1.2-2' }}, {{ fd.physics.commandedPitchAxisWorld.z | number:'1.2-2' }}</dd></div>
+          <div><dt>roll axis</dt><dd>{{ fd.physics.commandedRollAxisWorld.x | number:'1.2-2' }}, {{ fd.physics.commandedRollAxisWorld.y | number:'1.2-2' }}, {{ fd.physics.commandedRollAxisWorld.z | number:'1.2-2' }}</dd></div>
+          <div><dt>vel</dt><dd>{{ fd.physics.linearVelocity.x | number:'1.2-2' }}, {{ fd.physics.linearVelocity.y | number:'1.2-2' }}, {{ fd.physics.linearVelocity.z | number:'1.2-2' }}</dd></div>
+          <div><dt>q phys</dt><dd>{{ fd.physics.quaternion.x | number:'1.3-3' }}, {{ fd.physics.quaternion.y | number:'1.3-3' }}, {{ fd.physics.quaternion.z | number:'1.3-3' }}, {{ fd.physics.quaternion.w | number:'1.3-3' }}</dd></div>
+          <div><dt>q model</dt><dd>{{ fd.modelQuat.x | number:'1.3-3' }}, {{ fd.modelQuat.y | number:'1.3-3' }}, {{ fd.modelQuat.z | number:'1.3-3' }}, {{ fd.modelQuat.w | number:'1.3-3' }}</dd></div>
+          <div><dt>model fwd</dt><dd>{{ fd.modelForward.x | number:'1.2-2' }}, {{ fd.modelForward.y | number:'1.2-2' }}, {{ fd.modelForward.z | number:'1.2-2' }}</dd></div>
+          <div><dt>cam fwd</dt><dd>{{ fd.cameraForward.x | number:'1.2-2' }}, {{ fd.cameraForward.y | number:'1.2-2' }}, {{ fd.cameraForward.z | number:'1.2-2' }}</dd></div>
+          <div><dt>Rapier</dt><dd>{{ fd.rapierActive ? 'active' : 'off' }}</dd></div>
+        </dl>
+      </aside>
+    }
+
     <!-- LEFT: Controller Input -->
     <aside class="hud-panel hud-panel--left" aria-label="Controller input">
       <h2 class="hud-panel__title">Controller Input</h2>
@@ -1279,6 +1299,7 @@
               <li><kbd>Space</kbd> arm / disarm</li>
               <li><kbd>R</kbd> reset</li>
               <li><kbd>C</kbd> camera</li>
+              <li><kbd>B</kbd> frame debug</li>
               <li><kbd>F</kbd> fullscreen</li>
               <li><kbd>P</kbd> pause</li>
               <li><kbd>T</kbd> start run</li>

@@ -21,6 +21,32 @@ import type {
   Vec3,
 } from '../models/flight-state.model';
 import type { CrashReason } from '../../physics/models/collision.models';
+import {
+  bodyForwardWorld,
+  bodyRightWorld,
+  bodyUpWorld,
+  headingYawRad,
+  integrateBodyRates,
+  normalizeQuat,
+  rotateVecByQuat,
+} from '../utils/quat-math';
+
+/** Authoritative body-frame snapshot for HUD diagnostics (dev only). */
+export interface FlightFrameDiagnostics {
+  quaternion: Quat;
+  bodyForwardWorld: Vec3;
+  bodyRightWorld: Vec3;
+  bodyUpWorld: Vec3;
+  /** World axis commanded pitch rotates about (current body-right). */
+  commandedPitchAxisWorld: Vec3;
+  /** World axis commanded roll rotates about (current body-forward). */
+  commandedRollAxisWorld: Vec3;
+  thrustDirectionWorld: Vec3;
+  linearVelocity: Vec3;
+  headingYawRad: number;
+  headingYawDeg: number;
+  angularVelocity: AngularVelocity;
+}
 
 export interface FlightResetPose {
   position?: Vec3;
@@ -59,8 +85,9 @@ export interface FlightWindSample {
  *
  * Coordinate convention (documented in flight-state.model.ts):
  * X right, Y up, Z backward; drone forward = local -Z.
- * Orientation q maps body → world. Stick rates are body-local; integrate with
- * dq/dt = ½ q ⊗ ω_body so yaw updates the frame used by later pitch/roll.
+ * Orientation q maps body → world. Stick rates are body-local with
+ * ω = (−pitch, −yaw, −roll) so +pitch is nose-down toward local −Z.
+ * Integrate with dq/dt = ½ q ⊗ ω_body (shared quat-math helper).
  *
  * Does not access navigator, Gamepad API, DOM, templates, or Three.js.
  */
@@ -237,6 +264,34 @@ export class FlightControllerService {
 
   getCollisionEnergyMultiplier(): number {
     return this.cfg.collisionEnergyMultiplier;
+  }
+
+  /**
+   * Body-frame diagnostics for the flight HUD overlay.
+   * Pure read of authoritative controller state — no logging.
+   */
+  getFrameDiagnostics(): FlightFrameDiagnostics {
+    const forward = bodyForwardWorld(this.ori);
+    const right = bodyRightWorld(this.ori);
+    const up = bodyUpWorld(this.ori);
+    const heading = headingYawRad(this.ori);
+    return {
+      quaternion: { x: this.ori.x, y: this.ori.y, z: this.ori.z, w: this.ori.w },
+      bodyForwardWorld: forward,
+      bodyRightWorld: right,
+      bodyUpWorld: up,
+      commandedPitchAxisWorld: { ...right },
+      commandedRollAxisWorld: { ...forward },
+      thrustDirectionWorld: { ...up },
+      linearVelocity: { x: this.vel.x, y: this.vel.y, z: this.vel.z },
+      headingYawRad: heading,
+      headingYawDeg: (heading * 180) / Math.PI,
+      angularVelocity: {
+        pitch: this.ang.pitch,
+        yaw: this.ang.yaw,
+        roll: this.ang.roll,
+      },
+    };
   }
 
   /**
@@ -597,8 +652,7 @@ export class FlightControllerService {
       this.ang.yaw += Math.sin(phase * 0.7) * torque * 0.35 * dt;
     }
 
-    // Body rates → orientation. pitch about +X, yaw about +Y,
-    // roll about local forward (-Z). q is body→world, so use q ⊗ ω_body.
+    // Body rates → orientation via shared integrateBodyRates (q ⊗ ω_body).
     integrateBodyRates(
       this.ori,
       this.ang.pitch,
@@ -757,75 +811,6 @@ function approach(
 
 function length(v: Vec3): number {
   return Math.hypot(v.x, v.y, v.z);
-}
-
-function normalizeQuat(q: Quat): void {
-  const mag = Math.hypot(q.x, q.y, q.z, q.w);
-  if (mag < 1e-12) {
-    q.x = 0;
-    q.y = 0;
-    q.z = 0;
-    q.w = 1;
-    return;
-  }
-  const inv = 1 / mag;
-  q.x *= inv;
-  q.y *= inv;
-  q.z *= inv;
-  q.w *= inv;
-}
-
-/**
- * Integrate body-frame pitch/yaw/roll rates into orientation.
- *
- * q maps body → world. Body angular velocity ω = (pitch, yaw, −roll) as a pure
- * quaternion. The correct derivative is dq/dt = ½ q ⊗ ω (Hamilton product).
- *
- * The previous implementation expanded ½ ω ⊗ q, which treats rates as world-space
- * and leaves pitch/roll locked to spawn axes after yaw.
- */
-function integrateBodyRates(
-  q: Quat,
-  pitch: number,
-  yaw: number,
-  roll: number,
-  dt: number,
-  scratch: Quat,
-): void {
-  const wx = pitch;
-  const wy = yaw;
-  const wz = -roll;
-  const halfDt = 0.5 * dt;
-
-  // ½ Δt · (q ⊗ ω) with ω = (wx, wy, wz, 0)
-  scratch.x = halfDt * (q.w * wx + q.y * wz - q.z * wy);
-  scratch.y = halfDt * (q.w * wy - q.x * wz + q.z * wx);
-  scratch.z = halfDt * (q.w * wz + q.x * wy - q.y * wx);
-  scratch.w = halfDt * (-q.x * wx - q.y * wy - q.z * wz);
-
-  q.x += scratch.x;
-  q.y += scratch.y;
-  q.z += scratch.z;
-  q.w += scratch.w;
-  normalizeQuat(q);
-}
-
-/** Rotate vector (vx,vy,vz) by unit quaternion q into out. */
-function rotateVecByQuat(
-  vx: number,
-  vy: number,
-  vz: number,
-  q: Quat,
-  out: Vec3,
-): void {
-  // t = 2 * cross(q.xyz, v)
-  const tx = 2 * (q.y * vz - q.z * vy);
-  const ty = 2 * (q.z * vx - q.x * vz);
-  const tz = 2 * (q.x * vy - q.y * vx);
-  // v' = v + q.w * t + cross(q.xyz, t)
-  out.x = vx + q.w * tx + (q.y * tz - q.z * ty);
-  out.y = vy + q.w * ty + (q.z * tx - q.x * tz);
-  out.z = vz + q.w * tz + (q.x * ty - q.y * tx);
 }
 
 /** Angle between drone local up and world up (rad). */

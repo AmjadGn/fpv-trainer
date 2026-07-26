@@ -514,6 +514,48 @@ export class ThreeRendererService {
     );
   }
 
+  /**
+   * Read-back of model + camera frame for HUD diagnostics.
+   * Does not allocate logs — caller may throttle UI updates.
+   */
+  getFrameDiagnostics(): {
+    modelQuaternion: { x: number; y: number; z: number; w: number };
+    modelForward: { x: number; y: number; z: number };
+    cameraForward: { x: number; y: number; z: number };
+    cameraUp: { x: number; y: number; z: number };
+    rapierProxyActive: boolean;
+  } | null {
+    if (!this.drone || !this.camera) {
+      return null;
+    }
+    this.scratchForward.set(0, 0, -1).applyQuaternion(this.drone.quaternion);
+    this.camera.getWorldDirection(this.scratchTarget);
+    return {
+      modelQuaternion: {
+        x: this.drone.quaternion.x,
+        y: this.drone.quaternion.y,
+        z: this.drone.quaternion.z,
+        w: this.drone.quaternion.w,
+      },
+      modelForward: {
+        x: this.scratchForward.x,
+        y: this.scratchForward.y,
+        z: this.scratchForward.z,
+      },
+      cameraForward: {
+        x: this.scratchTarget.x,
+        y: this.scratchTarget.y,
+        z: this.scratchTarget.z,
+      },
+      cameraUp: {
+        x: this.camera.up.x,
+        y: this.camera.up.y,
+        z: this.camera.up.z,
+      },
+      rapierProxyActive: false,
+    };
+  }
+
   setVisualEffectsSettings(
     settings: TrainerVisualEffectsSettings,
     quality: EnvironmentQuality,

@@ -51,7 +51,10 @@ import {
   type RateProfileId,
 } from '../../core/flight/config/rate-profiles';
 import { FlightControllerService } from '../../core/flight/services/flight-controller.service';
+import type { FlightFrameDiagnostics } from '../../core/flight/services/flight-controller.service';
 import type { CameraMode, Vec3 } from '../../core/flight/models/flight-state.model';
+import { headingYawRad } from '../../core/flight/utils/quat-math';
+import { environment } from '../../../environments/environment';
 import { GhostRaceService } from '../../core/ghost/services/ghost-race.service';
 import { GhostStorageService } from '../../core/ghost/services/ghost-storage.service';
 import { formatGhostDeltaSeconds } from '../../core/ghost/utils/ghost-comparison';
@@ -259,6 +262,18 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   protected readonly guidanceMessage = this.guidance.message;
   protected readonly crashReasonLabel = signal<string | null>(null);
   protected readonly showCollisionDebug = signal(false);
+  /** Temporary body-frame HUD (dev / diagnosticsVisible only). Toggle with B. */
+  protected readonly showFrameDebug = signal<boolean>(
+    environment.diagnosticsVisible,
+  );
+  protected readonly frameDebug = signal<{
+    physics: FlightFrameDiagnostics;
+    modelForward: Vec3;
+    cameraForward: Vec3;
+    modelQuat: { x: number; y: number; z: number; w: number };
+    rapierActive: boolean;
+  } | null>(null);
+  protected readonly diagnosticsVisible = environment.diagnosticsVisible;
 
   // --- Ghost / training / progression signals ---
   protected readonly ghostSavedThisRun = signal(false);
@@ -739,13 +754,7 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   }
 
   private headingDegrees(): number {
-    const q = this.flight.orientation();
-    // Forward is local −Z; yaw about Y in XZ plane.
-    const fx = 2 * (q.x * q.z + q.w * q.y);
-    const fz = 1 - 2 * (q.x * q.x + q.y * q.y);
-    // Map: +Y screen is +world Z in our projection; drone nose (−Z) → up when heading 0.
-    const rad = Math.atan2(fx, -fz);
-    return (rad * 180) / Math.PI;
+    return (headingYawRad(this.flight.orientation()) * 180) / Math.PI;
   }
 
   constructor() {
@@ -2758,6 +2767,8 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
     this.wasArmed = armed;
   }
 
+  private frameDebugAccum = 0;
+
   private updateSmoothHud(dt: number): void {
     const a = 1 - Math.exp(-10 * dt);
     const speed = this.flight.speed();
@@ -2770,6 +2781,31 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       !this.flight.crashed() &&
       this.frameInput.throttle > 0.2;
     this.groundProximityWarn.set(warn);
+    this.updateFrameDebugHud();
+  }
+
+  /** Throttled (~8 Hz) frame diagnostics — no console logging. */
+  private updateFrameDebugHud(): void {
+    if (!this.diagnosticsVisible || !this.showFrameDebug()) {
+      if (this.frameDebug() !== null) {
+        this.frameDebug.set(null);
+      }
+      return;
+    }
+    this.frameDebugAccum += 1;
+    if (this.frameDebugAccum < 8) {
+      return;
+    }
+    this.frameDebugAccum = 0;
+    const physics = this.flight.getFrameDiagnostics();
+    const render = this.renderer.getFrameDiagnostics();
+    this.frameDebug.set({
+      physics,
+      modelForward: render?.modelForward ?? { x: 0, y: 0, z: 0 },
+      cameraForward: render?.cameraForward ?? { x: 0, y: 0, z: 0 },
+      modelQuat: render?.modelQuaternion ?? physics.quaternion,
+      rapierActive: this.physicsSession.isActive(),
+    });
   }
 
   private updateLivePolish(dt: number): void {
@@ -3087,6 +3123,10 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
     }
     if (code === 'KeyC' && !event.repeat) {
       this.onSwitchCamera();
+      return;
+    }
+    if (code === 'KeyB' && !event.repeat && this.diagnosticsVisible) {
+      this.showFrameDebug.update((v) => !v);
       return;
     }
     if (code === 'KeyT' && !event.repeat) {
