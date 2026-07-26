@@ -66,7 +66,8 @@ export interface ChannelRangeStats {
 export const CALIBRATION_STORAGE_KEY =
   'fpv-trainer.controller-calibration.v1';
 
-export const CALIBRATION_VERSION = 1;
+/** v2: yaw defaults inverted (radio/sim Axis polarity vs stick-right-positive). */
+export const CALIBRATION_VERSION = 2;
 
 export const DEFAULT_CENTERED_DEADZONE = 0.03;
 
