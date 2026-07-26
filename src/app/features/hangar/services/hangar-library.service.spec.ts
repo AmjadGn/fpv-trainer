@@ -256,6 +256,68 @@ describe('HangarLibraryService (Checkpoint 4)', () => {
       expect(selected.selectedAircraftId()).toBe(card.aircraftId);
     });
 
+    it('ensureRestored is idempotent and does not duplicate registered aircraft', async () => {
+      usePersistentBackend();
+      await facade.bootstrap();
+      facade.startFromIntent('racing');
+      await facade.saveDraft();
+      await facade.compile();
+      await hangar.refresh();
+      const before = catalog.userAircraft().length;
+
+      await hangar.ensureRestored();
+      await hangar.ensureRestored();
+      await hangar.refresh();
+
+      expect(catalog.userAircraft().length).toBe(before);
+      expect(hangar.compiledCards().length).toBe(1);
+    });
+
+    it('keeps Revision A immutable after compiling Revision B from a changed draft', async () => {
+      usePersistentBackend();
+      await facade.bootstrap();
+      facade.startFromIntent('racing');
+      await facade.saveDraft();
+      await facade.compile();
+      const aircraftA = session.lastCompile()?.aircraftId;
+      expect(aircraftA).toBeTruthy();
+      expect(session.lastCompile()?.ok).toBe(true);
+
+      facade.setActiveCategory('battery');
+      const currentBattery = session.selectedRevisionIdsBySlot()['battery'];
+      const nextBattery = facade
+        .optionsForActiveCategory()
+        .find((o) => o.revisionId !== currentBattery);
+      expect(nextBattery).toBeTruthy();
+      facade.selectComponentForActiveCategory(nextBattery!.revisionId);
+      await facade.saveDraft();
+      await facade.compile();
+      const aircraftB = session.lastCompile()?.aircraftId;
+      expect(session.lastCompile()?.ok).toBe(true);
+      expect(aircraftB).toBeTruthy();
+      expect(aircraftA).not.toBe(aircraftB);
+
+      await hangar.refresh();
+      const cards = hangar
+        .compiledCards()
+        .filter((c) => c.buildId === session.buildId());
+      expect(cards.length).toBeGreaterThanOrEqual(2);
+      expect(catalog.getById(aircraftA!)).toBeTruthy();
+      expect(catalog.getById(aircraftB!)).toBeTruthy();
+
+      const flewA = hangar.flyCompiled(
+        cards.find((c) => c.aircraftId === aircraftA)!.revisionId,
+      );
+      expect(flewA).toBe(true);
+      expect(selected.selectedAircraftId()).toBe(aircraftA);
+
+      const flewB = hangar.flyCompiled(
+        cards.find((c) => c.aircraftId === aircraftB)!.revisionId,
+      );
+      expect(flewB).toBe(true);
+      expect(selected.selectedAircraftId()).toBe(aircraftB);
+    });
+
     it('deletes a compiled revision and removes it from the aircraft catalog', async () => {
       usePersistentBackend();
       await facade.bootstrap();
