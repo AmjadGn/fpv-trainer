@@ -262,10 +262,11 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
   protected readonly guidanceMessage = this.guidance.message;
   protected readonly crashReasonLabel = signal<string | null>(null);
   protected readonly showCollisionDebug = signal(false);
-  /** Temporary body-frame HUD (dev / diagnosticsVisible only). Toggle with B. */
-  protected readonly showFrameDebug = signal<boolean>(
-    environment.diagnosticsVisible,
-  );
+  /**
+   * Body-frame HUD — off by default; toggle with B when diagnosticsVisible.
+   * Production builds set diagnosticsVisible=false so this never appears.
+   */
+  protected readonly showFrameDebug = signal(false);
   protected readonly frameDebug = signal<{
     physics: FlightFrameDiagnostics;
     modelForward: Vec3;
@@ -2073,10 +2074,13 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
               }
               }
             }
+            this.flight.recordPostPhysicsVelocity(this.flight.velocity());
             this.renderer.setDroneDamageState(
               this.physicsSession.getDamageState(),
               this.flight.getSimulationTime(),
             );
+          } else {
+            this.flight.recordPostPhysicsVelocity(this.flight.velocity(), null);
           }
 
           const after = this.flight.position();
@@ -3127,6 +3131,15 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
     }
     if (code === 'KeyB' && !event.repeat && this.diagnosticsVisible) {
       this.showFrameDebug.update((v) => !v);
+      return;
+    }
+    if (
+      code === 'KeyZ' &&
+      !event.repeat &&
+      this.diagnosticsVisible &&
+      this.showFrameDebug()
+    ) {
+      this.flight.zeroLinearVelocity();
       return;
     }
     if (code === 'KeyT' && !event.repeat) {

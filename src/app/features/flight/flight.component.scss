@@ -271,6 +271,14 @@
   font-size: 0.7em;
 }
 
+.frame-debug__build {
+  margin: 0 0 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #7dffb3;
+}
+
 .flight--ready .hud-panel--left,
 .flight--ready .hud-panel--right {
   opacity: 1;

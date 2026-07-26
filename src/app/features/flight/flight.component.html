@@ -52,20 +52,34 @@
 
     @if (showFrameDebug() && frameDebug(); as fd) {
       <aside class="hud-panel hud-panel--frame-debug" aria-label="Body-frame diagnostics">
-        <h2 class="hud-panel__title">Frame Debug <span class="frame-debug__hint">B</span></h2>
+        <h2 class="hud-panel__title">Frame Debug <span class="frame-debug__hint">B toggles</span></h2>
+        @if (fd.physics.buildMarker) {
+          <p class="frame-debug__build">{{ fd.physics.buildMarker }}</p>
+        }
         <dl class="frame-debug">
           <div><dt>heading°</dt><dd>{{ fd.physics.headingYawDeg | number: '1.0-1' }}</dd></div>
           <div><dt>fwd</dt><dd>{{ fd.physics.bodyForwardWorld.x | number:'1.2-2' }}, {{ fd.physics.bodyForwardWorld.y | number:'1.2-2' }}, {{ fd.physics.bodyForwardWorld.z | number:'1.2-2' }}</dd></div>
           <div><dt>right</dt><dd>{{ fd.physics.bodyRightWorld.x | number:'1.2-2' }}, {{ fd.physics.bodyRightWorld.y | number:'1.2-2' }}, {{ fd.physics.bodyRightWorld.z | number:'1.2-2' }}</dd></div>
-          <div><dt>up/thrust</dt><dd>{{ fd.physics.thrustDirectionWorld.x | number:'1.2-2' }}, {{ fd.physics.thrustDirectionWorld.y | number:'1.2-2' }}, {{ fd.physics.thrustDirectionWorld.z | number:'1.2-2' }}</dd></div>
+          <div><dt>up/thrust dir</dt><dd>{{ fd.physics.thrustDirectionWorld.x | number:'1.2-2' }}, {{ fd.physics.thrustDirectionWorld.y | number:'1.2-2' }}, {{ fd.physics.thrustDirectionWorld.z | number:'1.2-2' }}</dd></div>
           <div><dt>pitch axis</dt><dd>{{ fd.physics.commandedPitchAxisWorld.x | number:'1.2-2' }}, {{ fd.physics.commandedPitchAxisWorld.y | number:'1.2-2' }}, {{ fd.physics.commandedPitchAxisWorld.z | number:'1.2-2' }}</dd></div>
           <div><dt>roll axis</dt><dd>{{ fd.physics.commandedRollAxisWorld.x | number:'1.2-2' }}, {{ fd.physics.commandedRollAxisWorld.y | number:'1.2-2' }}, {{ fd.physics.commandedRollAxisWorld.z | number:'1.2-2' }}</dd></div>
           <div><dt>vel</dt><dd>{{ fd.physics.linearVelocity.x | number:'1.2-2' }}, {{ fd.physics.linearVelocity.y | number:'1.2-2' }}, {{ fd.physics.linearVelocity.z | number:'1.2-2' }}</dd></div>
+          @if (fd.physics.forceLedger; as led) {
+            <div><dt>thrustAccel</dt><dd>{{ led.thrustAccelerationWorld.x | number:'1.2-2' }}, {{ led.thrustAccelerationWorld.y | number:'1.2-2' }}, {{ led.thrustAccelerationWorld.z | number:'1.2-2' }}</dd></div>
+            <div><dt>totalAccel</dt><dd>{{ led.totalAccelerationWorld.x | number:'1.2-2' }}, {{ led.totalAccelerationWorld.y | number:'1.2-2' }}, {{ led.totalAccelerationWorld.z | number:'1.2-2' }}</dd></div>
+            <div><dt>dragAccel</dt><dd>{{ led.dragAccelerationWorld.x | number:'1.2-2' }}, {{ led.dragAccelerationWorld.y | number:'1.2-2' }}, {{ led.dragAccelerationWorld.z | number:'1.2-2' }}</dd></div>
+            <div><dt>assistAccel</dt><dd>{{ led.assistAccelerationWorld.x | number:'1.2-2' }}, {{ led.assistAccelerationWorld.y | number:'1.2-2' }}, {{ led.assistAccelerationWorld.z | number:'1.2-2' }}</dd></div>
+            <div><dt>collΔv</dt><dd>{{ led.collisionDeltaVelocity.x | number:'1.2-2' }}, {{ led.collisionDeltaVelocity.y | number:'1.2-2' }}, {{ led.collisionDeltaVelocity.z | number:'1.2-2' }}</dd></div>
+            <div><dt>v after ctrl</dt><dd>{{ led.velocityAfterController.x | number:'1.2-2' }}, {{ led.velocityAfterController.y | number:'1.2-2' }}, {{ led.velocityAfterController.z | number:'1.2-2' }}</dd></div>
+            <div><dt>posΔ</dt><dd>{{ led.positionDelta.x | number:'1.3-3' }}, {{ led.positionDelta.y | number:'1.3-3' }}, {{ led.positionDelta.z | number:'1.3-3' }}</dd></div>
+            <div><dt>ledger OK</dt><dd>{{ led.ledgerConsistent ? 'yes' : 'NO' }}</dd></div>
+          }
           <div><dt>q phys</dt><dd>{{ fd.physics.quaternion.x | number:'1.3-3' }}, {{ fd.physics.quaternion.y | number:'1.3-3' }}, {{ fd.physics.quaternion.z | number:'1.3-3' }}, {{ fd.physics.quaternion.w | number:'1.3-3' }}</dd></div>
           <div><dt>q model</dt><dd>{{ fd.modelQuat.x | number:'1.3-3' }}, {{ fd.modelQuat.y | number:'1.3-3' }}, {{ fd.modelQuat.z | number:'1.3-3' }}, {{ fd.modelQuat.w | number:'1.3-3' }}</dd></div>
           <div><dt>model fwd</dt><dd>{{ fd.modelForward.x | number:'1.2-2' }}, {{ fd.modelForward.y | number:'1.2-2' }}, {{ fd.modelForward.z | number:'1.2-2' }}</dd></div>
           <div><dt>cam fwd</dt><dd>{{ fd.cameraForward.x | number:'1.2-2' }}, {{ fd.cameraForward.y | number:'1.2-2' }}, {{ fd.cameraForward.z | number:'1.2-2' }}</dd></div>
           <div><dt>Rapier</dt><dd>{{ fd.rapierActive ? 'active' : 'off' }}</dd></div>
+          <div><dt>Z key</dt><dd>zero lin vel</dd></div>
         </dl>
       </aside>
     }
