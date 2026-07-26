@@ -229,6 +229,56 @@
   width: min(220px, 24vw);
 }
 
+.hud-panel--frame-debug {
+  left: 0.85rem;
+  bottom: 0.85rem;
+  top: auto;
+  max-width: min(28rem, calc(100% - 1.7rem));
+  max-height: 42%;
+  overflow: auto;
+  z-index: 6;
+  font-size: 0.72rem;
+  opacity: 1;
+  transform: none;
+}
+
+.frame-debug {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.frame-debug div {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.35rem;
+}
+
+.frame-debug dt {
+  opacity: 0.65;
+  margin: 0;
+}
+
+.frame-debug dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.frame-debug__hint {
+  opacity: 0.45;
+  font-weight: 500;
+  font-size: 0.7em;
+}
+
+.frame-debug__build {
+  margin: 0 0 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #7dffb3;
+}
+
 .flight--ready .hud-panel--left,
 .flight--ready .hud-panel--right {
   opacity: 1;

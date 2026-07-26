@@ -21,6 +21,82 @@ import type {
   Vec3,
 } from '../models/flight-state.model';
 import type { CrashReason } from '../../physics/models/collision.models';
+import {
+  bodyForwardWorld,
+  bodyRightWorld,
+  bodyUpWorld,
+  headingYawRad,
+  integrateBodyRates,
+  normalizeQuat,
+  rotateVecByQuat,
+} from '../utils/quat-math';
+
+/**
+ * Development-only build identity for stale-localhost diagnosis.
+ * Shown only when Frame Debug HUD is open (`environment.diagnosticsVisible`).
+ * Update the short SHA after each hotfix commit intended for manual verification.
+ */
+export const FLIGHT_HOTFIX_BUILD_MARKER = 'BODY-FRAME HOTFIX 96d6ee8 CLEAN';
+
+/** Authoritative body-frame snapshot for HUD diagnostics (dev only). */
+export interface FlightFrameDiagnostics {
+  quaternion: Quat;
+  bodyForwardWorld: Vec3;
+  bodyRightWorld: Vec3;
+  bodyUpWorld: Vec3;
+  /** World axis commanded pitch rotates about (current body-right). */
+  commandedPitchAxisWorld: Vec3;
+  /** World axis commanded roll rotates about (current body-forward). */
+  commandedRollAxisWorld: Vec3;
+  /**
+   * Predicted thrust direction (= body up). Independent of final acceleration.
+   * Do not treat as the acceleration that changed velocity.
+   */
+  thrustDirectionWorld: Vec3;
+  linearVelocity: Vec3;
+  headingYawRad: number;
+  headingYawDeg: number;
+  angularVelocity: AngularVelocity;
+  /** Last fixed-step force ledger (null until first armed integrateLinear). */
+  forceLedger: FlightForceLedger | null;
+  buildMarker: string;
+}
+
+/**
+ * Per-fixed-step translation budget. Units: m, m/s, m/s², world frame unless noted.
+ * Source of truth for whether thrust direction matches actual velocity change.
+ */
+export interface FlightForceLedger {
+  dt: number;
+  positionBefore: Vec3;
+  velocityBefore: Vec3;
+  orientationBefore: Quat;
+  throttleInput: number;
+  pitchInput: number;
+  rollInput: number;
+  yawInput: number;
+  bodyUpWorld: Vec3;
+  /** Unit thrust direction used for force (body up). */
+  thrustDirectionWorld: Vec3;
+  thrustMagnitudeAccel: number;
+  thrustAccelerationWorld: Vec3;
+  gravityAccelerationWorld: Vec3;
+  dragAccelerationWorld: Vec3;
+  /** Reserved: training/assist — currently always zero in free flight. */
+  assistAccelerationWorld: Vec3;
+  collisionDeltaVelocity: Vec3;
+  /** Explicit velocity overwrite after controller (e.g. maxVelocity clamp residual). */
+  velocityOverrideDelta: Vec3;
+  totalAccelerationWorld: Vec3;
+  predictedVelocityAfter: Vec3;
+  velocityAfterController: Vec3;
+  /** Filled after PhysicsSession / Rapier sync when caller records it. */
+  velocityAfterPhysicsSession: Vec3 | null;
+  velocityAfterRapier: Vec3 | null;
+  positionDelta: Vec3;
+  positionAfter: Vec3;
+  ledgerConsistent: boolean;
+}
 
 export interface FlightResetPose {
   position?: Vec3;
@@ -59,6 +135,9 @@ export interface FlightWindSample {
  *
  * Coordinate convention (documented in flight-state.model.ts):
  * X right, Y up, Z backward; drone forward = local -Z.
+ * Orientation q maps body → world. Stick rates are body-local with
+ * ω = (−pitch, −yaw, −roll) so +pitch is nose-down toward local −Z.
+ * Integrate with dq/dt = ½ q ⊗ ω_body (shared quat-math helper).
  *
  * Does not access navigator, Gamepad API, DOM, templates, or Three.js.
  */
@@ -127,6 +206,14 @@ export class FlightControllerService {
   private windTorqueScale = 0;
 
   private readonly scratchUp: Vec3 = { x: 0, y: 0, z: 0 };
+  private lastForceLedger: FlightForceLedger | null = null;
+  /** When true, next integrateLinear zeros drag coefficients (test / diagnosis). */
+  private forceLedgerIsolateDrag = false;
+  private pendingCollisionDelta: Vec3 = { x: 0, y: 0, z: 0 };
+  private stepPositionBefore: Vec3 = { x: 0, y: 0, z: 0 };
+  private stepVelocityBefore: Vec3 = { x: 0, y: 0, z: 0 };
+  private stepOrientationBefore: Quat = { x: 0, y: 0, z: 0, w: 1 };
+  private stepInputs: FlightInput = { ...ZERO_FLIGHT_INPUT };
   private readonly scratchDq: Quat = { x: 0, y: 0, z: 0, w: 1 };
   private readonly scratchRel: Vec3 = { x: 0, y: 0, z: 0 };
 
@@ -238,6 +325,132 @@ export class FlightControllerService {
   }
 
   /**
+   * Body-frame diagnostics for the flight HUD overlay.
+   * Pure read of authoritative controller state — no logging.
+   */
+  getFrameDiagnostics(): FlightFrameDiagnostics {
+    const forward = bodyForwardWorld(this.ori);
+    const right = bodyRightWorld(this.ori);
+    const up = bodyUpWorld(this.ori);
+    const heading = headingYawRad(this.ori);
+    return {
+      quaternion: { x: this.ori.x, y: this.ori.y, z: this.ori.z, w: this.ori.w },
+      bodyForwardWorld: forward,
+      bodyRightWorld: right,
+      bodyUpWorld: up,
+      commandedPitchAxisWorld: { ...right },
+      commandedRollAxisWorld: { ...forward },
+      thrustDirectionWorld: { ...up },
+      linearVelocity: { x: this.vel.x, y: this.vel.y, z: this.vel.z },
+      headingYawRad: heading,
+      headingYawDeg: (heading * 180) / Math.PI,
+      angularVelocity: {
+        pitch: this.ang.pitch,
+        yaw: this.ang.yaw,
+        roll: this.ang.roll,
+      },
+      forceLedger: this.lastForceLedger,
+      buildMarker: FLIGHT_HOTFIX_BUILD_MARKER,
+    };
+  }
+
+  /** Last fixed-step force ledger (null until first armed linear step). */
+  getLastForceLedger(): FlightForceLedger | null {
+    return this.lastForceLedger;
+  }
+
+  /**
+   * Diagnosis/test: set authoritative pose without resetting arm/crash flags.
+   * Does not clear wind or rate profile.
+   */
+  setAuthoritativePose(pose: {
+    position?: Vec3;
+    velocity?: Vec3;
+    orientation?: Quat;
+    angularVelocity?: AngularVelocity;
+  }): void {
+    if (pose.position) {
+      this.pos.x = pose.position.x;
+      this.pos.y = pose.position.y;
+      this.pos.z = pose.position.z;
+    }
+    if (pose.velocity) {
+      this.vel.x = pose.velocity.x;
+      this.vel.y = pose.velocity.y;
+      this.vel.z = pose.velocity.z;
+    }
+    if (pose.orientation) {
+      this.ori.x = pose.orientation.x;
+      this.ori.y = pose.orientation.y;
+      this.ori.z = pose.orientation.z;
+      this.ori.w = pose.orientation.w;
+      normalizeQuat(this.ori);
+    }
+    if (pose.angularVelocity) {
+      this.ang.pitch = pose.angularVelocity.pitch;
+      this.ang.yaw = pose.angularVelocity.yaw;
+      this.ang.roll = pose.angularVelocity.roll;
+    }
+    this.publish();
+  }
+
+  /**
+   * Diagnosis/test: bypass input smoothing so the next step sees exact sticks.
+   */
+  primeSmoothedInput(input: FlightInput): void {
+    this.smoothed = {
+      throttle: input.throttle,
+      yaw: input.yaw,
+      pitch: input.pitch,
+      roll: input.roll,
+    };
+  }
+
+  /**
+   * Diagnosis-only: clear linear velocity while keeping pose/orientation.
+   * Bound to KeyZ when Frame Debug is visible.
+   */
+  zeroLinearVelocity(): void {
+    this.vel.x = 0;
+    this.vel.y = 0;
+    this.vel.z = 0;
+    this.publish();
+  }
+
+  /**
+   * Test seam: next armed linear steps use zero drag (does not persist to cfg).
+   * Call {@link clearForceLedgerDragIsolation} to restore normal drag.
+   */
+  enableForceLedgerDragIsolation(enabled = true): void {
+    this.forceLedgerIsolateDrag = enabled;
+  }
+
+  clearForceLedgerDragIsolation(): void {
+    this.forceLedgerIsolateDrag = false;
+  }
+
+  /**
+   * Record post-PhysicsSession / Rapier velocity onto the last ledger.
+   * Call from the fixed-step loop after collision sync.
+   */
+  recordPostPhysicsVelocity(
+    afterSession: Vec3,
+    afterRapier: Vec3 | null = null,
+  ): void {
+    if (!this.lastForceLedger) {
+      return;
+    }
+    this.lastForceLedger.velocityAfterPhysicsSession = {
+      x: afterSession.x,
+      y: afterSession.y,
+      z: afterSession.z,
+    };
+    this.lastForceLedger.velocityAfterRapier = afterRapier
+      ? { x: afterRapier.x, y: afterRapier.y, z: afterRapier.z }
+      : null;
+  }
+
+  /**
    * Reset simulation. Optionally supply a course start pose.
    * Defaults to {@link FLIGHT_CONFIG.initialPosition} and identity orientation.
    */
@@ -257,6 +470,8 @@ export class FlightControllerService {
     this.ori = { ...(pose?.orientation ?? { x: 0, y: 0, z: 0, w: 1 }) };
     this.ang = { pitch: 0, yaw: 0, roll: 0 };
     this.smoothed = { ...ZERO_FLIGHT_INPUT };
+    this.lastForceLedger = null;
+    this.forceLedgerIsolateDrag = false;
     this.clearWind();
     this.publish();
     this._armWarning.set(null);
@@ -294,6 +509,32 @@ export class FlightControllerService {
       ].every(Number.isFinite)
     ) {
       return;
+    }
+
+    this.pendingCollisionDelta.x = correction.velocity.x - this.vel.x;
+    this.pendingCollisionDelta.y = correction.velocity.y - this.vel.y;
+    this.pendingCollisionDelta.z = correction.velocity.z - this.vel.z;
+    if (this.lastForceLedger) {
+      this.lastForceLedger.collisionDeltaVelocity = {
+        x: this.pendingCollisionDelta.x,
+        y: this.pendingCollisionDelta.y,
+        z: this.pendingCollisionDelta.z,
+      };
+      const expectedX =
+        this.lastForceLedger.velocityAfterController.x +
+        this.pendingCollisionDelta.x;
+      const expectedY =
+        this.lastForceLedger.velocityAfterController.y +
+        this.pendingCollisionDelta.y;
+      const expectedZ =
+        this.lastForceLedger.velocityAfterController.z +
+        this.pendingCollisionDelta.z;
+      this.lastForceLedger.ledgerConsistent =
+        Math.hypot(
+          correction.velocity.x - expectedX,
+          correction.velocity.y - expectedY,
+          correction.velocity.z - expectedZ,
+        ) < 1e-5;
     }
 
     this.pos.x = correction.position.x;
@@ -440,6 +681,23 @@ export class FlightControllerService {
     this.time += dt;
     const shaped = applyProfileExpo(input, this.activeProfile);
     const filtered = this.smoothInput(shaped, dt);
+    this.stepPositionBefore.x = this.pos.x;
+    this.stepPositionBefore.y = this.pos.y;
+    this.stepPositionBefore.z = this.pos.z;
+    this.stepVelocityBefore.x = this.vel.x;
+    this.stepVelocityBefore.y = this.vel.y;
+    this.stepVelocityBefore.z = this.vel.z;
+    this.stepOrientationBefore.x = this.ori.x;
+    this.stepOrientationBefore.y = this.ori.y;
+    this.stepOrientationBefore.z = this.ori.z;
+    this.stepOrientationBefore.w = this.ori.w;
+    this.stepInputs.throttle = filtered.throttle;
+    this.stepInputs.pitch = filtered.pitch;
+    this.stepInputs.roll = filtered.roll;
+    this.stepInputs.yaw = filtered.yaw;
+    this.pendingCollisionDelta.x = 0;
+    this.pendingCollisionDelta.y = 0;
+    this.pendingCollisionDelta.z = 0;
     this.integrateAngular(filtered, dt);
     this.integrateLinear(filtered, dt);
     if (this.legacyGroundEnabled) {
@@ -488,21 +746,14 @@ export class FlightControllerService {
     this.ang.yaw *= Math.exp(-damping * dt);
     this.ang.roll *= Math.exp(-damping * dt);
 
-    const wx = this.ang.pitch;
-    const wy = this.ang.yaw;
-    const wz = -this.ang.roll;
-    const q = this.ori;
-    const halfDt = 0.5 * dt;
-    const dq = this.scratchDq;
-    dq.x = halfDt * (wy * q.z - wz * q.y + wx * q.w);
-    dq.y = halfDt * (wz * q.x - wx * q.z + wy * q.w);
-    dq.z = halfDt * (wx * q.y - wy * q.x + wz * q.w);
-    dq.w = halfDt * (-wx * q.x - wy * q.y - wz * q.z);
-    q.x += dq.x;
-    q.y += dq.y;
-    q.z += dq.z;
-    q.w += dq.w;
-    normalizeQuat(q);
+    integrateBodyRates(
+      this.ori,
+      this.ang.pitch,
+      this.ang.yaw,
+      this.ang.roll,
+      dt,
+      this.scratchDq,
+    );
   }
 
   private integrateTumble(dt: number): void {
@@ -516,21 +767,14 @@ export class FlightControllerService {
     this.ang.yaw *= Math.exp(-1.2 * dt);
     this.ang.roll *= Math.exp(-1.2 * dt);
 
-    const wx = this.ang.pitch;
-    const wy = this.ang.yaw;
-    const wz = -this.ang.roll;
-    const q = this.ori;
-    const halfDt = 0.5 * dt;
-    const dq = this.scratchDq;
-    dq.x = halfDt * (wy * q.z - wz * q.y + wx * q.w);
-    dq.y = halfDt * (wz * q.x - wx * q.z + wy * q.w);
-    dq.z = halfDt * (wx * q.y - wy * q.x + wz * q.w);
-    dq.w = halfDt * (-wx * q.x - wy * q.y - wz * q.z);
-    q.x += dq.x;
-    q.y += dq.y;
-    q.z += dq.z;
-    q.w += dq.w;
-    normalizeQuat(q);
+    integrateBodyRates(
+      this.ori,
+      this.ang.pitch,
+      this.ang.yaw,
+      this.ang.roll,
+      dt,
+      this.scratchDq,
+    );
 
     this.pos.x += this.vel.x * dt;
     this.pos.y += this.vel.y * dt;
@@ -609,26 +853,15 @@ export class FlightControllerService {
       this.ang.yaw += Math.sin(phase * 0.7) * torque * 0.35 * dt;
     }
 
-    // Body rates → local angular velocity vector.
-    // pitch about +X, yaw about +Y, roll about local forward (-Z).
-    const wx = this.ang.pitch;
-    const wy = this.ang.yaw;
-    const wz = -this.ang.roll;
-
-    // dq/dt = 0.5 * q ⊗ ω_quat, then integrate.
-    const q = this.ori;
-    const halfDt = 0.5 * dt;
-    const dq = this.scratchDq;
-    dq.x = halfDt * (wy * q.z - wz * q.y + wx * q.w);
-    dq.y = halfDt * (wz * q.x - wx * q.z + wy * q.w);
-    dq.z = halfDt * (wx * q.y - wy * q.x + wz * q.w);
-    dq.w = halfDt * (-wx * q.x - wy * q.y - wz * q.z);
-
-    q.x += dq.x;
-    q.y += dq.y;
-    q.z += dq.z;
-    q.w += dq.w;
-    normalizeQuat(q);
+    // Body rates → orientation via shared integrateBodyRates (q ⊗ ω_body).
+    integrateBodyRates(
+      this.ori,
+      this.ang.pitch,
+      this.ang.yaw,
+      this.ang.roll,
+      dt,
+      this.scratchDq,
+    );
   }
 
   private integrateLinear(input: FlightInput, dt: number): void {
@@ -636,6 +869,10 @@ export class FlightControllerService {
     const throttle = clamp(input.throttle, 0, 1);
     /** Near-zero throttle ≈ unpowered: do not soft-cap vertical fall. */
     const unpowered = throttle <= 0.001;
+
+    const velBeforeX = this.vel.x;
+    const velBeforeY = this.vel.y;
+    const velBeforeZ = this.vel.z;
 
     // Local up (0,1,0) → world via orientation.
     rotateVecByQuat(0, 1, 0, this.ori, this.scratchUp);
@@ -652,9 +889,10 @@ export class FlightControllerService {
       thrustAccel *= 1 + cfg.groundEffectStrength * t * t;
     }
 
-    let ax = this.scratchUp.x * thrustAccel;
-    let ay = this.scratchUp.y * thrustAccel - cfg.gravity;
-    let az = this.scratchUp.z * thrustAccel;
+    const thrustAx = this.scratchUp.x * thrustAccel;
+    const thrustAy = this.scratchUp.y * thrustAccel;
+    const thrustAz = this.scratchUp.z * thrustAccel;
+    const gravAy = -cfg.gravity;
 
     // Relative air velocity: when wind is zero this matches legacy drag.
     const rel = this.scratchRel;
@@ -662,36 +900,134 @@ export class FlightControllerService {
     rel.y = this.vel.y - this.windVel.y;
     rel.z = this.vel.z - this.windVel.z;
 
-    const drag = cfg.linearDrag + cfg.velocityDamping;
+    const drag = this.forceLedgerIsolateDrag
+      ? 0
+      : cfg.linearDrag + cfg.velocityDamping;
+    let dragAx = 0;
+    let dragAy = 0;
+    let dragAz = 0;
     if (unpowered) {
       // Horizontal air resistance only — vertical viscous drag created a fake
       // ~g/drag ≈ 17 m/s soft ceiling that felt like a speed limit with motors idle.
-      ax -= drag * rel.x;
-      az -= drag * rel.z;
+      dragAx = -drag * rel.x;
+      dragAz = -drag * rel.z;
     } else {
-      ax -= drag * rel.x;
-      ay -= drag * rel.y;
-      az -= drag * rel.z;
+      dragAx = -drag * rel.x;
+      dragAy = -drag * rel.y;
+      dragAz = -drag * rel.z;
     }
+
+    // Assist/training horizontal movement: not implemented in free flight.
+    const assistAx = 0;
+    const assistAy = 0;
+    const assistAz = 0;
+
+    const ax = thrustAx + dragAx + assistAx;
+    const ay = thrustAy + gravAy + dragAy + assistAy;
+    const az = thrustAz + dragAz + assistAz;
 
     this.vel.x += ax * dt;
     this.vel.y += ay * dt;
     this.vel.z += az * dt;
+
+    const predictedX = this.vel.x;
+    const predictedY = this.vel.y;
+    const predictedZ = this.vel.z;
+    let overrideDx = 0;
+    let overrideDy = 0;
+    let overrideDz = 0;
 
     // Powered handling clamp only — never limit an unpowered descent/dive.
     if (!unpowered && cfg.maxVelocity > 0) {
       const speed = Math.hypot(this.vel.x, this.vel.y, this.vel.z);
       if (speed > cfg.maxVelocity) {
         const s = cfg.maxVelocity / speed;
-        this.vel.x *= s;
-        this.vel.y *= s;
-        this.vel.z *= s;
+        const nx = this.vel.x * s;
+        const ny = this.vel.y * s;
+        const nz = this.vel.z * s;
+        overrideDx = nx - this.vel.x;
+        overrideDy = ny - this.vel.y;
+        overrideDz = nz - this.vel.z;
+        this.vel.x = nx;
+        this.vel.y = ny;
+        this.vel.z = nz;
       }
     }
 
     this.pos.x += this.vel.x * dt;
     this.pos.y += this.vel.y * dt;
     this.pos.z += this.vel.z * dt;
+
+    const expectedX = velBeforeX + ax * dt + overrideDx;
+    const expectedY = velBeforeY + ay * dt + overrideDy;
+    const expectedZ = velBeforeZ + az * dt + overrideDz;
+    const ledgerConsistent =
+      Math.hypot(
+        this.vel.x - expectedX,
+        this.vel.y - expectedY,
+        this.vel.z - expectedZ,
+      ) < 1e-9;
+
+    this.lastForceLedger = {
+      dt,
+      positionBefore: {
+        x: this.stepPositionBefore.x,
+        y: this.stepPositionBefore.y,
+        z: this.stepPositionBefore.z,
+      },
+      velocityBefore: { x: velBeforeX, y: velBeforeY, z: velBeforeZ },
+      orientationBefore: {
+        x: this.stepOrientationBefore.x,
+        y: this.stepOrientationBefore.y,
+        z: this.stepOrientationBefore.z,
+        w: this.stepOrientationBefore.w,
+      },
+      throttleInput: this.stepInputs.throttle,
+      pitchInput: this.stepInputs.pitch,
+      rollInput: this.stepInputs.roll,
+      yawInput: this.stepInputs.yaw,
+      bodyUpWorld: {
+        x: this.scratchUp.x,
+        y: this.scratchUp.y,
+        z: this.scratchUp.z,
+      },
+      thrustDirectionWorld: {
+        x: this.scratchUp.x,
+        y: this.scratchUp.y,
+        z: this.scratchUp.z,
+      },
+      thrustMagnitudeAccel: thrustAccel,
+      thrustAccelerationWorld: { x: thrustAx, y: thrustAy, z: thrustAz },
+      gravityAccelerationWorld: { x: 0, y: gravAy, z: 0 },
+      dragAccelerationWorld: { x: dragAx, y: dragAy, z: dragAz },
+      assistAccelerationWorld: { x: assistAx, y: assistAy, z: assistAz },
+      collisionDeltaVelocity: {
+        x: this.pendingCollisionDelta.x,
+        y: this.pendingCollisionDelta.y,
+        z: this.pendingCollisionDelta.z,
+      },
+      velocityOverrideDelta: { x: overrideDx, y: overrideDy, z: overrideDz },
+      totalAccelerationWorld: { x: ax, y: ay, z: az },
+      predictedVelocityAfter: {
+        x: predictedX,
+        y: predictedY,
+        z: predictedZ,
+      },
+      velocityAfterController: {
+        x: this.vel.x,
+        y: this.vel.y,
+        z: this.vel.z,
+      },
+      velocityAfterPhysicsSession: null,
+      velocityAfterRapier: null,
+      positionDelta: {
+        x: this.pos.x - this.stepPositionBefore.x,
+        y: this.pos.y - this.stepPositionBefore.y,
+        z: this.pos.z - this.stepPositionBefore.z,
+      },
+      positionAfter: { x: this.pos.x, y: this.pos.y, z: this.pos.z },
+      ledgerConsistent,
+    };
   }
 
   private resolveGround(): void {
@@ -779,40 +1115,6 @@ function approach(
 
 function length(v: Vec3): number {
   return Math.hypot(v.x, v.y, v.z);
-}
-
-function normalizeQuat(q: Quat): void {
-  const mag = Math.hypot(q.x, q.y, q.z, q.w);
-  if (mag < 1e-12) {
-    q.x = 0;
-    q.y = 0;
-    q.z = 0;
-    q.w = 1;
-    return;
-  }
-  const inv = 1 / mag;
-  q.x *= inv;
-  q.y *= inv;
-  q.z *= inv;
-  q.w *= inv;
-}
-
-/** Rotate vector (vx,vy,vz) by unit quaternion q into out. */
-function rotateVecByQuat(
-  vx: number,
-  vy: number,
-  vz: number,
-  q: Quat,
-  out: Vec3,
-): void {
-  // t = 2 * cross(q.xyz, v)
-  const tx = 2 * (q.y * vz - q.z * vy);
-  const ty = 2 * (q.z * vx - q.x * vz);
-  const tz = 2 * (q.x * vy - q.y * vx);
-  // v' = v + q.w * t + cross(q.xyz, t)
-  out.x = vx + q.w * tx + (q.y * tz - q.z * ty);
-  out.y = vy + q.w * ty + (q.z * tx - q.x * tz);
-  out.z = vz + q.w * tz + (q.x * ty - q.y * tx);
 }
 
 /** Angle between drone local up and world up (rad). */
