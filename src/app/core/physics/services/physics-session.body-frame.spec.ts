@@ -6,6 +6,7 @@ import { FlightControllerService } from '../../flight/services/flight-controller
 import {
   bodyUpWorld,
   headingYawRad,
+  quatFromAxisAngle,
 } from '../../flight/utils/quat-math';
 import { PhysicsSessionService } from './physics-session.service';
 
@@ -119,19 +120,36 @@ describe('PhysicsSession body-frame isolation', () => {
     expect(flight.orientation()).toEqual(before);
   });
 
-  it('empty correction shape used by drone collision omits orientation', () => {
-    // Documents the contract: outcome 'none' corrections must not carry orientation.
-    const empty = {
+  it('inactive session leaves controller velocity ledger unchanged (Layer 2)', () => {
+    expect(session.isActive()).toBe(false);
+    flight.enableForceLedgerDragIsolation(true);
+    flight.setLegacyGroundEnabled(false);
+    const q = quatFromAxisAngle(1, 0, 0, -Math.PI / 6);
+    flight.reset({ position: { x: 0, y: 10, z: 0 }, orientation: q });
+    flight.arm(0);
+    flight.primeSmoothedInput({ throttle: 0.8, yaw: 0, pitch: 0, roll: 0 });
+    flight.setAuthoritativePose({
+      orientation: q,
+      velocity: { x: 0, y: 0, z: 0 },
+      angularVelocity: { pitch: 0, yaw: 0, roll: 0 },
+    });
+    flight.update({ throttle: 0.8, yaw: 0, pitch: 0, roll: 0 }, dt);
+    const afterController = { ...flight.velocity() };
+    const correction = session.processFixedStep({
       position: flight.position(),
       velocity: flight.velocity(),
+      orientation: flight.orientation(),
       angularVelocity: flight.angularVelocity(),
-      outcome: 'none' as const,
-      crash: false,
-      events: [],
-      damageDelta: 0,
-    };
-    expect(
-      'orientation' in empty && (empty as { orientation?: unknown }).orientation,
-    ).toBeFalsy();
+      armed: true,
+      crashed: false,
+      timestampMs: 0,
+    });
+    expect(correction).toBeNull();
+    expect(flight.velocity()).toEqual(afterController);
+    expect(afterController.z).toBeLessThan(0);
+    flight.recordPostPhysicsVelocity(flight.velocity());
+    expect(flight.getLastForceLedger()?.velocityAfterPhysicsSession).toEqual(
+      afterController,
+    );
   });
 });

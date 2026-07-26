@@ -67,4 +67,23 @@ describe('flight-frame-sync Layer 4', () => {
     expect(world.y).toBeCloseTo(2.2, 9);
     expect(world.z).toBeCloseTo(0, 9);
   });
+
+  it('render model position follows authoritative physics position (no alternate path)', () => {
+    const physicsPos = { x: 1.25, y: 4.5, z: -3.1 };
+    const q = quatFromAxisAngle(0, 1, 0, Math.PI);
+    const sample = buildRenderFrameSync({
+      physicsQuaternion: q,
+      modelQuaternion: { ...q },
+      modelPosition: { ...physicsPos },
+      cameraForward: fpvLookDirection(q, 0),
+      cameraPosition: {
+        x: physicsPos.x,
+        y: physicsPos.y + 0.12,
+        z: physicsPos.z,
+      },
+    });
+    expect(sample.modelPosition).toEqual(physicsPos);
+    expect(sample.cameraPosition.x).toBeCloseTo(physicsPos.x, 9);
+    expect(sample.cameraPosition.z).toBeCloseTo(physicsPos.z, 9);
+  });
 });
