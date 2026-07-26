@@ -36,6 +36,7 @@ import { ProductAnalyticsService } from './core/analytics/product-analytics.serv
 import { AnalyticsEvents } from './core/analytics/analytics-events';
 import { ErrorReporterService } from './core/error-reporting/error-reporter.service';
 import { BrowserCapabilityService } from './core/browser/browser-capability.service';
+import { HangarLibraryService } from './features/hangar/services/hangar-library.service';
 import type { FpvIconName } from './shared/icons/fpv-icons';
 
 interface ShellNavItem {
@@ -93,6 +94,7 @@ export class App {
   private readonly analytics = inject(ProductAnalyticsService);
   private readonly errorReporter = inject(ErrorReporterService);
   private readonly browserCaps = inject(BrowserCapabilityService);
+  private readonly hangarLibrary = inject(HangarLibraryService);
   protected readonly onlineRoute = signal(isOnlinePath(this.router.url));
   protected readonly currentPath = signal(normalizePath(this.router.url));
   protected readonly shellChromeHidden = computed(() => {
@@ -147,6 +149,10 @@ export class App {
       });
     this.features.load().subscribe();
     this.auth.restoreSession().subscribe(() => this.refreshNotifications());
+    // Restore compiled user aircraft from persistence into the runtime
+    // catalog on app startup. Non-blocking — Hangar/Builder refresh their
+    // own view state independently once this resolves.
+    void this.hangarLibrary.ensureRestored();
     this.browserCaps.refresh();
     const caps = this.browserCaps.capabilities();
     this.analytics.track(AnalyticsEvents.appOpened, { support: caps.status });

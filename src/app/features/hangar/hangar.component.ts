@@ -5,6 +5,7 @@ import {
   DestroyRef,
   ElementRef,
   OnDestroy,
+  OnInit,
   computed,
   inject,
   signal,
@@ -40,16 +41,24 @@ import { AIRCRAFT_STATS_DISCLAIMER } from '../../core/aircraft/models/aircraft-s
 import { AppShellService } from '../../core/shell/app-shell.service';
 import { DroneBuilderFacadeService } from '../drone-builder/services/drone-builder-facade.service';
 import type { FactoryAircraftId } from '@fpv/factory-aircraft';
+import { FpvButtonDirective } from '../../shared/ui/fpv-button.directive';
+import { FpvDialogComponent } from '../../shared/ui/fpv-dialog.component';
+import { ComponentPresentationMediaService } from '../drone-builder/services/component-presentation-media.service';
+import { HangarLibraryService } from './services/hangar-library.service';
+import type {
+  HangarCompiledCardView,
+  HangarDraftCardView,
+} from './models/hangar-library.models';
 
 @Component({
   selector: 'app-hangar',
   standalone: true,
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, FpvButtonDirective, FpvDialogComponent],
   templateUrl: './hangar.component.html',
   styleUrl: './hangar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class HangarComponent implements AfterViewInit, OnDestroy {
+export class HangarComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly catalog = inject(AircraftCatalogService);
   protected readonly selected = inject(SelectedAircraftService);
   private readonly stats = inject(AircraftStatsService);
@@ -57,6 +66,8 @@ export class HangarComponent implements AfterViewInit, OnDestroy {
   private readonly persistence = inject(AircraftPersistenceService);
   private readonly shell = inject(AppShellService);
   private readonly builderFacade = inject(DroneBuilderFacadeService);
+  protected readonly hangarLibrary = inject(HangarLibraryService);
+  private readonly media = inject(ComponentPresentationMediaService);
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly canvasHost = viewChild.required<ElementRef<HTMLElement>>('hangarCanvas');
@@ -72,12 +83,36 @@ export class HangarComponent implements AfterViewInit, OnDestroy {
   protected readonly focusIndex = signal(0);
   protected readonly disclaimer = AIRCRAFT_STATS_DISCLAIMER;
 
+  // Checkpoint 4 — Hangar library state (drafts + compiled user builds).
+  protected readonly libraryState = this.hangarLibrary.state;
+  protected readonly draftCards = this.hangarLibrary.draftCards;
+  protected readonly compiledCards = this.hangarLibrary.compiledCards;
+  protected readonly recoveryNotice = this.hangarLibrary.recoveryNotice;
+  protected readonly libraryError = this.hangarLibrary.errorMessage;
+  protected readonly libraryNotice = this.hangarLibrary.actionNotice;
+  protected readonly storageUnavailable = computed(() =>
+    this.hangarLibrary.isStorageUnavailable(),
+  );
+  protected readonly storageMessage = computed(() =>
+    this.hangarLibrary.storageMessage(),
+  );
+  protected readonly draftsEmpty = computed(() => this.draftCards().length === 0);
+  protected readonly compiledEmpty = computed(() => this.compiledCards().length === 0);
+
+  protected readonly deleteDraftTarget = signal<HangarDraftCardView | null>(null);
+  protected readonly deleteCompiledTarget = signal<HangarCompiledCardView | null>(
+    null,
+  );
+  protected readonly renameDraftTarget = signal<HangarDraftCardView | null>(null);
+  protected readonly renameDraftName = signal('');
+
   protected readonly filtered = computed(() =>
     this.catalog.filter({
       query: this.query(),
       category: this.categoryFilter(),
       favoritesOnly: this.favoritesOnly(),
       favoriteIds: this.selected.favoriteIds(),
+      includeUserBuilds: false,
     }),
   );
 
@@ -110,6 +145,10 @@ export class HangarComponent implements AfterViewInit, OnDestroy {
   private targetDistance = 3.2;
   private disposed = false;
   private preferReducedMotion = false;
+
+  ngOnInit(): void {
+    void this.hangarLibrary.refresh();
+  }
 
   ngAfterViewInit(): void {
     this.preferReducedMotion =
@@ -231,6 +270,107 @@ export class HangarComponent implements AfterViewInit, OnDestroy {
     }
     this.dispose();
     this.shell.showBuilder();
+  }
+
+  // ---------------------------------------------------------------------
+  // Checkpoint 4 — User Build Drafts actions
+  // ---------------------------------------------------------------------
+
+  protected openDraft(card: HangarDraftCardView): void {
+    this.dispose();
+    void this.hangarLibrary.openDraftInBuilder(card.buildId);
+  }
+
+  protected duplicateDraft(card: HangarDraftCardView): void {
+    void this.hangarLibrary.duplicateDraft(card.buildId);
+  }
+
+  protected requestRenameDraft(card: HangarDraftCardView, event?: Event): void {
+    event?.stopPropagation();
+    this.renameDraftTarget.set(card);
+    this.renameDraftName.set(card.name);
+  }
+
+  protected onRenameInput(value: string): void {
+    this.renameDraftName.set(value);
+  }
+
+  protected confirmRenameDraft(): void {
+    const target = this.renameDraftTarget();
+    if (!target) return;
+    const name = this.renameDraftName();
+    this.renameDraftTarget.set(null);
+    void this.hangarLibrary.renameDraft(target.buildId, name);
+  }
+
+  protected cancelRenameDraft(): void {
+    this.renameDraftTarget.set(null);
+  }
+
+  protected requestDeleteDraft(card: HangarDraftCardView, event?: Event): void {
+    event?.stopPropagation();
+    this.deleteDraftTarget.set(card);
+  }
+
+  protected confirmDeleteDraft(): void {
+    const target = this.deleteDraftTarget();
+    if (!target) return;
+    this.deleteDraftTarget.set(null);
+    void this.hangarLibrary.deleteDraft(target.buildId);
+  }
+
+  protected cancelDeleteDraft(): void {
+    this.deleteDraftTarget.set(null);
+  }
+
+  protected compileDraft(card: HangarDraftCardView): void {
+    void this.hangarLibrary.compileDraftFromHangar(card.buildId);
+  }
+
+  protected compileAndFlyDraft(card: HangarDraftCardView): void {
+    this.dispose();
+    void this.hangarLibrary.compileAndFlyDraft(card.buildId);
+  }
+
+  // ---------------------------------------------------------------------
+  // Checkpoint 4 — Compiled User Aircraft actions
+  // ---------------------------------------------------------------------
+
+  protected flyCompiled(card: HangarCompiledCardView): void {
+    this.dispose();
+    this.hangarLibrary.flyCompiled(card.revisionId);
+  }
+
+  protected duplicateCompiledIntoBuilder(card: HangarCompiledCardView): void {
+    this.dispose();
+    void this.hangarLibrary.duplicateCompiledSourceIntoBuilder(card.revisionId);
+  }
+
+  protected requestDeleteCompiled(
+    card: HangarCompiledCardView,
+    event?: Event,
+  ): void {
+    event?.stopPropagation();
+    this.deleteCompiledTarget.set(card);
+  }
+
+  protected confirmDeleteCompiled(): void {
+    const target = this.deleteCompiledTarget();
+    if (!target) return;
+    this.deleteCompiledTarget.set(null);
+    void this.hangarLibrary.deleteCompiledRevision(target.revisionId);
+  }
+
+  protected cancelDeleteCompiled(): void {
+    this.deleteCompiledTarget.set(null);
+  }
+
+  protected dismissLibraryNotice(): void {
+    this.hangarLibrary.clearActionNotice();
+  }
+
+  protected onMediaError(event: Event): void {
+    this.media.onImageError(event, 'frame');
   }
 
   protected onKeyNav(event: KeyboardEvent): void {

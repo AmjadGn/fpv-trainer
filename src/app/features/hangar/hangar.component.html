@@ -22,6 +22,36 @@
     </div>
   </header>
 
+  @if (storageUnavailable()) {
+    <div class="hangar__banner hangar__banner--warning" role="status">
+      <span>{{ storageMessage() || 'Persistent storage is unavailable. Drafts and compiled builds are only saved for this session.' }}</span>
+    </div>
+  }
+
+  @if (recoveryNotice()) {
+    <div class="hangar__banner hangar__banner--info" role="status">
+      <span>
+        Some saved records could not be loaded and were preserved for recovery
+        ({{ recoveryNotice()!.invalidDraftCount }} draft(s),
+        {{ recoveryNotice()!.invalidCompiledCount }} compiled revision(s)). They were
+        not deleted.
+      </span>
+    </div>
+  }
+
+  @if (libraryNotice()) {
+    <div class="hangar__banner hangar__banner--success" role="status">
+      <span>{{ libraryNotice() }}</span>
+      <button type="button" class="hangar__icon-btn" aria-label="Dismiss" (click)="dismissLibraryNotice()">✕</button>
+    </div>
+  }
+
+  @if (libraryError()) {
+    <div class="hangar__banner hangar__banner--danger" role="alert">
+      <span>{{ libraryError() }}</span>
+    </div>
+  }
+
   <div class="hangar__layout">
     <aside class="hangar__list" aria-label="Aircraft list">
       <label class="hangar__search">
@@ -180,7 +210,7 @@
       </div>
 
       <div class="hangar__cta">
-        <button type="button" class="action" (click)="customizeInBuilder()">Customize in Builder</button>
+        <button type="button" class="action" (click)="customizeInBuilder()">Duplicate into Builder</button>
         <button type="button" class="action" (click)="openCompare()">Compare</button>
         <button type="button" class="action" (click)="startTestFlight()">Test Flight</button>
         <button type="button" class="action action--primary" (click)="startFullFlight()">
@@ -189,6 +219,195 @@
       </div>
     </aside>
   </div>
+
+  <section class="hangar__section" aria-label="User build drafts">
+    <div class="hangar__section-header">
+      <h2>User Build Drafts</h2>
+      <button type="button" class="action action--sm" (click)="openBuilder()">New build</button>
+    </div>
+    @if (libraryState() === 'loading') {
+      <p class="hangar__loading-text" role="status">Loading your saved drafts…</p>
+    } @else if (draftsEmpty()) {
+      <p class="hangar__empty">
+        You haven't saved any custom drone drafts yet. Start one from the Drone Builder — it will
+        appear here automatically.
+      </p>
+    } @else {
+      <div class="hangar__card-grid">
+        @for (card of draftCards(); track card.buildId) {
+          <article
+            class="hangar__draft-card"
+            [class.hangar__draft-card--attention]="card.hasMissingComponents || card.isOutdated"
+          >
+            <div class="hangar__card-media">
+              <img
+                [src]="card.frameMedia.thumbnailUrl"
+                [alt]="card.frameMedia.altText"
+                (error)="onMediaError($event)"
+              />
+            </div>
+            <div class="hangar__card-body">
+              <h3 class="hangar__card-title">{{ card.name }}</h3>
+              <p class="hangar__card-meta">
+                @if (card.intentLabel) {
+                  <span>{{ card.intentLabel }}</span>
+                }
+                <span>Updated {{ card.updatedLabel }}</span>
+              </p>
+              <p class="hangar__card-completeness">{{ card.completenessLabel }}</p>
+              <span class="hangar__pill" [attr.data-level]="card.compatibilityLevel">
+                {{ card.compatibilityLabel }}
+              </span>
+              @if (card.hasMissingComponents) {
+                <p class="hangar__card-warning">
+                  Some selected parts are missing from the catalog — open in Builder to fix.
+                </p>
+              }
+              @if (card.isOutdated) {
+                <p class="hangar__card-warning">
+                  Draft changed since the last compile — recompile to update the flyable build.
+                </p>
+              }
+              @if (card.hasCompiledRevisions) {
+                <p class="hangar__card-hint">
+                  {{ card.compiledRevisionCount }} compiled revision(s) in the Hangar.
+                </p>
+              }
+            </div>
+            <div class="hangar__card-actions">
+              <button type="button" class="action action--sm" (click)="openDraft(card)">
+                Open in Builder
+              </button>
+              <button type="button" class="action action--sm" (click)="duplicateDraft(card)">
+                Duplicate
+              </button>
+              <button
+                type="button"
+                class="action action--sm"
+                (click)="requestRenameDraft(card, $event)"
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                class="action action--sm"
+                [disabled]="!card.canCompile"
+                (click)="compileDraft(card)"
+              >
+                Compile
+              </button>
+              <button
+                type="button"
+                class="action action--sm action--primary"
+                [disabled]="!card.canCompile"
+                [attr.aria-label]="'Compile and fly ' + card.name"
+                (click)="compileAndFlyDraft(card)"
+              >
+                Compile &amp; Fly
+              </button>
+              <button
+                type="button"
+                class="action action--sm action--danger"
+                (click)="requestDeleteDraft(card, $event)"
+              >
+                Delete
+              </button>
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="hangar__section" aria-label="Compiled user aircraft">
+    <div class="hangar__section-header">
+      <h2>Compiled User Aircraft</h2>
+    </div>
+    @if (libraryState() === 'loading') {
+      <p class="hangar__loading-text" role="status">Loading your compiled aircraft…</p>
+    } @else if (compiledEmpty()) {
+      <p class="hangar__empty">
+        No compiled aircraft yet. Compile a draft from the Drone Builder (or “Compile &amp; Fly”
+        above) to make it flyable — it will appear here.
+      </p>
+    } @else {
+      <div class="hangar__card-grid">
+        @for (card of compiledCards(); track card.revisionId) {
+          <article
+            class="hangar__compiled-card"
+            [class.hangar__compiled-card--incompatible]="!card.runtimeCompatible"
+          >
+            <div class="hangar__card-media">
+              @if (card.frameMedia) {
+                <img
+                  [src]="card.frameMedia.thumbnailUrl"
+                  [alt]="card.frameMedia.altText"
+                  (error)="onMediaError($event)"
+                />
+              }
+            </div>
+            <div class="hangar__card-body">
+              <h3 class="hangar__card-title">{{ card.nameAtCompile }}</h3>
+              <p class="hangar__card-meta">
+                <span>{{ card.revisionLabel }}</span>
+                @if (card.intentLabel) {
+                  <span>{{ card.intentLabel }}</span>
+                }
+                <span>{{ card.createdLabel }}</span>
+              </p>
+              <p class="hangar__card-id">Aircraft ID: {{ card.aircraftIdShort }}</p>
+              @if (card.massLabel || card.thrustLabel) {
+                <p class="hangar__card-stats">
+                  @if (card.massLabel) {
+                    <span>{{ card.massLabel }}</span>
+                  }
+                  @if (card.thrustLabel) {
+                    <span>{{ card.thrustLabel }}</span>
+                  }
+                </p>
+              }
+              @if (card.confidenceSummary) {
+                <p class="hangar__card-hint">{{ card.confidenceSummary }}</p>
+              }
+              <span class="hangar__pill" [attr.data-compatible]="card.runtimeCompatible">
+                {{ card.runtimeCompatibilityLabel }}
+              </span>
+              @if (card.isOrphan) {
+                <span class="hangar__pill hangar__pill--orphan">
+                  Orphaned — source draft deleted, still flyable
+                </span>
+              }
+            </div>
+            <div class="hangar__card-actions">
+              <button
+                type="button"
+                class="action action--sm action--primary"
+                [disabled]="!card.isFlyable"
+                [attr.aria-label]="'Fly ' + card.nameAtCompile"
+                (click)="flyCompiled(card)"
+              >
+                Fly
+              </button>
+              <button
+                type="button"
+                class="action action--sm"
+                (click)="duplicateCompiledIntoBuilder(card)"
+              >
+                Duplicate into Builder
+              </button>
+              <button
+                type="button"
+                class="action action--sm action--danger"
+                (click)="requestDeleteCompiled(card, $event)"
+              >
+                Delete
+              </button>
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
 
   @if (showCompare()) {
     <div class="hangar__compare" role="dialog" aria-modal="true" aria-label="Aircraft comparison">
@@ -226,4 +445,76 @@
       </div>
     </div>
   }
+
+  <fpv-dialog
+    [open]="!!renameDraftTarget()"
+    title="Rename draft"
+    (close)="cancelRenameDraft()"
+  >
+    <label class="hangar__dialog-field">
+      <span class="fpv-sr-only">Draft name</span>
+      <input
+        type="text"
+        [value]="renameDraftName()"
+        (input)="onRenameInput(($any($event.target)).value)"
+        maxlength="80"
+      />
+    </label>
+    <div footer class="hangar__dialog-footer">
+      <button type="button" fpvButton variant="ghost" size="sm" (click)="cancelRenameDraft()">
+        Cancel
+      </button>
+      <button
+        type="button"
+        fpvButton
+        variant="primary"
+        size="sm"
+        [disabled]="!renameDraftName().trim()"
+        (click)="confirmRenameDraft()"
+      >
+        Save name
+      </button>
+    </div>
+  </fpv-dialog>
+
+  <fpv-dialog
+    [open]="!!deleteDraftTarget()"
+    title="Delete draft?"
+    (close)="cancelDeleteDraft()"
+  >
+    <p>
+      This deletes the draft “{{ deleteDraftTarget()?.name }}” from this device.
+      @if (deleteDraftTarget()?.hasCompiledRevisions) {
+        Compiled revisions of this build remain flyable in the Hangar — they are not deleted.
+      }
+    </p>
+    <div footer class="hangar__dialog-footer">
+      <button type="button" fpvButton variant="ghost" size="sm" (click)="cancelDeleteDraft()">
+        Cancel
+      </button>
+      <button type="button" fpvButton variant="danger" size="sm" (click)="confirmDeleteDraft()">
+        Delete draft
+      </button>
+    </div>
+  </fpv-dialog>
+
+  <fpv-dialog
+    [open]="!!deleteCompiledTarget()"
+    title="Delete compiled revision?"
+    (close)="cancelDeleteCompiled()"
+  >
+    <p>
+      This permanently deletes the compiled revision “{{ deleteCompiledTarget()?.revisionLabel }}”
+      of “{{ deleteCompiledTarget()?.nameAtCompile }}”. It will no longer be flyable, and this
+      cannot be undone. The source draft (if it still exists) is not affected.
+    </p>
+    <div footer class="hangar__dialog-footer">
+      <button type="button" fpvButton variant="ghost" size="sm" (click)="cancelDeleteCompiled()">
+        Cancel
+      </button>
+      <button type="button" fpvButton variant="danger" size="sm" (click)="confirmDeleteCompiled()">
+        Delete revision
+      </button>
+    </div>
+  </fpv-dialog>
 </div>

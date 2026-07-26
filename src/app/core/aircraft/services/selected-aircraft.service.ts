@@ -39,6 +39,24 @@ export class SelectedAircraftService {
     return resolved;
   }
 
+  /**
+   * Select an exact aircraft id with no DEFAULT_AIRCRAFT_ID fallback.
+   * Used by Hangar "Fly" actions on compiled builds — flying the wrong
+   * (fallback) aircraft would be worse than refusing to launch. Returns
+   * null when the id is not currently registered in the catalog.
+   */
+  trySelectExact(id: string): AircraftId | null {
+    const def = this.catalog.getById(id);
+    if (!def || def.id !== id) {
+      return null;
+    }
+    const resolved = def.id;
+    this._selectedId.set(resolved);
+    this.persistence.setSelected(resolved);
+    this.persistence.pushRecent(resolved);
+    return resolved;
+  }
+
   toggleFavorite(id: AircraftId): void {
     this.persistence.toggleFavorite(id);
   }
