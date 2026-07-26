@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Generic battery silhouette">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="34" y="42" width="92" height="40" rx="6" fill="#2a4034" stroke="#6fbf8a" stroke-width="3"/>
+  <rect x="126" y="52" width="10" height="20" rx="2" fill="#8fd6a8"/>
+  <path d="M50 54 H70 M50 62 H66 M50 70 H74" stroke="#8fd6a8" stroke-width="3" stroke-linecap="round"/>
+</svg>

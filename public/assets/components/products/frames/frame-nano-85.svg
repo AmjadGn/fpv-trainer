@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Nano 85 whoop frame">
+  <rect width="160" height="120" fill="#142018"/>
+  <circle cx="102" cy="38" r="9.24" fill="none" stroke="#3d5c48" stroke-width="2"/>
+<circle cx="58" cy="38" r="9.24" fill="none" stroke="#3d5c48" stroke-width="2"/>
+<circle cx="58" cy="82" r="9.24" fill="none" stroke="#3d5c48" stroke-width="2"/>
+<circle cx="102" cy="82" r="9.24" fill="none" stroke="#3d5c48" stroke-width="2"/>
+  <line x1="80" y1="60" x2="102" y2="38" stroke="#6fbf8a" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="102" cy="38" r="4" fill="#8fd6a8"/>
+<line x1="80" y1="60" x2="58" y2="38" stroke="#6fbf8a" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="58" cy="38" r="4" fill="#8fd6a8"/>
+<line x1="80" y1="60" x2="58" y2="82" stroke="#6fbf8a" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="58" cy="82" r="4" fill="#8fd6a8"/>
+<line x1="80" y1="60" x2="102" y2="82" stroke="#6fbf8a" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="102" cy="82" r="4" fill="#8fd6a8"/>
+  <rect x="71" y="52" width="18" height="16" rx="3" fill="#2a4034" stroke="#6fbf8a" stroke-width="2"/>
+  <rect x="75.5" y="56" width="9" height="8" rx="2" fill="#1a2a22"/>
+</svg>

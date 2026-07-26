@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Generic receiver silhouette">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="52" y="40" width="40" height="28" rx="3" fill="#2a4034" stroke="#6fbf8a" stroke-width="3"/>
+  <path d="M72 68 V92 M64 92 H80" stroke="#8fd6a8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M100 36 Q120 60 100 84" fill="none" stroke="#6fbf8a" stroke-width="3"/>
+  <path d="M112 44 Q124 60 112 76" fill="none" stroke="#8fd6a8" stroke-width="2"/>
+</svg>

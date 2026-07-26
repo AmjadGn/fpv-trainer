@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Racing 5-inch frame">
+  <rect width="160" height="120" fill="#142018"/>
+  
+  <line x1="80" y1="60" x2="122" y2="18" stroke="#6fbf8a" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="122" cy="18" r="4.5" fill="#8fd6a8"/>
+<line x1="80" y1="60" x2="38" y2="18" stroke="#6fbf8a" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="38" cy="18" r="4.5" fill="#8fd6a8"/>
+<line x1="80" y1="60" x2="38" y2="102" stroke="#6fbf8a" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="38" cy="102" r="4.5" fill="#8fd6a8"/>
+<line x1="80" y1="60" x2="122" y2="102" stroke="#6fbf8a" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="122" cy="102" r="4.5" fill="#8fd6a8"/>
+  <rect x="69" y="51" width="22" height="18" rx="3" fill="#2a4034" stroke="#6fbf8a" stroke-width="2"/>
+  <rect x="74.5" y="55.5" width="11" height="9" rx="2" fill="#1a2a22"/>
+</svg>

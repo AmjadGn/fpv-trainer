@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="5x4.5x3 freestyle propeller">
+  <rect width="160" height="120" fill="#142018"/>
+  
+  <g transform="rotate(-90 80 60)">
+    <path d="M80 54
+      Q97 39.75 84.2 15
+      Q74.05 28.500000000000004 80 54 Z"
+      fill="#2a4034" stroke="#6fbf8a" stroke-width="1.5" stroke-linejoin="round"/>
+    
+  </g>
+  <g transform="rotate(30 80 60)">
+    <path d="M80 54
+      Q97 39.75 84.2 15
+      Q74.05 28.500000000000004 80 54 Z"
+      fill="#2a4034" stroke="#6fbf8a" stroke-width="1.5" stroke-linejoin="round"/>
+    
+  </g>
+  <g transform="rotate(150 80 60)">
+    <path d="M80 54
+      Q97 39.75 84.2 15
+      Q74.05 28.500000000000004 80 54 Z"
+      fill="#2a4034" stroke="#6fbf8a" stroke-width="1.5" stroke-linejoin="round"/>
+    
+  </g>
+  <circle cx="80" cy="60" r="8" fill="#1a2a22" stroke="#6fbf8a" stroke-width="2"/>
+  <circle cx="80" cy="60" r="3" fill="#8fd6a8"/>
+</svg>

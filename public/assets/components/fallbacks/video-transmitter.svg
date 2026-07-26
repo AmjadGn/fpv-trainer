@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Generic VTX silhouette">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="40" y="44" width="56" height="36" rx="4" fill="#2a4034" stroke="#6fbf8a" stroke-width="3"/>
+  <path d="M100 50 L128 36 V84 L100 70 Z" fill="#3d5c48" stroke="#8fd6a8" stroke-width="2"/>
+  <circle cx="58" cy="62" r="5" fill="#8fd6a8"/>
+</svg>

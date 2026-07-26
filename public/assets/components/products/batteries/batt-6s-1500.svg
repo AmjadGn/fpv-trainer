@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="6S 1500mAh racing battery">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="51" y="46" width="58" height="28" rx="4" fill="#2a4034" stroke="#6fbf8a" stroke-width="2"/>
+  <line x1="60.666666666666664" y1="48" x2="60.666666666666664" y2="72" stroke="#3d5c48" stroke-width="1.5"/>
+<line x1="70.33333333333333" y1="48" x2="70.33333333333333" y2="72" stroke="#3d5c48" stroke-width="1.5"/>
+<line x1="80" y1="48" x2="80" y2="72" stroke="#3d5c48" stroke-width="1.5"/>
+<line x1="89.66666666666666" y1="48" x2="89.66666666666666" y2="72" stroke="#3d5c48" stroke-width="1.5"/>
+<line x1="99.33333333333333" y1="48" x2="99.33333333333333" y2="72" stroke="#3d5c48" stroke-width="1.5"/>
+  <rect x="105" y="55" width="12" height="10" rx="2" fill="#8fd6a8"/>
+  <rect x="115" y="58" width="4" height="4" fill="#6fbf8a"/>
+  <rect x="55" y="50" width="14.5" height="6" rx="1" fill="#1a2a22"/>
+</svg>

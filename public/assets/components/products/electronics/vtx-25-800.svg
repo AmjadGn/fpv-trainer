@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="VTX 25-800mW">
+  <rect width="160" height="120" fill="#142018"/>
+  <rect x="40" y="38" width="70" height="44" rx="3" fill="#2a4034" stroke="#6fbf8a" stroke-width="2"/>
+  <rect x="48" y="46" width="28" height="16" rx="2" fill="#1a2a22"/>
+  <circle cx="96" cy="60" r="10" fill="#1a2a22" stroke="#8fd6a8" stroke-width="2"/>
+  <line x1="106" y1="60" x2="128" y2="48" stroke="#6fbf8a" stroke-width="2"/>
+  <circle cx="128" cy="48" r="3" fill="#8fd6a8"/>
+  <text x="55" y="74" font-family="ui-monospace, monospace" font-size="9" fill="#8fd6a8">25-800</text>
+</svg>

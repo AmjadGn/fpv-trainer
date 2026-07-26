@@ -17,6 +17,11 @@ import type {
 } from '@fpv/drone-build-domain';
 import { revisionCanonicalContent } from '@fpv/drone-build-domain';
 import type { CompiledAircraftSpecification } from '@fpv/aircraft-compiler';
+import type {
+  PersistedCompiledRevisionRecord,
+  PersistedDraftRecord,
+  ValidatedRecordResult,
+} from '../records/persisted-records';
 
 export type {
   PropulsionDatasetRepository,
@@ -52,6 +57,53 @@ export interface DroneBuildRepository {
    * @deprecated Use insertRevision. Delegates with immutable conflict semantics.
    */
   saveRevision(revision: DroneBuildRevision): Promise<void>;
+  listBuildIds(): Promise<readonly DroneBuildId[]>;
+  listDraftIds(): Promise<readonly DroneBuildId[]>;
+  listRevisionIds(): Promise<readonly DroneBuildRevisionId[]>;
+  listRevisionsForBuild(
+    buildId: DroneBuildId,
+  ): Promise<readonly DroneBuildRevision[]>;
+  /** Deletes the editable draft only — never cascades to compiled revisions. */
+  deleteDraft(buildId: DroneBuildId): Promise<void>;
+  deleteBuild(buildId: DroneBuildId): Promise<void>;
+  /** Deletes one immutable compiled revision only. */
+  deleteRevision(revisionId: DroneBuildRevisionId): Promise<void>;
+}
+
+/**
+ * Envelope-aware library port for Hangar / Builder lifecycle metadata.
+ * Stores use the same IndexedDB object stores as {@link DroneBuildRepository}.
+ */
+export interface UserBuildLibraryRepository {
+  saveDraftRecord(record: PersistedDraftRecord): Promise<void>;
+  getDraftRecord(
+    buildId: DroneBuildId,
+  ): Promise<ValidatedRecordResult<PersistedDraftRecord> | null>;
+  listDraftRecords(): Promise<{
+    readonly valid: readonly PersistedDraftRecord[];
+    readonly invalid: readonly ValidatedRecordResult<PersistedDraftRecord>[];
+  }>;
+  deleteDraftRecord(buildId: DroneBuildId): Promise<void>;
+
+  saveCompiledRevisionRecord(
+    record: PersistedCompiledRevisionRecord,
+  ): Promise<void>;
+  getCompiledRevisionRecord(
+    revisionId: DroneBuildRevisionId,
+  ): Promise<ValidatedRecordResult<PersistedCompiledRevisionRecord> | null>;
+  listCompiledRevisionRecords(): Promise<{
+    readonly valid: readonly PersistedCompiledRevisionRecord[];
+    readonly invalid: readonly ValidatedRecordResult<PersistedCompiledRevisionRecord>[];
+  }>;
+  listCompiledRevisionRecordsForBuild(buildId: DroneBuildId): Promise<{
+    readonly valid: readonly PersistedCompiledRevisionRecord[];
+    readonly invalid: readonly ValidatedRecordResult<PersistedCompiledRevisionRecord>[];
+  }>;
+  deleteCompiledRevisionRecord(revisionId: DroneBuildRevisionId): Promise<void>;
+
+  saveBuild(build: DroneBuild): Promise<void>;
+  getBuild(id: DroneBuildId): Promise<DroneBuild | null>;
+  deleteBuild(buildId: DroneBuildId): Promise<void>;
 }
 
 export interface CompiledArtifactRecord {
@@ -75,6 +127,7 @@ export interface CompiledArtifactRepository {
     compilerVersion: string,
   ): Promise<CompiledArtifactRecord | null>;
   save(record: CompiledArtifactRecord): Promise<void>;
+  list(): Promise<readonly CompiledArtifactRecord[]>;
 }
 
 export async function insertImmutableRevision(

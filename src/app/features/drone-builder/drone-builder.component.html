@@ -1,0 +1,922 @@
+<div class="fpv-page-bg">
+  <main class="fpv-page builder" [attr.aria-label]="snapshot().mode === 'advanced' ? 'Advanced Drone Builder' : 'Simple Drone Builder'">
+    <fpv-page-header
+      eyebrow="Drone Builder"
+      [title]="snapshot().buildName || 'Build your aircraft'"
+      [support]="
+        snapshot().mode === 'advanced'
+          ? 'Detailed component specs, compatibility diagnostics, and engineering provenance for the same shared build.'
+          : 'Choose a flying style, review recommended parts, then compile and fly in the simulator.'
+      "
+    >
+      <div actions class="builder__header-actions">
+        <div class="builder__mode" role="group" aria-label="Builder mode">
+          <button
+            type="button"
+            fpvButton
+            size="sm"
+            [variant]="snapshot().mode === 'simple' ? 'primary' : 'secondary'"
+            (click)="setMode('simple')"
+          >
+            Simple
+          </button>
+          <button
+            type="button"
+            fpvButton
+            size="sm"
+            [variant]="snapshot().mode === 'advanced' ? 'primary' : 'secondary'"
+            (click)="setMode('advanced')"
+          >
+            Advanced
+          </button>
+        </div>
+        <button type="button" fpvButton variant="ghost" size="sm" (click)="requestReset()">
+          Start over
+        </button>
+        <button type="button" fpvButton variant="ghost" size="sm" (click)="backToFly()">
+          Fly hub
+        </button>
+        <button type="button" fpvButton variant="ghost" size="sm" (click)="backToHangar()">
+          Hangar
+        </button>
+      </div>
+    </fpv-page-header>
+
+    <div class="builder__status-bar" aria-live="polite">
+      <span>
+        Style:
+        <strong>{{ activeIntent()?.title ?? 'Not chosen' }}</strong>
+      </span>
+      <span>
+        Readiness:
+        <strong>{{ readinessLabel() }}</strong>
+      </span>
+      @if (snapshot().dirty || snapshot().saveState === 'unsaved') {
+        <span class="builder__dirty">Unsaved changes</span>
+      } @else if (snapshot().saveState === 'saving') {
+        <span class="builder__saved">Saving…</span>
+      } @else if (snapshot().saveState === 'save-failed') {
+        <span class="builder__dirty">Saving failed — retry</span>
+      } @else if (snapshot().saveState === 'storage-unavailable') {
+        <span class="builder__dirty">Session-only save</span>
+      } @else if (snapshot().saveState === 'saved') {
+        <span class="builder__saved">Saved locally on this device</span>
+      }
+      @if (snapshot().lastSavedAtIso && snapshot().saveState === 'saved') {
+        <span class="builder__saved">Last saved at {{ lastSavedClock() }}</span>
+      }
+      @if (snapshot().compileStale) {
+        <span class="builder__stale">Compile outdated</span>
+      }
+    </div>
+
+    @if (facade.errorMessage(); as err) {
+      <p class="builder__error" role="alert">{{ err }}</p>
+    }
+    @if (facade.saveNotice(); as notice) {
+      <p class="builder__notice" role="status">{{ notice }}</p>
+    }
+
+    @if (snapshot().mode === 'advanced') {
+      <div class="builder__advanced" aria-label="Advanced Drone Builder">
+        <div class="builder__name-row builder__advanced-name">
+          <label class="builder__name">
+            <span>Build name</span>
+            <input
+              type="text"
+              [value]="nameDraft()"
+              (input)="onNameInput($any($event.target).value)"
+              (change)="commitName()"
+              (blur)="commitName()"
+              maxlength="64"
+            />
+          </label>
+          <p class="builder__hint">
+            Same shared build as Simple mode. Switching modes never creates a second build.
+          </p>
+        </div>
+
+        <div class="builder__advanced-layout">
+          <aside class="builder__advanced-nav" aria-label="Categories and completeness">
+            <fpv-panel title="Categories" subtitle="Shared selections with Simple mode.">
+              <nav class="builder__advanced-cats" aria-label="Component categories">
+                @for (cat of categoryProgress(); track cat.category) {
+                  <button
+                    type="button"
+                    class="builder__advanced-cat"
+                    [class.builder__advanced-cat--active]="cat.active"
+                    [class.builder__advanced-cat--missing]="cat.status === 'missing'"
+                    (click)="setCategory(cat.category)"
+                  >
+                    @if (cat.media; as media) {
+                      <img
+                        [src]="media.thumbnailUrl"
+                        [alt]="media.altText"
+                        width="48"
+                        height="36"
+                        loading="lazy"
+                        decoding="async"
+                        (error)="onMediaError($event, cat.category)"
+                      />
+                    }
+                    <span>
+                      <strong>{{ cat.label }}</strong>
+                      <small>{{ cat.selectedName ?? 'Not selected' }}</small>
+                      <small>{{ statusLabel(cat.status) }}</small>
+                    </span>
+                  </button>
+                }
+              </nav>
+              <ul class="builder__ready-list">
+                @for (line of readinessLines(); track line) {
+                  <li>{{ line }}</li>
+                }
+              </ul>
+            </fpv-panel>
+          </aside>
+
+          <section class="builder__advanced-main" aria-labelledby="advanced-parts-heading">
+            <div class="builder__section-head">
+              <h2 id="advanced-parts-heading">
+                {{ categoryProgress().find((c) => c.active)?.label ?? 'Components' }}
+              </h2>
+              <p>Inspect specifications, compatibility, and catalog data quality.</p>
+            </div>
+
+            <div class="builder__intent-inline">
+              <span>Flying style:</span>
+              <strong>{{ activeIntent()?.title ?? 'Not chosen' }}</strong>
+              <div class="builder__row">
+                @for (intent of intents; track intent.id) {
+                  <button
+                    type="button"
+                    fpvButton
+                    size="sm"
+                    [variant]="snapshot().intentId === intent.id ? 'primary' : 'ghost'"
+                    (click)="chooseIntent(intent.id)"
+                  >
+                    {{ intent.title }}
+                  </button>
+                }
+              </div>
+            </div>
+
+            <ul class="builder__advanced-options" role="listbox">
+              @for (detail of advancedDetails(); track detail.option.revisionId) {
+                <li>
+                  <button
+                    type="button"
+                    class="builder__advanced-option"
+                    role="option"
+                    [attr.aria-selected]="detail.option.selected"
+                    [class.builder__advanced-option--selected]="detail.option.selected"
+                    (click)="selectOption(detail.option.revisionId)"
+                  >
+                    <span class="builder__advanced-option-media">
+                      <img
+                        [src]="detail.option.media.thumbnailUrl"
+                        [alt]="detail.option.media.altText"
+                        width="120"
+                        height="90"
+                        loading="lazy"
+                        decoding="async"
+                        (error)="onMediaError($event, detail.option.category)"
+                      />
+                      @if (detail.option.media.isFallback) {
+                        <span class="builder__option-fallback-label">Generic image</span>
+                      }
+                    </span>
+                    <span class="builder__advanced-option-body">
+                      <span class="builder__option-top">
+                        <strong>{{ detail.option.name }}</strong>
+                        @if (detail.option.isRecommended) {
+                          <span class="builder__pill">Recommended</span>
+                        }
+                        @if (detail.option.selected) {
+                          <span class="builder__pill builder__pill--selected">Selected</span>
+                        }
+                      </span>
+                      <span>{{ detail.option.categoryLabel }} · {{ detail.manufacturerLabel }}</span>
+                      <span class="builder__meta">Revision: {{ detail.revisionDisplay }}</span>
+                      @if (detail.option.distinguishingLabels.length) {
+                        <span class="builder__spec-chips" aria-label="Key specifications">
+                          @for (label of detail.option.distinguishingLabels; track label) {
+                            <span class="builder__spec-chip">{{ label }}</span>
+                          }
+                        </span>
+                      }
+                      <span>{{ compatibilityStatusLabel(detail.option.compatibilityStatus) }}</span>
+                      <span class="builder__meta">Data: {{ detail.dataAvailability }}</span>
+
+                      @if (detail.tags.length) {
+                        <span class="builder__tags">
+                          @for (tag of detail.tags; track tag) {
+                            <span class="builder__tag">{{ tag }}</span>
+                          }
+                        </span>
+                      }
+
+                      <div class="builder__spec-grid">
+                        <div>
+                          <h3>Physical</h3>
+                          <dl>
+                            @for (spec of detail.physicalSpecs; track spec.label) {
+                              <div>
+                                <dt>{{ spec.label }}</dt>
+                                <dd [class.builder__na]="!spec.available">{{ spec.value }}</dd>
+                              </div>
+                            }
+                          </dl>
+                        </div>
+                        @if (detail.electricalSpecs.length) {
+                          <div>
+                            <h3>Electrical</h3>
+                            <dl>
+                              @for (spec of detail.electricalSpecs; track spec.label) {
+                                <div>
+                                  <dt>{{ spec.label }}</dt>
+                                  <dd [class.builder__na]="!spec.available">{{ spec.value }}</dd>
+                                </div>
+                              }
+                            </dl>
+                          </div>
+                        }
+                      </div>
+                    </span>
+                  </button>
+                </li>
+              } @empty {
+                <li class="builder__empty">
+                  Choose a flying style to load catalog components for this category.
+                </li>
+              }
+            </ul>
+
+            @if (selectedAdvancedDetail(); as selected) {
+              <section class="builder__selected-detail builder__selected-detail--advanced" aria-label="Selected component detail">
+                <div class="builder__selected-detail-media">
+                  <img
+                    [src]="selected.option.media.imageUrl"
+                    [alt]="selected.option.media.altText"
+                    width="280"
+                    height="210"
+                    decoding="async"
+                    (error)="onMediaError($event, selected.option.category)"
+                  />
+                  @if (selected.option.media.isFallback) {
+                    <span class="builder__option-fallback-label">Generic image</span>
+                  }
+                </div>
+                <div class="builder__selected-detail-body">
+                  <h3>{{ selected.option.name }}</h3>
+                  <p class="builder__meta">Revision: {{ selected.revisionDisplay }}</p>
+                  @if (selected.option.distinguishingLabels.length) {
+                    <div class="builder__spec-chips">
+                      @for (label of selected.option.distinguishingLabels; track label) {
+                        <span class="builder__spec-chip">{{ label }}</span>
+                      }
+                    </div>
+                  }
+                  <p>{{ compatibilityStatusLabel(selected.option.compatibilityStatus) }}</p>
+                  <p class="builder__meta">Data: {{ selected.dataAvailability }}</p>
+                  <div class="builder__spec-grid">
+                    <div>
+                      <h4>Physical</h4>
+                      <dl>
+                        @for (spec of selected.physicalSpecs; track spec.label) {
+                          <div>
+                            <dt>{{ spec.label }}</dt>
+                            <dd [class.builder__na]="!spec.available">{{ spec.value }}</dd>
+                          </div>
+                        }
+                      </dl>
+                    </div>
+                    @if (selected.electricalSpecs.length) {
+                      <div>
+                        <h4>Electrical</h4>
+                        <dl>
+                          @for (spec of selected.electricalSpecs; track spec.label) {
+                            <div>
+                              <dt>{{ spec.label }}</dt>
+                              <dd [class.builder__na]="!spec.available">{{ spec.value }}</dd>
+                            </div>
+                          }
+                        </dl>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </section>
+            }
+          </section>
+
+          <aside class="builder__advanced-side" aria-label="Diagnostics and engineering">
+            <fpv-panel title="Compatibility diagnostics" [subtitle]="compatibilityHeadline()">
+              <div class="builder__diag-group">
+                <h3>Blocking errors</h3>
+                @if (blocking().length === 0) {
+                  <p class="builder__empty">No blocking errors.</p>
+                }
+                <ul class="builder__issues">
+                  @for (issue of blocking(); track issue.domainCode + issue.title) {
+                    <li class="builder__issue builder__issue--error">
+                      <span class="builder__pill">{{ issueClassLabel(issue.issueClass) }}</span>
+                      <strong>{{ issue.title }}</strong>
+                      <span>{{ issue.explanation }}</span>
+                      <span>Affected: {{ issue.affectedPartLabel }}</span>
+                      <span class="builder__issue-action">{{ issue.suggestedAction }}</span>
+                      <span class="builder__meta">Code: {{ issue.domainCode }}</span>
+                      <span class="builder__meta">Blocks compilation: yes</span>
+                      @if (issue.affectedCategory !== 'build' && issue.affectedCategory !== 'unknown') {
+                        <button
+                          type="button"
+                          fpvButton
+                          size="sm"
+                          variant="ghost"
+                          (click)="goToIssueCategory(issue.affectedCategory)"
+                        >
+                          Go to {{ issue.affectedPartLabel }}
+                        </button>
+                      }
+                    </li>
+                  }
+                </ul>
+              </div>
+
+              <div class="builder__diag-group">
+                <h3>Warnings</h3>
+                @if (warnings().length === 0) {
+                  <p class="builder__empty">No warnings.</p>
+                }
+                <ul class="builder__issues">
+                  @for (issue of warnings(); track issue.domainCode + issue.title) {
+                    <li class="builder__issue builder__issue--warn">
+                      <span class="builder__pill">{{ issueClassLabel(issue.issueClass) }}</span>
+                      <strong>{{ issue.title }}</strong>
+                      <span>{{ issue.explanation }}</span>
+                      <span>Affected: {{ issue.affectedPartLabel }}</span>
+                      <span class="builder__issue-action">{{ issue.suggestedAction }}</span>
+                      <span class="builder__meta">Code: {{ issue.domainCode }}</span>
+                      <span class="builder__meta">Blocks compilation: no</span>
+                      @if (issue.affectedCategory !== 'build' && issue.affectedCategory !== 'unknown') {
+                        <button
+                          type="button"
+                          fpvButton
+                          size="sm"
+                          variant="ghost"
+                          (click)="goToIssueCategory(issue.affectedCategory)"
+                        >
+                          Go to {{ issue.affectedPartLabel }}
+                        </button>
+                      }
+                    </li>
+                  }
+                </ul>
+              </div>
+
+              <div class="builder__diag-group">
+                <h3>Recommendations</h3>
+                @if (recommendationIssues().length === 0) {
+                  <p class="builder__empty">No recommendations.</p>
+                }
+                <ul class="builder__issues">
+                  @for (issue of recommendationIssues(); track issue.domainCode + issue.title) {
+                    <li class="builder__issue builder__issue--info">
+                      <strong>{{ issue.title }}</strong>
+                      <span>{{ issue.explanation }}</span>
+                      <span class="builder__meta">Code: {{ issue.domainCode }}</span>
+                    </li>
+                  }
+                </ul>
+              </div>
+
+              <div class="builder__diag-group">
+                <h3>Information</h3>
+                @if (informationIssues().length === 0) {
+                  <p class="builder__empty">No informational notes.</p>
+                }
+                <ul class="builder__issues">
+                  @for (issue of informationIssues(); track issue.domainCode + issue.title) {
+                    <li class="builder__issue builder__issue--info">
+                      <strong>{{ issue.title }}</strong>
+                      <span>{{ issue.explanation }}</span>
+                      <span class="builder__meta">Code: {{ issue.domainCode }}</span>
+                    </li>
+                  }
+                </ul>
+              </div>
+            </fpv-panel>
+
+            <fpv-panel title="Engineering report" subtitle="Shared engineering pipeline output.">
+              <details class="builder__collapse" open>
+                <summary>Mass</summary>
+                <ul class="builder__stats">
+                  @for (stat of massStats(); track stat.id) {
+                    <li>
+                      <span>{{ stat.label }}</span>
+                      <strong>{{ stat.displayValue }}</strong>
+                      <small>{{ stat.confidence }} · {{ stat.source }}</small>
+                      <small>{{ stat.limitations }}</small>
+                    </li>
+                  } @empty {
+                    <li class="builder__empty">Not available yet.</li>
+                  }
+                </ul>
+              </details>
+              <details class="builder__collapse" open>
+                <summary>Propulsion</summary>
+                <ul class="builder__stats">
+                  @for (stat of propulsionStats(); track stat.id) {
+                    <li>
+                      <span>{{ stat.label }}</span>
+                      <strong>{{ stat.displayValue }}</strong>
+                      <small>{{ stat.confidence }} · {{ stat.source }}</small>
+                      <small>{{ stat.limitations }}</small>
+                    </li>
+                  } @empty {
+                    <li class="builder__empty">Not available yet.</li>
+                  }
+                </ul>
+              </details>
+              <details class="builder__collapse">
+                <summary>Electrical</summary>
+                <ul class="builder__stats">
+                  @for (stat of electricalStats(); track stat.id) {
+                    <li>
+                      <span>{{ stat.label }}</span>
+                      <strong>{{ stat.displayValue }}</strong>
+                      <small>{{ stat.confidence }} · {{ stat.source }}</small>
+                      <small>{{ stat.limitations }}</small>
+                    </li>
+                  } @empty {
+                    <li class="builder__empty">Not available yet.</li>
+                  }
+                </ul>
+              </details>
+              <details class="builder__collapse">
+                <summary>Endurance</summary>
+                <ul class="builder__stats">
+                  @for (stat of enduranceStats(); track stat.id) {
+                    <li>
+                      <span>{{ stat.label }}</span>
+                      <strong>{{ stat.displayValue }}</strong>
+                      <small>{{ stat.limitations }}</small>
+                    </li>
+                  } @empty {
+                    <li class="builder__empty">Not available yet.</li>
+                  }
+                </ul>
+              </details>
+              <details class="builder__collapse">
+                <summary>Runtime mapping</summary>
+                <ul class="builder__stats">
+                  @for (stat of runtimeStats(); track stat.id) {
+                    <li>
+                      <span>{{ stat.label }}</span>
+                      <strong>{{ stat.displayValue }}</strong>
+                      <small>{{ stat.limitations }}</small>
+                    </li>
+                  } @empty {
+                    <li class="builder__empty">Not available yet.</li>
+                  }
+                </ul>
+              </details>
+            </fpv-panel>
+
+            <fpv-panel title="Confidence & provenance" [subtitle]="provenanceInfo().label">
+              <p>{{ provenanceInfo().description }}</p>
+              <p class="builder__meta">
+                Confidence: {{ provenanceInfo().confidence }}
+              </p>
+              <p class="builder__meta">{{ provenanceInfo().limitations }}</p>
+              <p class="builder__hint">
+                Synthetic and fallback sources are never labelled as measured.
+              </p>
+            </fpv-panel>
+
+            <fpv-panel title="Configuration & tuning" subtitle="Read-only for this milestone.">
+              <p>{{ tuningInfo().summary }}</p>
+              <dl class="builder__tuning">
+                @for (field of tuningInfo().fields; track field.label) {
+                  <div>
+                    <dt>{{ field.label }}</dt>
+                    <dd [class.builder__na]="!field.available">{{ field.value }}</dd>
+                  </div>
+                }
+              </dl>
+            </fpv-panel>
+
+            <fpv-panel title="Compilation" [subtitle]="readinessLabel()">
+              @if (snapshot().lastCompile; as compile) {
+                @if (compile.ok && !snapshot().compileStale) {
+                  <ul class="builder__ready-list">
+                    <li>Build name: {{ snapshot().buildName }}</li>
+                    <li>Compiled aircraft: {{ compile.aircraftDisplayName }}</li>
+                    <li>Aircraft ID: {{ compile.aircraftId }}</li>
+                    @if (compile.sourceBuildRevisionId) {
+                      <li>Source revision: {{ compile.sourceBuildRevisionId }}</li>
+                    }
+                    <li>Validation: {{ compile.validationCanCompile ? 'can compile' : 'blocked' }}</li>
+                    @if (compile.confidenceSummary) {
+                      <li>Confidence: {{ compile.confidenceSummary }}</li>
+                    }
+                    <li>Ready to fly: yes</li>
+                  </ul>
+                } @else if (!compile.ok) {
+                  <p class="builder__blocked">{{ compile.message }}</p>
+                  @if (compile.failedStage) {
+                    <p class="builder__meta">Failed stage: {{ compile.failedStage }}</p>
+                  }
+                  @if (compile.developmentDiagnosticCode) {
+                    <p class="builder__meta">
+                      Diagnostic code: {{ compile.developmentDiagnosticCode }}
+                    </p>
+                  }
+                  <ul class="builder__issues">
+                    @for (issue of compile.blockingIssues; track issue.domainCode + issue.title) {
+                      <li class="builder__issue builder__issue--error">
+                        <strong>{{ issue.title }}</strong>
+                        <span>{{ issue.explanation }}</span>
+                      </li>
+                    }
+                  </ul>
+                } @else if (snapshot().compileStale) {
+                  <p class="builder__stale">
+                    Compiled artifact is outdated. Recompile before flying the updated build.
+                  </p>
+                }
+              } @else {
+                <p class="builder__empty">Compile to produce a flyable aircraft artifact.</p>
+              }
+            </fpv-panel>
+          </aside>
+        </div>
+      </div>
+    } @else {
+      <section class="builder__intent-section" aria-labelledby="builder-intent-heading">
+        <div class="builder__section-head">
+          <h2 id="builder-intent-heading">1. Choose a flying style</h2>
+          <p>Recommendations never skip compatibility checks.</p>
+        </div>
+        <div class="builder__intent-grid">
+          @for (intent of intents; track intent.id) {
+            <button
+              type="button"
+              class="builder__intent"
+              [class.builder__intent--active]="snapshot().intentId === intent.id"
+              [attr.aria-pressed]="snapshot().intentId === intent.id"
+              (click)="chooseIntent(intent.id)"
+            >
+              <strong>{{ intent.title }}</strong>
+              <span>{{ intent.expectedFeel }}</span>
+              <span class="builder__intent-trade">Trade-off: {{ intent.mainTradeOff }}</span>
+              <span class="builder__intent-rec">{{ intent.factoryRecommendationLabel }}</span>
+            </button>
+          }
+        </div>
+        <div class="builder__row">
+          <button
+            type="button"
+            fpvButton
+            variant="secondary"
+            size="sm"
+            [disabled]="!snapshot().intentId"
+            (click)="applyRecommended()"
+          >
+            Use recommended build
+          </button>
+        </div>
+      </section>
+
+      <div class="builder__layout">
+        <section class="builder__main" aria-labelledby="builder-parts-heading">
+          <div class="builder__section-head">
+            <h2 id="builder-parts-heading">2. Review and adjust parts</h2>
+            <p>Select a category, then pick a part. Only stocked catalog categories are shown.</p>
+          </div>
+
+          <div class="builder__name-row">
+            <label class="builder__name">
+              <span>Build name</span>
+              <input
+                type="text"
+                [value]="nameDraft()"
+                (input)="onNameInput($any($event.target).value)"
+                (change)="commitName()"
+                (blur)="commitName()"
+                maxlength="64"
+                aria-describedby="builder-name-help"
+              />
+            </label>
+            <p id="builder-name-help" class="builder__hint">
+              @if (snapshot().persistenceBackend === 'memory-fallback') {
+                Persistent storage is unavailable — this name is kept only for the current browser session.
+              } @else {
+                Save Draft stores this name with the build on this device (local IndexedDB). It is not synced to the cloud.
+              }
+            </p>
+          </div>
+
+          <nav class="builder__progress" aria-label="Build completion">
+            @for (cat of categoryProgress(); track cat.category) {
+              <button
+                type="button"
+                class="builder__progress-item"
+                [class.builder__progress-item--active]="cat.active"
+                [class.builder__progress-item--missing]="cat.status === 'missing'"
+                [class.builder__progress-item--attention]="cat.status === 'needs-attention'"
+                [class.builder__progress-item--recommended]="cat.status === 'recommended'"
+                (click)="setCategory(cat.category)"
+              >
+                @if (cat.media; as media) {
+                  <span class="builder__progress-thumb" aria-hidden="true">
+                    <img
+                      [src]="media.thumbnailUrl"
+                      [alt]="''"
+                      width="40"
+                      height="30"
+                      loading="lazy"
+                      decoding="async"
+                      (error)="onMediaError($event, cat.category)"
+                    />
+                  </span>
+                }
+                <span class="builder__progress-label">{{ cat.label }}</span>
+                <span class="builder__progress-status">{{ statusLabel(cat.status) }}</span>
+                <span class="builder__progress-name">{{ cat.selectedName ?? 'Not selected' }}</span>
+              </button>
+            }
+          </nav>
+
+          <fpv-panel
+            [title]="categoryProgress().find((c) => c.active)?.label ?? 'Parts'"
+            subtitle="Choose one option for this category."
+          >
+            <ul class="builder__options" role="listbox" [attr.aria-label]="'Options for ' + snapshot().activeCategory">
+              @for (opt of options(); track opt.revisionId) {
+                <li>
+                  <button
+                    type="button"
+                    class="builder__option"
+                    role="option"
+                    [attr.aria-selected]="opt.selected"
+                    [class.builder__option--selected]="opt.selected"
+                    [class.builder__option--recommended]="opt.isRecommended"
+                    (click)="selectOption(opt.revisionId)"
+                  >
+                    <span class="builder__option-media">
+                      <img
+                        [src]="opt.media.thumbnailUrl"
+                        [alt]="opt.media.altText"
+                        width="112"
+                        height="84"
+                        loading="lazy"
+                        decoding="async"
+                        (error)="onMediaError($event, opt.category)"
+                      />
+                      @if (opt.media.isFallback) {
+                        <span class="builder__option-fallback-label">Generic image</span>
+                      }
+                    </span>
+                    <span class="builder__option-body">
+                      <span class="builder__option-top">
+                        <strong>{{ opt.name }}</strong>
+                        @if (opt.isRecommended) {
+                          <span class="builder__pill">Recommended</span>
+                        }
+                        @if (opt.selected) {
+                          <span class="builder__pill builder__pill--selected">Selected</span>
+                        }
+                      </span>
+                      @if (opt.distinguishingLabels.length) {
+                        <span class="builder__spec-chips" aria-label="Key specifications">
+                          @for (label of opt.distinguishingLabels; track label) {
+                            <span class="builder__spec-chip">{{ label }}</span>
+                          }
+                        </span>
+                      } @else {
+                        <span>{{ opt.mainSpec }}</span>
+                      }
+                      <span class="builder__option-compat">
+                        {{ compatibilityStatusLabel(opt.compatibilityStatus) }}
+                      </span>
+                      <span class="builder__option-effect">{{ opt.simplePerformanceEffect }}</span>
+                    </span>
+                  </button>
+                </li>
+              } @empty {
+                <li class="builder__empty">
+                  Choose a flying style to load compatible parts for this category.
+                </li>
+              }
+            </ul>
+
+            @if (selectedOption(); as selected) {
+              <section class="builder__selected-detail" aria-label="Selected component detail">
+                <div class="builder__selected-detail-media">
+                  <img
+                    [src]="selected.media.imageUrl"
+                    [alt]="selected.media.altText"
+                    width="240"
+                    height="180"
+                    decoding="async"
+                    (error)="onMediaError($event, selected.category)"
+                  />
+                  @if (selected.media.isFallback) {
+                    <span class="builder__option-fallback-label">Generic image</span>
+                  }
+                </div>
+                <div class="builder__selected-detail-body">
+                  <h3>{{ selected.name }}</h3>
+                  @if (selected.distinguishingLabels.length) {
+                    <div class="builder__spec-chips">
+                      @for (label of selected.distinguishingLabels; track label) {
+                        <span class="builder__spec-chip">{{ label }}</span>
+                      }
+                    </div>
+                  }
+                  <p class="builder__option-effect">{{ selected.simplePerformanceEffect }}</p>
+                  <p class="builder__option-compat">
+                    {{ compatibilityStatusLabel(selected.compatibilityStatus) }}
+                  </p>
+                </div>
+              </section>
+            }
+          </fpv-panel>
+        </section>
+
+        <aside class="builder__sidebar" aria-label="Compatibility and performance">
+          <fpv-panel title="Compatibility" [subtitle]="compatibilityHeadline()">
+            @if (snapshot().compatibilityLevel === 'all-compatible' && snapshot().intentId) {
+              <p class="builder__ok">All selected parts look compatible for compilation.</p>
+            }
+            @if (!snapshot().intentId) {
+              <p class="builder__empty">Choose a flying style to check compatibility.</p>
+            }
+            <ul class="builder__issues">
+              @for (issue of blocking(); track issue.domainCode + issue.title) {
+                <li class="builder__issue builder__issue--error">
+                  <strong>{{ issue.title }}</strong>
+                  <span>{{ issue.explanation }}</span>
+                  <span>Part: {{ issue.affectedPartLabel }}</span>
+                  <span class="builder__issue-action">{{ issue.suggestedAction }}</span>
+                </li>
+              }
+              @for (issue of warnings(); track issue.domainCode + issue.title) {
+                <li class="builder__issue builder__issue--warn">
+                  <strong>{{ issue.title }}</strong>
+                  <span>{{ issue.explanation }}</span>
+                  <span>Part: {{ issue.affectedPartLabel }}</span>
+                  <span class="builder__issue-action">{{ issue.suggestedAction }}</span>
+                </li>
+              }
+              @for (issue of infoIssues(); track issue.domainCode + issue.title) {
+                <li class="builder__issue builder__issue--info">
+                  <strong>{{ issue.title }}</strong>
+                  <span>{{ issue.explanation }}</span>
+                  <span class="builder__issue-action">{{ issue.suggestedAction }}</span>
+                </li>
+              }
+            </ul>
+          </fpv-panel>
+
+          <fpv-panel title="Simple performance" subtitle="Estimates from the shared engineering pipeline.">
+            <ul class="builder__stats">
+              @for (stat of simpleStats(); track stat.id) {
+                <li>
+                  <span>{{ stat.simpleLabel }}</span>
+                  <strong>{{ stat.displayValue }}</strong>
+                  <small>{{ stat.interpretation }}</small>
+                  @if (stat.available) {
+                    <small>{{ stat.sourceBrief }}</small>
+                  }
+                </li>
+              } @empty {
+                <li class="builder__empty">
+                  Performance estimates appear once the build is complete and compatible.
+                </li>
+              }
+            </ul>
+          </fpv-panel>
+
+          <fpv-panel title="Build readiness" [subtitle]="readinessLabel()">
+            <ul class="builder__ready-list">
+              @for (line of readinessLines(); track line) {
+                <li>{{ line }}</li>
+              }
+            </ul>
+            @if (snapshot().lastCompile?.ok && !snapshot().compileStale) {
+              <p class="builder__ok">
+                Ready to fly:
+                <strong>{{ snapshot().lastCompile?.aircraftDisplayName }}</strong>
+              </p>
+            }
+          </fpv-panel>
+        </aside>
+      </div>
+    }
+
+    <div class="builder__actions" role="region" aria-label="Save and compile actions">
+      <div class="builder__actions-copy">
+        <p>
+          <strong>Save Draft</strong>
+          stores this build on this device so you can reopen it from the Hangar after refresh.
+        </p>
+        @if (snapshot().persistenceBackend === 'memory-fallback') {
+          <p class="builder__blocked">
+            Persistent storage is unavailable. Your changes are currently saved only for this session.
+          </p>
+        }
+        @if (compileDisabledReason(); as reason) {
+          <p class="builder__blocked" id="compile-disabled-reason">{{ reason }}</p>
+        }
+      </div>
+      <div class="builder__actions-buttons">
+        <button type="button" fpvButton variant="secondary" size="sm" (click)="save()">
+          Save Draft
+        </button>
+        <button
+          type="button"
+          fpvButton
+          variant="secondary"
+          size="sm"
+          [disabled]="!snapshot().canCompile"
+          [attr.aria-describedby]="compileDisabledReason() ? 'compile-disabled-reason' : null"
+          (click)="compile()"
+        >
+          @if (snapshot().phase === 'compiling') {
+            Compiling…
+          } @else {
+            Compile
+          }
+        </button>
+        <button
+          type="button"
+          fpvButton
+          variant="primary"
+          size="sm"
+          [disabled]="!snapshot().canCompile && !canLaunch()"
+          [attr.aria-label]="flyLabel()"
+          (click)="compileAndFly()"
+        >
+          {{ flyLabel() }}
+        </button>
+      </div>
+    </div>
+
+    @if (snapshot().lastCompile; as compile) {
+      <p
+        class="builder__compile"
+        [class.builder__compile--ok]="compile.ok && !snapshot().compileStale"
+        role="status"
+      >
+        {{ compile.message }}
+        @if (snapshot().compileStale) {
+          <span> Selections changed — recompile before flying the updated build.</span>
+        }
+      </p>
+    }
+  </main>
+</div>
+
+<fpv-dialog
+  [open]="intentDialogOpen()"
+  title="Change flying style?"
+  (close)="cancelIntentDialog()"
+>
+  <p>
+    You already changed parts on this build. Replacing selections loads the
+    <strong>{{ pendingIntent()?.title }}</strong>
+    recommended starting build.
+  </p>
+  <p class="builder__hint">
+    Keeping the current selections only updates the flying-style label.
+  </p>
+  <div footer class="builder__dialog-footer">
+    <button type="button" fpvButton variant="ghost" size="sm" (click)="cancelIntentDialog()">
+      Cancel
+    </button>
+    <button type="button" fpvButton variant="secondary" size="sm" (click)="confirmIntentLabelOnly()">
+      Keep current selections
+    </button>
+    <button type="button" fpvButton variant="primary" size="sm" (click)="confirmReplaceIntent()">
+      Replace current selections
+    </button>
+  </div>
+</fpv-dialog>
+
+<fpv-dialog
+  [open]="resetDialogOpen()"
+  title="Start over?"
+  (close)="cancelReset()"
+>
+  <p>This clears the current draft session selections. Unsaved changes will be lost.</p>
+  <div footer class="builder__dialog-footer">
+    <button type="button" fpvButton variant="ghost" size="sm" (click)="cancelReset()">
+      Cancel
+    </button>
+    <button type="button" fpvButton variant="primary" size="sm" (click)="confirmReset()">
+      Start over
+    </button>
+  </div>
+</fpv-dialog>

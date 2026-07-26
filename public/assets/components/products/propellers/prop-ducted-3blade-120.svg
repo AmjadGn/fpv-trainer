@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Ducted 120mm 3-blade propeller">
+  <rect width="160" height="120" fill="#142018"/>
+  <circle cx="80" cy="60" r="44" fill="none" stroke="#3d5c48" stroke-width="3"/>
+  <circle cx="80" cy="60" r="40" fill="none" stroke="#6fbf8a" stroke-width="1"/>
+  <g transform="rotate(-90 80 60)">
+    <path d="M80 54
+      Q93 43.8 81.5 24
+      Q75.45 34.8 80 54 Z"
+      fill="#2a4034" stroke="#6fbf8a" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle cx="80" cy="26" r="4.333333333333333" fill="#8fd6a8"/>
+  </g>
+  <g transform="rotate(30 80 60)">
+    <path d="M80 54
+      Q93 43.8 81.5 24
+      Q75.45 34.8 80 54 Z"
+      fill="#2a4034" stroke="#6fbf8a" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle cx="80" cy="26" r="4.333333333333333" fill="#8fd6a8"/>
+  </g>
+  <g transform="rotate(150 80 60)">
+    <path d="M80 54
+      Q93 43.8 81.5 24
+      Q75.45 34.8 80 54 Z"
+      fill="#2a4034" stroke="#6fbf8a" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle cx="80" cy="26" r="4.333333333333333" fill="#8fd6a8"/>
+  </g>
+  <circle cx="80" cy="60" r="8" fill="#1a2a22" stroke="#6fbf8a" stroke-width="2"/>
+  <circle cx="80" cy="60" r="3" fill="#8fd6a8"/>
+</svg>
