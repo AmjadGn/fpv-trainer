@@ -416,6 +416,13 @@ export class PhysicsWorldService {
     this.publishTelemetry();
   }
 
+  /** Removes registered environment/prop bodies; keeps the drone body intact. */
+  clearRegisteredBodiesKeepingDrone(): void {
+    for (const id of [...this.bodies.keys()]) {
+      this.removeBody(id);
+    }
+  }
+
   resetDynamicProps(): void {
     for (const entry of this.bodies.values()) {
       if (!entry.isDynamic) {

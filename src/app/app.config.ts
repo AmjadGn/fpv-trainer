@@ -6,6 +6,7 @@ import { routes } from './app.routes';
 import { provideClientHydration } from '@angular/platform-browser';
 import { authInterceptor } from './core/auth/interceptors/auth.interceptor';
 import { ApplicationErrorHandler } from './core/error-reporting/application-error-handler';
+import { provideMissionLocationRuntime } from './core/mission/providers/mission-location-runtime.providers';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -14,5 +15,6 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([authInterceptor])),
     provideClientHydration(),
     { provide: ErrorHandler, useClass: ApplicationErrorHandler },
+    ...provideMissionLocationRuntime(),
   ]
 };

@@ -7,6 +7,8 @@ import type { AuthoritativeFlightStepObserver } from '../../flight-runtime/ports
 import { AuthoritativeFlightStepPublisher } from '../../flight-runtime/services/authoritative-flight-step-publisher.service';
 import { FlightCameraSnapshotAdapter } from '../../camera/services/flight-camera-snapshot-adapter.service';
 import { UnavailableMissionSpatialQueryAdapter } from '../adapters/unavailable-mission-spatial-query.adapter';
+import { MISSION_SPATIAL_QUERY } from '../ports/mission-spatial-query.token';
+import type { MissionSpatialQueryPort } from '../ports/mission-spatial-query.port';
 import type { MissionRuntimeDiagnostic } from '../models/mission-runtime-diagnostics';
 import { MissionSessionFacade } from './mission-session.facade';
 import { LocationLoadCoordinator } from './location-load-coordinator.service';
@@ -31,8 +33,15 @@ export class MissionRuntimeCoordinator implements AuthoritativeFlightStepObserve
   private readonly publisher = inject(AuthoritativeFlightStepPublisher);
   private readonly facade = inject(MissionSessionFacade);
   private readonly cameraSnapshots = inject(FlightCameraSnapshotAdapter);
-  private readonly spatial = inject(UnavailableMissionSpatialQueryAdapter);
+  private readonly spatial = inject(MISSION_SPATIAL_QUERY, {
+    optional: true,
+  }) as MissionSpatialQueryPort | null;
+  private readonly spatialFallback = inject(UnavailableMissionSpatialQueryAdapter);
   private readonly locationLoad = inject(LocationLoadCoordinator);
+
+  private get spatialPort(): MissionSpatialQueryPort {
+    return this.spatial ?? this.spatialFallback;
+  }
 
   private subscribed = false;
   private expectedSessionGeneration: number | null = null;
@@ -130,10 +139,10 @@ export class MissionRuntimeCoordinator implements AuthoritativeFlightStepObserve
   }
 
   probeSpatialQuery(): MissionRuntimeDiagnostic | null {
-    if (this.spatial.isAvailable()) {
+    if (this.spatialPort.isAvailable()) {
       return null;
     }
-    const probe = this.spatial.queryLineOfSight({
+    const probe = this.spatialPort.queryLineOfSight({
       startWorld: { x: 0, y: 0, z: 0 },
       endWorld: { x: 0, y: 0, z: -1 },
     });
