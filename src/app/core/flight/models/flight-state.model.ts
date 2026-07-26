@@ -7,11 +7,16 @@
  * - Drone up:      local +Y
  * - Drone right:   local +X
  *
- * Orientation is a unit quaternion (x, y, z, w).
+ * Orientation is a unit quaternion (x, y, z, w) that maps body → world
+ * (v_world = q ⊗ v_body ⊗ q*). Local axes are recovered by rotating
+ * (1,0,0), (0,1,0), and (0,0,-1) through q.
+ *
  * Angular velocity is body-frame rates (rad/s):
  * - pitch: about local +X (positive = nose down / forward)
  * - yaw:   about local +Y (positive = rotate right)
  * - roll:  about local forward (-Z); positive = tilt right
+ *
+ * Body-rate integration uses dq/dt = ½ q ⊗ ω_body (not ω ⊗ q).
  */
 
 export interface Vec3 {

@@ -59,6 +59,8 @@ export interface FlightWindSample {
  *
  * Coordinate convention (documented in flight-state.model.ts):
  * X right, Y up, Z backward; drone forward = local -Z.
+ * Orientation q maps body → world. Stick rates are body-local; integrate with
+ * dq/dt = ½ q ⊗ ω_body so yaw updates the frame used by later pitch/roll.
  *
  * Does not access navigator, Gamepad API, DOM, templates, or Three.js.
  */
@@ -488,21 +490,14 @@ export class FlightControllerService {
     this.ang.yaw *= Math.exp(-damping * dt);
     this.ang.roll *= Math.exp(-damping * dt);
 
-    const wx = this.ang.pitch;
-    const wy = this.ang.yaw;
-    const wz = -this.ang.roll;
-    const q = this.ori;
-    const halfDt = 0.5 * dt;
-    const dq = this.scratchDq;
-    dq.x = halfDt * (wy * q.z - wz * q.y + wx * q.w);
-    dq.y = halfDt * (wz * q.x - wx * q.z + wy * q.w);
-    dq.z = halfDt * (wx * q.y - wy * q.x + wz * q.w);
-    dq.w = halfDt * (-wx * q.x - wy * q.y - wz * q.z);
-    q.x += dq.x;
-    q.y += dq.y;
-    q.z += dq.z;
-    q.w += dq.w;
-    normalizeQuat(q);
+    integrateBodyRates(
+      this.ori,
+      this.ang.pitch,
+      this.ang.yaw,
+      this.ang.roll,
+      dt,
+      this.scratchDq,
+    );
   }
 
   private integrateTumble(dt: number): void {
@@ -516,21 +511,14 @@ export class FlightControllerService {
     this.ang.yaw *= Math.exp(-1.2 * dt);
     this.ang.roll *= Math.exp(-1.2 * dt);
 
-    const wx = this.ang.pitch;
-    const wy = this.ang.yaw;
-    const wz = -this.ang.roll;
-    const q = this.ori;
-    const halfDt = 0.5 * dt;
-    const dq = this.scratchDq;
-    dq.x = halfDt * (wy * q.z - wz * q.y + wx * q.w);
-    dq.y = halfDt * (wz * q.x - wx * q.z + wy * q.w);
-    dq.z = halfDt * (wx * q.y - wy * q.x + wz * q.w);
-    dq.w = halfDt * (-wx * q.x - wy * q.y - wz * q.z);
-    q.x += dq.x;
-    q.y += dq.y;
-    q.z += dq.z;
-    q.w += dq.w;
-    normalizeQuat(q);
+    integrateBodyRates(
+      this.ori,
+      this.ang.pitch,
+      this.ang.yaw,
+      this.ang.roll,
+      dt,
+      this.scratchDq,
+    );
 
     this.pos.x += this.vel.x * dt;
     this.pos.y += this.vel.y * dt;
@@ -609,26 +597,16 @@ export class FlightControllerService {
       this.ang.yaw += Math.sin(phase * 0.7) * torque * 0.35 * dt;
     }
 
-    // Body rates → local angular velocity vector.
-    // pitch about +X, yaw about +Y, roll about local forward (-Z).
-    const wx = this.ang.pitch;
-    const wy = this.ang.yaw;
-    const wz = -this.ang.roll;
-
-    // dq/dt = 0.5 * q ⊗ ω_quat, then integrate.
-    const q = this.ori;
-    const halfDt = 0.5 * dt;
-    const dq = this.scratchDq;
-    dq.x = halfDt * (wy * q.z - wz * q.y + wx * q.w);
-    dq.y = halfDt * (wz * q.x - wx * q.z + wy * q.w);
-    dq.z = halfDt * (wx * q.y - wy * q.x + wz * q.w);
-    dq.w = halfDt * (-wx * q.x - wy * q.y - wz * q.z);
-
-    q.x += dq.x;
-    q.y += dq.y;
-    q.z += dq.z;
-    q.w += dq.w;
-    normalizeQuat(q);
+    // Body rates → orientation. pitch about +X, yaw about +Y,
+    // roll about local forward (-Z). q is body→world, so use q ⊗ ω_body.
+    integrateBodyRates(
+      this.ori,
+      this.ang.pitch,
+      this.ang.yaw,
+      this.ang.roll,
+      dt,
+      this.scratchDq,
+    );
   }
 
   private integrateLinear(input: FlightInput, dt: number): void {
@@ -795,6 +773,41 @@ function normalizeQuat(q: Quat): void {
   q.y *= inv;
   q.z *= inv;
   q.w *= inv;
+}
+
+/**
+ * Integrate body-frame pitch/yaw/roll rates into orientation.
+ *
+ * q maps body → world. Body angular velocity ω = (pitch, yaw, −roll) as a pure
+ * quaternion. The correct derivative is dq/dt = ½ q ⊗ ω (Hamilton product).
+ *
+ * The previous implementation expanded ½ ω ⊗ q, which treats rates as world-space
+ * and leaves pitch/roll locked to spawn axes after yaw.
+ */
+function integrateBodyRates(
+  q: Quat,
+  pitch: number,
+  yaw: number,
+  roll: number,
+  dt: number,
+  scratch: Quat,
+): void {
+  const wx = pitch;
+  const wy = yaw;
+  const wz = -roll;
+  const halfDt = 0.5 * dt;
+
+  // ½ Δt · (q ⊗ ω) with ω = (wx, wy, wz, 0)
+  scratch.x = halfDt * (q.w * wx + q.y * wz - q.z * wy);
+  scratch.y = halfDt * (q.w * wy - q.x * wz + q.z * wx);
+  scratch.z = halfDt * (q.w * wz + q.x * wy - q.y * wx);
+  scratch.w = halfDt * (-q.x * wx - q.y * wy - q.z * wz);
+
+  q.x += scratch.x;
+  q.y += scratch.y;
+  q.z += scratch.z;
+  q.w += scratch.w;
+  normalizeQuat(q);
 }
 
 /** Rotate vector (vx,vy,vz) by unit quaternion q into out. */
