@@ -2,13 +2,13 @@ export type ReleaseChannel = 'development' | 'internal' | 'alpha' | 'beta' | 'pr
 
 export const environment = {
   production: true,
-  releaseChannel: 'alpha' as ReleaseChannel,
-  appVersion: '1.0.0-alpha.1',
-  buildId: 'alpha-build',
-  // Override at deploy time (reverse proxy / CDN rewrite recommended).
+  releaseChannel: 'production' as ReleaseChannel,
+  appVersion: '1.3.0',
+  buildId: 'v1.3.0',
+  // API remains optional; Expeditions Preview runs fully client-side.
   apiBaseUrl: 'https://api.fpv-trainer.example/api/v1',
-  appPublicUrl: 'https://fpv-trainer.example',
-  shareUrl: 'https://fpv-trainer.example',
+  appPublicUrl: 'https://amjadgn.github.io/fpv-trainer',
+  shareUrl: 'https://amjadgn.github.io/fpv-trainer',
   analyticsEnabled: true,
   errorReportingEnabled: true,
   diagnosticsVisible: false,

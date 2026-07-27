@@ -34,7 +34,7 @@ import { FpvButtonDirective } from '../../shared/ui/fpv-button.directive';
               Start Free Flight
             </button>
           </fpv-panel>
-          <fpv-panel title="Expeditions" subtitle="Photography missions in curated locations.">
+          <fpv-panel title="Expeditions" subtitle="Expeditions Preview — photography missions in curated locations.">
             <button type="button" fpvButton variant="secondary" size="sm" (click)="expeditions()">
               Open Expeditions
             </button>

@@ -41,12 +41,12 @@ type HubPhase = 'list' | 'briefing' | 'loading' | 'error';
       <main class="fpv-page">
         <fpv-page-header
           eyebrow="Fly"
-          title="Expeditions"
-          support="Photography missions in curated locations. Content is installed per build."
+          title="Expeditions Preview"
+          support="Photography missions in curated locations. Coastal Ruins uses repository-owned proxy art — not final production art."
         />
 
         @if (phase() === 'list') {
-          <fpv-panel title="Expeditions" subtitle="Installed mission packages.">
+          <fpv-panel title="Expeditions Preview" subtitle="Installed mission packages for this build.">
             @for (mission of missions(); track mission.missionId) {
               <article class="mission-row" data-testid="expedition-mission-row">
                 <div>

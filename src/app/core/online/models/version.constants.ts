@@ -1,4 +1,4 @@
-export const CLIENT_BUILD_VERSION = '1.0.0-alpha.1';
+export const CLIENT_BUILD_VERSION = '1.3.0';
 /** Competitive physics stack — bump when collision response / flight integration changes. */
 export const PHYSICS_VERSION = '1.1.0';
 export const REPLAY_VERSION = 3;

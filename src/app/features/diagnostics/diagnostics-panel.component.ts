@@ -19,7 +19,7 @@ import { FpvButtonDirective } from '../../shared/ui/fpv-button.directive';
         <fpv-page-header
           eyebrow="Advanced"
           title="Diagnostics"
-          support="Performance and capability summary for alpha troubleshooting."
+          support="Performance and capability summary for troubleshooting."
         />
 
         <dl class="diag">
