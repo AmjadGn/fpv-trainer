@@ -6,6 +6,7 @@ import { createDefaultPhotographyScoringPolicy } from '@fpv/photography-domain';
 import type { CameraSnapshot } from '@fpv/simulation-contracts';
 
 import { getCoastalRuinsSurveyMission } from '../../../content/locations/mediterranean-expedition-region/missions/coastal-ruins-survey';
+import { MEDITERRANEAN_LOCATION_ID, MEDITERRANEAN_PACKAGE_VERSION } from '../../../content/locations/mediterranean-expedition-region/identity';
 import type { AuthoritativeFlightStepSnapshot } from '../../flight-runtime/models/authoritative-flight-step-snapshot';
 import { MissionObjectiveRuntime } from './mission-objective-runtime.service';
 import { MissionResultsFacade } from './mission-results.facade';
@@ -30,6 +31,14 @@ import {
  */
 
 const MISSION = getCoastalRuinsSurveyMission();
+
+const TEST_CAMERA_RIG = {
+  rigId: 'test-rig',
+  rigVersion: '1.0.0',
+  resolutionStrategy: 'aircraft-profile-v1',
+  cameraTiltRad: 0,
+  templateDerivedCamera: false,
+} as const;
 
 const CAMERA_SNAPSHOT: CameraSnapshot = {
   worldPose: { position: { x: 0, y: 5, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
@@ -72,6 +81,7 @@ function observationFixture(
   return {
     flight: flightSnapshot(),
     camera: CAMERA_SNAPSHOT,
+    cameraRig: TEST_CAMERA_RIG,
     missionElapsedTicks: 1,
     ...overrides,
   };
@@ -87,6 +97,8 @@ function beginInput(
     sessionId: 'session-1',
     sessionGeneration: 1,
     locationGeneration: 1,
+    locationId: MEDITERRANEAN_LOCATION_ID,
+    locationVersion: MEDITERRANEAN_PACKAGE_VERSION,
     subjects: [],
     boundaryShape: null,
     ...overrides,

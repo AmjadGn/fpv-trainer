@@ -161,6 +161,8 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
       return {
         status: gate.status,
         visibleFraction: null,
+        visibleSampleCount: null,
+        totalSampleCount: query.samplePointsWorld.length,
         sampleCount: query.samplePointsWorld.length,
         diagnosticCode: gate.code,
         diagnosticMessage: gate.message,
@@ -170,6 +172,8 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
       return {
         status: 'invalid-input',
         visibleFraction: null,
+        visibleSampleCount: null,
+        totalSampleCount: query.samplePointsWorld.length,
         sampleCount: query.samplePointsWorld.length,
         diagnosticMessage: 'Visibility sample origin must be finite',
       };
@@ -180,6 +184,8 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
       return {
         status: 'ok',
         visibleFraction: 0,
+        visibleSampleCount: 0,
+        totalSampleCount: 0,
         sampleCount: 0,
       };
     }
@@ -192,6 +198,8 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
         return {
           status: 'invalid-input',
           visibleFraction: null,
+          visibleSampleCount: null,
+          totalSampleCount: samples.length,
           sampleCount: samples.length,
           diagnosticMessage: `Visibility sample[${i}] is not finite`,
         };
@@ -208,6 +216,8 @@ export class RapierMissionSpatialQueryAdapter implements MissionSpatialQueryPort
     return {
       status: 'ok',
       visibleFraction: visible / samples.length,
+      visibleSampleCount: visible,
+      totalSampleCount: samples.length,
       sampleCount: samples.length,
     };
   }

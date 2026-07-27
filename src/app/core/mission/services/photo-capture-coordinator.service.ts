@@ -39,6 +39,10 @@ export interface PhotoCaptureConsumeContext {
   readonly sessionGeneration: number;
   readonly locationGeneration: number;
   readonly sessionId: string;
+  readonly missionId: string;
+  readonly missionVersion: string;
+  readonly locationId: string;
+  readonly locationVersion: string;
   readonly subjects: readonly PhotographySubjectDefinition[];
   readonly zones: readonly MissionZoneShape[];
   readonly stability: PhotoStabilityWindowSnapshot;
@@ -196,7 +200,7 @@ export class PhotoCaptureCoordinator {
         details: { requested: pending.objectiveId, active: active.photographyObjectiveId },
       });
     }
-    if (observation.camera === null) {
+    if (observation.camera === null || observation.cameraRig === null) {
       return this.reject(pending, observation, {
         code: 'PHOTO_CAPTURE_EVIDENCE_INVALID',
         message: 'No canonical camera snapshot was available for this fixed step',
@@ -206,14 +210,21 @@ export class PhotoCaptureCoordinator {
     const attemptNumber = active.attemptNumber;
     const built = this.evidenceBuilder.build({
       sessionId: context.sessionId,
+      sessionGeneration: context.sessionGeneration,
+      locationGeneration: context.locationGeneration,
       attemptNumber,
+      missionId: context.missionId,
+      missionVersion: context.missionVersion,
+      locationId: context.locationId,
+      locationVersion: context.locationVersion,
+      scoringPolicyVersion: context.scoringPolicy.policyVersion,
+      missionElapsedTicks: observation.missionElapsedTicks,
       flight: observation.flight,
       camera: observation.camera,
+      cameraRig: observation.cameraRig,
       objective: active.definition,
       subjects: context.subjects,
       stability: context.stability,
-      locationGeneration: context.locationGeneration,
-      sessionGeneration: context.sessionGeneration,
       zones: context.zones,
     });
     if (!built.ok) {

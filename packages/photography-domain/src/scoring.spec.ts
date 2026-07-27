@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { asElapsedTicks, asSimulationTick, IDENTITY_QUAT, PROJECTION_MODEL_VERSION } from '@fpv/simulation-contracts';
-import { asPhotoCaptureEvidenceId, asPhotographyObjectiveId, asPositionZoneId, asSubjectId } from './ids';
-import { createPhotoCaptureEvidence, EVIDENCE_SCHEMA_VERSION, type PhotoCaptureEvidence, type PhotoCaptureEvidenceInput } from './evidence';
+import { asPositionZoneId } from './ids';
+import type { PhotoCaptureEvidenceInput } from './evidence';
+import {
+  OBJECTIVE_ID,
+  SUBJECT_A,
+  SUBJECT_B,
+  STABILITY_TICKS,
+  baseEvidenceInput,
+  buildEvidence,
+} from './evidence-fixtures';
 import type { PhotographyObjectiveDefinition } from './objective';
 import { createDefaultPhotographyScoringPolicy, type PhotographyScoringPolicy } from './scoring-policy';
 import { evaluatePhotoCapture, type PhotoEvaluationResult } from './scoring';
-
-const OBJECTIVE_ID = asPhotographyObjectiveId('obj-golden-1');
-const SUBJECT_A = asSubjectId('subject-a');
-const SUBJECT_B = asSubjectId('subject-b');
-const STABILITY_TICKS = asElapsedTicks(60);
 
 function baseObjective(overrides: Partial<PhotographyObjectiveDefinition> = {}): PhotographyObjectiveDefinition {
   return {
@@ -34,85 +36,6 @@ function baseObjective(overrides: Partial<PhotographyObjectiveDefinition> = {}):
     attemptPolicy: { retryable: true },
     ...overrides,
   };
-}
-
-function baseEvidenceInput(overrides: Partial<PhotoCaptureEvidenceInput> = {}): PhotoCaptureEvidenceInput {
-  const pose = { position: { x: 0, y: 20, z: 0 }, orientation: IDENTITY_QUAT };
-  return {
-    identity: {
-      evidenceId: asPhotoCaptureEvidenceId('evidence-1'),
-      objectiveId: OBJECTIVE_ID,
-      attemptNumber: 1,
-      capturedAtTick: asSimulationTick(1000),
-      schemaVersion: EVIDENCE_SCHEMA_VERSION,
-    },
-    aircraftSnapshot: {
-      aircraftId: 'aircraft-1',
-      pose,
-      linearVelocityMps: { x: 0, y: 0, z: 0 },
-      bodyAngularVelocityRadps: { x: 0, y: 0, z: 0 },
-      altitudeMeters: 20,
-      armed: true,
-      crashed: false,
-    },
-    cameraSnapshot: {
-      worldPose: pose,
-      projection: {
-        verticalFovDegrees: 90,
-        aspectRatio: 16 / 9,
-        nearMeters: 0.1,
-        farMeters: 1000,
-        projectionModelVersion: PROJECTION_MODEL_VERSION,
-      },
-      cameraMode: 'fpv',
-      cosmeticEffectsExcluded: true,
-    },
-    spatialContext: {
-      lineOfSightRatio: 1,
-      obstructionRatio: 0,
-      distanceToPrimarySubjectMeters: 10,
-    },
-    subjectObservations: [
-      {
-        subjectId: SUBJECT_A,
-        visible: true,
-        visibilityRatio: 1,
-        screenRectangle: { minU: 0.45, minV: 0.45, maxU: 0.55, maxV: 0.55 },
-        centeringErrorFromCenter: 0,
-        distanceMeters: 10,
-        viewingAngleDeg: 0,
-        viewingSide: 'front',
-        coverageRatio: 0.2,
-        frameIntersectionRatio: 1,
-      },
-      {
-        subjectId: SUBJECT_B,
-        visible: true,
-        visibilityRatio: 0.9,
-        screenRectangle: null,
-        centeringErrorFromCenter: null,
-        distanceMeters: 15,
-        viewingAngleDeg: 10,
-        viewingSide: 'front',
-        coverageRatio: null,
-        frameIntersectionRatio: null,
-      },
-    ],
-    stability: {
-      stableDurationTicks: STABILITY_TICKS,
-      requiredDurationTicks: STABILITY_TICKS,
-      isStable: true,
-    },
-    ...overrides,
-  };
-}
-
-function buildEvidence(overrides: Partial<PhotoCaptureEvidenceInput> = {}): PhotoCaptureEvidence {
-  const result = createPhotoCaptureEvidence(baseEvidenceInput(overrides));
-  if (!result.ok) {
-    throw new Error(`Fixture evidence construction failed: ${result.reason}`);
-  }
-  return result.value;
 }
 
 const POLICY: PhotographyScoringPolicy = createDefaultPhotographyScoringPolicy();

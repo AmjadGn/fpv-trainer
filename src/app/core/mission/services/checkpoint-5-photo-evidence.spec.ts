@@ -3,8 +3,11 @@ import { TestBed } from '@angular/core/testing';
 import type { PhotographySubjectDefinition } from '@fpv/location-domain';
 import {
   asPositionZoneId,
+  computeNormalizedScreenRectangle,
   evaluatePhotoCapture,
   findForbiddenAircraftSnapshotKeys,
+  projectSubjectBounds,
+  projectSubjectSamplePoints,
   type PhotoEvaluationResult,
   type PhotographyObjectiveDefinition,
 } from '@fpv/photography-domain';
@@ -53,6 +56,14 @@ import { PhotoStabilityWindow } from './photo-stability-window';
 const LOCATION_GENERATION = 5;
 const SESSION_GENERATION = 11;
 const SESSION_ID = 'session-cp5';
+
+const TEST_CAMERA_RIG = {
+  rigId: 'test-rig',
+  rigVersion: '1.0.0',
+  resolutionStrategy: 'aircraft-profile-v1',
+  cameraTiltRad: 0,
+  templateDerivedCamera: false,
+} as const;
 
 const ARCH_OBJECTIVE = COASTAL_RUINS_PHOTO_OBJECTIVES[0];
 const LOOKOUT_OBJECTIVE = COASTAL_RUINS_PHOTO_OBJECTIVES[1];
@@ -187,10 +198,13 @@ function stubSpatialQuery(options: StubSpatialOptions = {}): MissionSpatialQuery
         query.expectedLocationGeneration !== undefined &&
         query.expectedLocationGeneration !== installed
       ) {
+        const totalSampleCount = query.samplePointsWorld.length;
         return {
           status: 'stale-session',
           visibleFraction: null,
-          sampleCount: query.samplePointsWorld.length,
+          visibleSampleCount: null,
+          totalSampleCount,
+          sampleCount: totalSampleCount,
           diagnosticCode: 'STALE_RUNTIME_SESSION',
           diagnosticMessage: 'Location runtime generation changed under the query',
         };
@@ -200,10 +214,13 @@ function stubSpatialQuery(options: StubSpatialOptions = {}): MissionSpatialQuery
         options.visibleFractionBySubject?.[subjectId] ??
         options.defaultVisibleFraction ??
         1;
+      const totalSampleCount = query.samplePointsWorld.length;
       return {
         status: 'ok',
         visibleFraction: fraction,
-        sampleCount: query.samplePointsWorld.length,
+        visibleSampleCount: Math.round(fraction * totalSampleCount),
+        totalSampleCount,
+        sampleCount: totalSampleCount,
       };
     },
   };
@@ -253,8 +270,15 @@ function buildInput(options: ScenarioOptions): PhotoEvidenceBuildInput {
   return {
     sessionId: SESSION_ID,
     attemptNumber: options.attemptNumber ?? 1,
+    missionId: 'coastal-ruins-survey',
+    missionVersion: '1.0.0',
+    locationId: 'mediterranean-expedition-region',
+    locationVersion: '1.0.0',
+    scoringPolicyVersion: COASTAL_RUINS_SCORING_POLICY.policyVersion,
+    missionElapsedTicks: flight.simulationTick,
     flight,
     camera,
+    cameraRig: TEST_CAMERA_RIG,
     objective,
     subjects: COASTAL_RUINS_SUBJECTS,
     stability: stabilitySnapshot(objective, options.stableTicks ?? 30),
@@ -318,7 +342,7 @@ describe('Checkpoint 5 — photo capture evidence golden scenarios', () => {
     expect(observation.viewingSide).toBe('front');
     expect(observation.distanceMeters).toBeCloseTo(12.007, 2);
     expect(observation.viewingAngleDeg).toBeCloseTo(0, 6);
-    expect(observation.centeringErrorFromCenter).toBeCloseTo(0.02, 6);
+    expect(observation.centeringError).toBeCloseTo(0.02, 6);
     expect(evidence.spatialContext.lineOfSightRatio).toBe(1);
     expect(evidence.spatialContext.obstructionRatio).toBe(0);
     expect(evidence.stability.isStable).toBe(true);
@@ -361,9 +385,16 @@ describe('Checkpoint 5 — photo capture evidence golden scenarios', () => {
     expect(observation.screenRectangle).not.toBeNull();
     expect(observation.screenRectangle!.minU).toBeLessThan(0.5);
     expect(observation.screenRectangle!.maxU).toBeGreaterThan(0.5);
-    expect(observation.frameIntersectionRatio).toBe(1);
+    // Full authored AABB is larger than the opening samples, so at this
+    // close station the bounds rectangle may leave the frame. That is a
+    // legitimate framing-score change from the visibility-sample bugfix.
+    expect(observation.frameIntersectionRatio).toBeGreaterThan(0.5);
+    expect(observation.frameIntersectionRatio).toBeLessThanOrEqual(1);
     expect(observation.distanceMeters).toBeCloseTo(10, 6);
     expect(evaluation.passed).toBe(true);
+    expect(componentScore(evaluation, 'framing')).toBeLessThan(
+      componentMax(evaluation, 'framing'),
+    );
   });
 
   it('4: partial sample obstruction still fails the line-of-sight gate while the subject counts as visible', () => {
@@ -453,7 +484,7 @@ describe('Checkpoint 5 — photo capture evidence golden scenarios', () => {
 
     const observation = evidence.subjectObservations[0]!;
     expect(observation.screenRectangle).toBeNull();
-    expect(observation.centeringErrorFromCenter).toBeNull();
+    expect(observation.centeringError).toBeNull();
     expect(observation.coverageRatio).toBeNull();
     expect(observation.frameIntersectionRatio).toBeNull();
     expect(observation.viewingAngleDeg).toBeGreaterThan(170);
@@ -658,10 +689,15 @@ describe('Checkpoint 5 — photo capture evidence golden scenarios', () => {
     });
 
     expect(String(evidence.identity.evidenceId)).toBe(
-      buildCaptureId(SESSION_ID, String(ARCH_OBJECTIVE.objectiveId), 3),
+      buildCaptureId(
+        SESSION_ID,
+        SESSION_GENERATION,
+        String(ARCH_OBJECTIVE.objectiveId),
+        3,
+      ),
     );
     expect(String(evidence.identity.evidenceId)).toBe(
-      `${SESSION_ID}:photo-coastal-arch-01:3`,
+      `${SESSION_ID}:g${SESSION_GENERATION}:photo-coastal-arch-01:3`,
     );
     expect(evidence.identity.capturedAtTick as unknown as number).toBe(4_200);
     expect(evidence.cameraSnapshot.cosmeticEffectsExcluded).toBe(true);
@@ -697,5 +733,171 @@ describe('Checkpoint 5 — photo capture evidence golden scenarios', () => {
     });
     expect(LOOKOUT.scoringAnchor.y).toBe(COASTAL_RUINS_LAYOUT.lookoutTower.shaftCenterY);
     expect(CLIFF.scoringAnchor.y).toBe(COASTAL_RUINS_LAYOUT.cliffsideRuin.position.y + 3);
+  });
+
+  it('frames Stone Sea Arch from authored subjectBounds, not visibility samples', () => {
+    const builder = builderWith(stubSpatialQuery());
+    const camera = cameraAt(ARCH_STATION, ARCH.scoringAnchor);
+    const evidence = mustBuild(builder, {
+      cameraPosition: ARCH_STATION,
+      lookAt: ARCH.scoringAnchor,
+    });
+
+    const boundsProj = projectSubjectBounds(ARCH.subjectBounds, camera);
+    const sampleProj = projectSubjectSamplePoints(ARCH.visibilitySamplePoints, camera);
+    expect(boundsProj.ok).toBe(true);
+    expect(sampleProj.ok).toBe(true);
+    if (!boundsProj.ok || !sampleProj.ok) {
+      return;
+    }
+    const sampleRect = computeNormalizedScreenRectangle(sampleProj.value);
+    expect(sampleRect.ok).toBe(true);
+    if (!sampleRect.ok) {
+      return;
+    }
+
+    const observation = evidence.subjectObservations[0]!;
+    expect(boundsProj.value.screenRectangle).not.toEqual(sampleRect.value);
+    expect(observation.screenRectangle).toEqual(boundsProj.value.screenRectangle);
+    expect(observation.screenRectangle).not.toEqual(sampleRect.value);
+    expect(observation.totalSampleCount).toBe(ARCH.visibilitySamplePoints.length);
+    expect(observation.visibleSampleCount).toBe(ARCH.visibilitySamplePoints.length);
+    expect(observation.boundsVersion).toBe(ARCH.boundsVersion);
+  });
+
+  it('frames Ruined Lookout Tower and Cliffside Ruin from authored bounds', () => {
+    const builder = builderWith(stubSpatialQuery());
+
+    for (const [subjectDef, objective, station] of [
+      [LOOKOUT, LOOKOUT_OBJECTIVE, { x: 20, y: 8, z: -55 }] as const,
+      [CLIFF, CLIFF_OBJECTIVE, CLIFF_STATION] as const,
+    ]) {
+      const camera = cameraAt(station, subjectDef.scoringAnchor);
+      const evidence = mustBuild(builder, {
+        objective,
+        cameraPosition: station,
+        lookAt: subjectDef.scoringAnchor,
+      });
+      const boundsProj = projectSubjectBounds(subjectDef.subjectBounds, camera);
+      const sampleProj = projectSubjectSamplePoints(subjectDef.visibilitySamplePoints, camera);
+      expect(boundsProj.ok).toBe(true);
+      expect(sampleProj.ok).toBe(true);
+      if (!boundsProj.ok || !sampleProj.ok) {
+        return;
+      }
+      const sampleRect = computeNormalizedScreenRectangle(sampleProj.value);
+      expect(sampleRect.ok).toBe(true);
+      if (!sampleRect.ok) {
+        return;
+      }
+      expect(boundsProj.value.screenRectangle).not.toEqual(sampleRect.value);
+      expect(evidence.subjectObservations[0]!.screenRectangle).toEqual(
+        boundsProj.value.screenRectangle,
+      );
+    }
+  });
+
+  it('keeps capture IDs unique across session generations and attempts', () => {
+    expect(buildCaptureId('s', 1, 'obj', 1)).toBe('s:g1:obj:1');
+    expect(buildCaptureId('s', 2, 'obj', 1)).toBe('s:g2:obj:1');
+    expect(buildCaptureId('s', 1, 'obj', 2)).toBe('s:g1:obj:2');
+    expect(buildCaptureId('s', 1, 'obj-a', 1)).not.toBe(buildCaptureId('s', 1, 'obj-b', 1));
+
+    const builder = builderWith(stubSpatialQuery());
+    const gen11 = mustBuild(builder, {
+      cameraPosition: ARCH_STATION,
+      lookAt: ARCH.scoringAnchor,
+      attemptNumber: 1,
+    });
+    const gen12Input = {
+      ...buildInput({
+        cameraPosition: ARCH_STATION,
+        lookAt: ARCH.scoringAnchor,
+        attemptNumber: 1,
+      }),
+      sessionGeneration: SESSION_GENERATION + 1,
+    };
+    const gen12 = builder.build(gen12Input);
+    expect(gen12.ok).toBe(true);
+    if (!gen12.ok) {
+      return;
+    }
+    expect(String(gen11.identity.evidenceId)).not.toBe(String(gen12.evidence.identity.evidenceId));
+    expect(gen12.evidence.identity.sessionGeneration).toBe(SESSION_GENERATION + 1);
+    // Retry generation changes identity fields; scoring geometry stays aligned.
+    expect(gen12.evidence.subjectObservations[0]!.screenRectangle).toEqual(
+      gen11.subjectObservations[0]!.screenRectangle,
+    );
+  });
+
+  it('records exact visibility sample counts and durable aircraft/camera provenance', () => {
+    const builder = builderWith(stubSpatialQuery({ defaultVisibleFraction: 0.5 }));
+    const evidence = mustBuild(builder, {
+      cameraPosition: ARCH_STATION,
+      lookAt: ARCH.scoringAnchor,
+    });
+    const observation = evidence.subjectObservations[0]!;
+    expect(observation.totalSampleCount).toBe(4);
+    expect(observation.visibleSampleCount).toBe(2);
+    expect(observation.visibilityRatio).toBe(0.5);
+    expect(evidence.aircraftSnapshot.aircraftSourceType).toBe('factory');
+    expect(evidence.aircraftSnapshot.definitionVersion).toBe('1.0.0');
+    expect(evidence.aircraftSnapshot.physicsProfileVersion).toBe('1.0.0');
+    expect(evidence.cameraSnapshot.rigId).toBe(TEST_CAMERA_RIG.rigId);
+    expect(evidence.cameraSnapshot.resolutionStrategy).toBe(TEST_CAMERA_RIG.resolutionStrategy);
+    expect(evidence.identity.missionId).toBe('coastal-ruins-survey');
+    expect(evidence.identity.locationId).toBe('mediterranean-expedition-region');
+    expect(evidence.identity.locationGeneration).toBe(LOCATION_GENERATION);
+    expect(evidence.identity.sessionGeneration).toBe(SESSION_GENERATION);
+  });
+
+  it('is unaffected by viewport dimensions, device pixel ratio, or presentation image outcome', () => {
+    const builder = builderWith(stubSpatialQuery());
+    const base = mustBuild(builder, {
+      cameraPosition: ARCH_STATION,
+      lookAt: ARCH.scoringAnchor,
+    });
+    // Evidence never accepts viewport/DPR inputs — rebuild with identical
+    // authoritative inputs must stay byte-identical regardless of UI state.
+    for (let i = 0; i < 200; i += 1) {
+      const repeat = mustBuild(builder, {
+        cameraPosition: ARCH_STATION,
+        lookAt: ARCH.scoringAnchor,
+      });
+      expect(JSON.stringify(repeat)).toBe(JSON.stringify(base));
+    }
+    expect(base.cameraSnapshot.cosmeticEffectsExcluded).toBe(true);
+    expect(
+      Object.keys(base.cameraSnapshot as unknown as Record<string, unknown>),
+    ).not.toContain('viewportWidth');
+    expect(
+      Object.keys(base.cameraSnapshot as unknown as Record<string, unknown>),
+    ).not.toContain('devicePixelRatio');
+  });
+
+  it('rejects deep mutation of built evidence nested structures', () => {
+    const builder = builderWith(stubSpatialQuery());
+    const evidence = mustBuild(builder, {
+      cameraPosition: ARCH_STATION,
+      lookAt: ARCH.scoringAnchor,
+    });
+    expect(() => {
+      (evidence.aircraftSnapshot.pose.position as { x: number }).x = 1;
+    }).toThrow();
+    expect(() => {
+      (evidence.cameraSnapshot.worldPose.position as { y: number }).y = 1;
+    }).toThrow();
+    expect(() => {
+      const rect = evidence.subjectObservations[0]!.screenRectangle;
+      if (rect) {
+        (rect as { minU: number }).minU = 0;
+      }
+    }).toThrow();
+    expect(() => {
+      (evidence.subjectObservations as unknown as unknown[]).length = 0;
+    }).toThrow();
+    expect(() => {
+      (evidence.stability as { linearSpeedMps: number }).linearSpeedMps = 9;
+    }).toThrow();
   });
 });

@@ -2144,6 +2144,8 @@ export class FlightComponent implements AfterViewInit, OnDestroy {
       sessionId: `mission-${intent.missionId}-${Date.now()}`,
       sessionGeneration: prepared.sessionGeneration,
       locationGeneration: this.locationLoadCoordinator.locationGeneration(),
+      locationId: String(location.identity.locationId),
+      locationVersion: String(location.identity.packageVersion),
       subjects: location.photographySubjects,
       boundaryShape: location.playableBoundary.shape,
       zones: location.gameplaySpatial.zones.map((zone) => ({

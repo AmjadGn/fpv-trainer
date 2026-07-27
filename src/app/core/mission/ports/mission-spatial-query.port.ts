@@ -98,6 +98,11 @@ export interface MissionVisibilitySampleResult {
   readonly status: MissionSpatialQueryStatus;
   /** Fraction of samples with clear LOS; null when infrastructure unavailable. */
   readonly visibleFraction: number | null;
+  /** Exact count of samples with clear LOS; null when infrastructure unavailable. */
+  readonly visibleSampleCount: number | null;
+  /** Exact authored sample count that was queried. */
+  readonly totalSampleCount: number;
+  /** @deprecated Prefer totalSampleCount — retained as an alias for existing callers. */
   readonly sampleCount: number;
   readonly diagnosticCode?: 'SPATIAL_QUERY_UNAVAILABLE' | 'STALE_RUNTIME_SESSION';
   readonly diagnosticMessage?: string;

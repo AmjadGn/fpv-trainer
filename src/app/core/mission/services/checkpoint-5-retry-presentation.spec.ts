@@ -53,6 +53,17 @@ const SESSION_GENERATION = 7;
 const LOCATION_GENERATION = 3;
 const FIXED_STEP_SECONDS = 1 / 120;
 
+const TEST_CAMERA_RIG = {
+  rigId: 'test-rig',
+  rigVersion: '1.0.0',
+  resolutionStrategy: 'aircraft-profile-v1',
+  cameraTiltRad: 0,
+  templateDerivedCamera: false,
+} as const;
+
+const CONSUME_LOCATION_ID = 'mediterranean-expedition-region';
+const CONSUME_LOCATION_VERSION = '1.0.0';
+
 const ARCH_OBJECTIVE = COASTAL_RUINS_PHOTO_OBJECTIVES[0];
 const ARCH_OBJECTIVE_ID = String(ARCH_OBJECTIVE.objectiveId);
 const ARCH_ANCHOR = COASTAL_RUINS_SUBJECTS.find(
@@ -124,7 +135,12 @@ function observation(
   overrides: Partial<AuthoritativeFlightStepSnapshot> = {},
 ): MissionRuntimeObservation {
   const flight = flightSnapshot(overrides);
-  return { flight, camera: cameraSnapshot(), missionElapsedTicks: flight.simulationTick };
+  return {
+    flight,
+    camera: cameraSnapshot(),
+    cameraRig: TEST_CAMERA_RIG,
+    missionElapsedTicks: flight.simulationTick,
+  };
 }
 
 function clearSpatialQuery(): MissionSpatialQueryPort {
@@ -142,11 +158,16 @@ function clearSpatialQuery(): MissionSpatialQueryPort {
       firstHitDistanceMeters: null,
       obstructionCategory: null,
     }),
-    queryVisibilitySamples: (query) => ({
-      status: 'ok',
-      visibleFraction: 1,
-      sampleCount: query.samplePointsWorld.length,
-    }),
+    queryVisibilitySamples: (query) => {
+      const totalSampleCount = query.samplePointsWorld.length;
+      return {
+        status: 'ok',
+        visibleFraction: 1,
+        visibleSampleCount: totalSampleCount,
+        totalSampleCount,
+        sampleCount: totalSampleCount,
+      };
+    },
   };
 }
 
@@ -223,13 +244,16 @@ function setup(): Harness {
   });
 
   const runtime = TestBed.inject(PhotographyMissionRuntime);
+  const mission = getCoastalRuinsSurveyMission();
   const begun = runtime.begin({
-    mission: getCoastalRuinsSurveyMission(),
+    mission,
     photographyObjectives: COASTAL_RUINS_PHOTO_OBJECTIVES,
     scoringPolicy: COASTAL_RUINS_SCORING_POLICY,
     sessionId: SESSION_ID,
     sessionGeneration: SESSION_GENERATION,
     locationGeneration: LOCATION_GENERATION,
+    locationId: CONSUME_LOCATION_ID,
+    locationVersion: CONSUME_LOCATION_VERSION,
     subjects: COASTAL_RUINS_SUBJECTS,
     boundaryShape: BOUNDARY,
     zones: [],
@@ -436,10 +460,15 @@ describe('Checkpoint 5 — presentation frames and retry', () => {
     expect(outcome?.diagnostic).toBeNull();
     expect(outcome?.attemptNumber).toBe(1);
     expect(harness.presentation.requests).toHaveLength(2);
-    // Capture ids are deterministic per session/objective/attempt, so a retry
-    // that resets attempt numbering reproduces the first id — safe only
-    // because every previous image and result was already released.
+    // Capture ids include session generation, so a full retry produces a new
+    // id even though attempt numbering resets to 1 for the same objective.
+    expect(harness.presentation.requests[0]!.captureId).toBe(
+      `${SESSION_ID}:g${SESSION_GENERATION}:${ARCH_OBJECTIVE_ID}:1`,
+    );
     expect(harness.presentation.requests[1]!.captureId).toBe(
+      `${SESSION_ID}:g${SESSION_GENERATION + 1}:${ARCH_OBJECTIVE_ID}:1`,
+    );
+    expect(harness.presentation.requests[1]!.captureId).not.toBe(
       harness.presentation.requests[0]!.captureId,
     );
     expect(harness.results.presentationImageUrls()).toEqual([

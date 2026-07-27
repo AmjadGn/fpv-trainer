@@ -62,7 +62,7 @@ export interface MissionPhotoComponentScore {
       @if (capturePending()) {
         <p class="mission-hud__pending" role="status">Capture queued for the next step</p>
       } @else if (!captureEnabled()) {
-        <p class="mission-hud__pending">Shutter needs FPV camera and a live objective</p>
+        <p class="mission-hud__pending">Return to FPV to capture</p>
       }
 
       @if (objectiveAccepted()) {

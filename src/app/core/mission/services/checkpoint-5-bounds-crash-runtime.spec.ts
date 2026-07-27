@@ -50,6 +50,17 @@ const SESSION_GENERATION = 12;
 const LOCATION_GENERATION = 2;
 const FIXED_STEP_SECONDS = 1 / 120;
 
+const TEST_CAMERA_RIG = {
+  rigId: 'test-rig',
+  rigVersion: '1.0.0',
+  resolutionStrategy: 'aircraft-profile-v1',
+  cameraTiltRad: 0,
+  templateDerivedCamera: false,
+} as const;
+
+const CONSUME_LOCATION_ID = 'mediterranean-expedition-region';
+const CONSUME_LOCATION_VERSION = '1.0.0';
+
 const ARCH_OBJECTIVE = COASTAL_RUINS_PHOTO_OBJECTIVES[0];
 const ARCH_OBJECTIVE_ID = String(ARCH_OBJECTIVE.objectiveId);
 const ARCH_ANCHOR = COASTAL_RUINS_SUBJECTS.find(
@@ -126,7 +137,7 @@ function observation(options: StepOptions): MissionRuntimeObservation {
     collisionOutcome: options.crashed ? 'severe' : 'none',
     runtimeCompatibilityVersion: '1.3.0-runtime-c3',
   };
-  return { flight, camera: CAMERA, missionElapsedTicks: options.tick };
+  return { flight, camera: CAMERA, cameraRig: TEST_CAMERA_RIG, missionElapsedTicks: options.tick };
 }
 
 function clearSpatialQuery(): MissionSpatialQueryPort {
@@ -144,11 +155,16 @@ function clearSpatialQuery(): MissionSpatialQueryPort {
       firstHitDistanceMeters: null,
       obstructionCategory: null,
     }),
-    queryVisibilitySamples: (query) => ({
-      status: 'ok',
-      visibleFraction: 1,
-      sampleCount: query.samplePointsWorld.length,
-    }),
+    queryVisibilitySamples: (query) => {
+      const totalSampleCount = query.samplePointsWorld.length;
+      return {
+        status: 'ok',
+        visibleFraction: 1,
+        visibleSampleCount: totalSampleCount,
+        totalSampleCount,
+        sampleCount: totalSampleCount,
+      };
+    },
   };
 }
 
@@ -210,6 +226,8 @@ function setup(): Harness {
       sessionId: SESSION_ID,
       sessionGeneration: SESSION_GENERATION,
       locationGeneration: LOCATION_GENERATION,
+      locationId: CONSUME_LOCATION_ID,
+      locationVersion: CONSUME_LOCATION_VERSION,
       subjects: COASTAL_RUINS_SUBJECTS,
       boundaryShape: BOUNDARY,
       zones: [],

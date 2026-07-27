@@ -8,13 +8,12 @@ import {
   asPositionZoneId,
   asSubjectId,
   centeringError,
-  computeNormalizedScreenRectangle,
   coverageRatio,
   createPhotoCaptureEvidence,
   distance,
   evaluateViewingSide,
   frameIntersectionRatio,
-  projectSubjectSamplePoints,
+  projectSubjectBounds,
   projectWorldPoint,
   viewingAngle,
   EVIDENCE_SCHEMA_VERSION,
@@ -28,6 +27,7 @@ import {
   asSimulationTick,
   type CameraSnapshot,
   type NormalizedScreenPoint,
+  type Pose,
   type Vec3,
 } from '@fpv/simulation-contracts';
 
@@ -44,17 +44,37 @@ export interface MissionZoneShape {
   readonly shape: BoundaryShape;
 }
 
+/** Canonical camera-rig provenance supplied by the mission runtime (not Angular singletons). */
+export interface PhotoEvidenceCameraRigContext {
+  readonly rigId: string;
+  readonly rigVersion: string;
+  readonly resolutionStrategy: string;
+  readonly cameraTiltRad?: number;
+  readonly templateDerivedCamera?: boolean;
+}
+
+/**
+ * All durable evidence context must arrive here. The builder must not query
+ * Angular singleton state for mission/location/session/policy versions.
+ */
 export interface PhotoEvidenceBuildInput {
   readonly sessionId: string;
+  readonly sessionGeneration: number;
+  readonly locationGeneration: number;
   readonly attemptNumber: number;
+  readonly missionId: string;
+  readonly missionVersion: string;
+  readonly locationId: string;
+  readonly locationVersion: string;
+  readonly scoringPolicyVersion: string;
+  readonly missionElapsedTicks: number;
   readonly flight: AuthoritativeFlightStepSnapshot;
   /** Canonical, cosmetics-free camera snapshot for the same fixed step. */
   readonly camera: CameraSnapshot;
+  readonly cameraRig: PhotoEvidenceCameraRigContext;
   readonly objective: PhotographyObjectiveDefinition;
   readonly subjects: readonly PhotographySubjectDefinition[];
   readonly stability: PhotoStabilityWindowSnapshot;
-  readonly locationGeneration: number;
-  readonly sessionGeneration: number;
   readonly zones?: readonly MissionZoneShape[];
 }
 
@@ -66,11 +86,10 @@ export type PhotoEvidenceBuildResult =
  * Builds `PhotoCaptureEvidence` from one authoritative fixed-step
  * observation plus authored subject content.
  *
- * Visibility is sourced exclusively from `MissionSpatialQueryPort`; when the
- * port is unavailable or stale this fails with
- * `PHOTO_CAPTURE_SPATIAL_UNAVAILABLE` rather than inventing clear
- * line-of-sight. Projection/framing math is delegated to
- * `@fpv/photography-domain`'s pure helpers.
+ * Framing/coverage use `subject.subjectBounds`. Visibility uses
+ * `subject.visibilitySamplePoints` via `MissionSpatialQueryPort` only.
+ * When the port is unavailable or stale this fails with
+ * `PHOTO_CAPTURE_SPATIAL_UNAVAILABLE` rather than inventing clear LOS.
  */
 @Injectable({ providedIn: 'root' })
 export class PhotoEvidenceBuilder {
@@ -87,6 +106,7 @@ export class PhotoEvidenceBuilder {
     const { objective, camera } = input;
     const evidenceId = buildCaptureId(
       input.sessionId,
+      input.sessionGeneration,
       String(objective.objectiveId),
       input.attemptNumber,
     );
@@ -118,7 +138,11 @@ export class PhotoEvidenceBuilder {
         expectedLocationGeneration: input.locationGeneration,
         expectedSessionGeneration: input.sessionGeneration,
       });
-      if (visibility.status !== 'ok' || visibility.visibleFraction === null) {
+      if (
+        visibility.status !== 'ok' ||
+        visibility.visibleFraction === null ||
+        visibility.visibleSampleCount === null
+      ) {
         return {
           ok: false,
           diagnostic: {
@@ -138,6 +162,8 @@ export class PhotoEvidenceBuilder {
 
       const observation = this.buildSubjectObservation(
         subject,
+        visibility.visibleSampleCount,
+        visibility.totalSampleCount,
         visibility.visibleFraction,
         objective,
         camera,
@@ -165,18 +191,36 @@ export class PhotoEvidenceBuilder {
 
     const stableTicks = input.stability.continuousStableTicks;
     const requiredTicks = objective.stabilityDurationTicks as unknown as number;
+    const linearSpeedMps =
+      input.stability.lastLinearSpeedMps ?? magnitudeVec3(input.flight.linearVelocity);
+    const angularSpeedRadps =
+      input.stability.lastBodyAngularSpeedRadps ??
+      bodyAngularSpeedFromRates(input.flight.bodyAngularVelocity);
 
     const constructed = createPhotoCaptureEvidence({
       identity: {
         evidenceId: asPhotoCaptureEvidenceId(evidenceId),
-        objectiveId: objective.objectiveId,
-        missionAttemptId: input.sessionId,
-        attemptNumber: input.attemptNumber,
-        capturedAtTick: asSimulationTick(input.flight.simulationTick),
         schemaVersion: EVIDENCE_SCHEMA_VERSION,
+        missionId: input.missionId,
+        missionVersion: input.missionVersion,
+        missionSessionId: input.sessionId,
+        sessionGeneration: input.sessionGeneration,
+        objectiveId: objective.objectiveId,
+        objectiveVersion: objective.version,
+        attemptNumber: input.attemptNumber,
+        locationId: input.locationId,
+        locationVersion: input.locationVersion,
+        locationGeneration: input.locationGeneration,
+        capturedAtTick: asSimulationTick(input.flight.simulationTick),
+        missionElapsedTicks: asElapsedTicks(input.missionElapsedTicks),
+        scoringPolicyVersion: input.scoringPolicyVersion,
       },
       aircraftSnapshot: {
         aircraftId: input.flight.aircraftId,
+        aircraftSourceType: input.flight.aircraftSourceType,
+        definitionVersion: input.flight.definitionVersion,
+        physicsProfileVersion: input.flight.physicsProfileVersion,
+        runtimeCompatibilityVersion: input.flight.runtimeCompatibilityVersion,
         pose: input.flight.pose,
         linearVelocityMps: input.flight.linearVelocity,
         bodyAngularVelocityRadps: toBodyAngularVelocityVec3(input.flight.bodyAngularVelocity),
@@ -186,10 +230,20 @@ export class PhotoEvidenceBuilder {
         ...resolvePositionZone(objective, input),
       },
       cameraSnapshot: {
+        rigId: input.cameraRig.rigId,
+        rigVersion: input.cameraRig.rigVersion,
+        resolutionStrategy: input.cameraRig.resolutionStrategy,
         worldPose: camera.worldPose,
+        ...(camera.localMountPose ? { localMountPose: camera.localMountPose } : {}),
         projection: camera.projection,
+        ...(input.cameraRig.cameraTiltRad !== undefined
+          ? { cameraTiltRad: input.cameraRig.cameraTiltRad }
+          : {}),
         cameraMode: 'fpv',
         cosmeticEffectsExcluded: true,
+        ...(input.cameraRig.templateDerivedCamera !== undefined
+          ? { templateDerivedCamera: input.cameraRig.templateDerivedCamera }
+          : {}),
       },
       spatialContext: {
         lineOfSightRatio,
@@ -200,6 +254,8 @@ export class PhotoEvidenceBuilder {
       },
       subjectObservations: observations,
       stability: {
+        linearSpeedMps,
+        angularSpeedRadps,
         stableDurationTicks: asElapsedTicks(stableTicks),
         requiredDurationTicks: asElapsedTicks(requiredTicks),
         isStable: stableTicks >= requiredTicks,
@@ -222,42 +278,48 @@ export class PhotoEvidenceBuilder {
 
   private buildSubjectObservation(
     subject: PhotographySubjectDefinition,
+    visibleSampleCount: number,
+    totalSampleCount: number,
     visibilityRatio: number,
     objective: PhotographyObjectiveDefinition,
     camera: CameraSnapshot,
   ):
     | { readonly ok: true; readonly value: SubjectObservation }
     | { readonly ok: false; readonly reason: string } {
-    const projected = projectSubjectSamplePoints(subject.visibilitySamplePoints, camera);
-    if (!projected.ok) {
-      return { ok: false, reason: projected.reason };
+    const boundsProjection = projectSubjectBounds(subject.subjectBounds, camera);
+    if (!boundsProjection.ok) {
+      return { ok: false, reason: boundsProjection.reason };
     }
 
-    const rectangle = computeNormalizedScreenRectangle(projected.value);
-    const screenRectangle = rectangle.ok ? rectangle.value : null;
+    const screenRectangle = boundsProjection.value.screenRectangle;
 
     const anchorProjection = projectWorldPoint(subject.scoringAnchor, camera);
     if (!anchorProjection.ok) {
       return { ok: false, reason: anchorProjection.reason };
     }
-    const anchorScreen: NormalizedScreenPoint | null = anchorProjection.value.screen;
+    const projectedAnchor: NormalizedScreenPoint | null = anchorProjection.value.screen;
 
-    // Centering is measured against the objective's authored target anchor
-    // (`SCREEN_CENTER` when the objective does not move it off-center).
     const centeringTarget = objective.centeringTarget.targetAnchor ?? SCREEN_CENTER;
 
     const angle = viewingAngle(camera.worldPose, subject.scoringAnchor);
     const side = evaluateViewingSide(camera.worldPose, subject.worldPose);
+    const clampedVisibility = clamp01(visibilityRatio);
 
     return {
       ok: true,
       value: {
         subjectId: asSubjectId(String(subject.id)),
-        visible: visibilityRatio >= objective.visibilityMin,
-        visibilityRatio: clamp01(visibilityRatio),
+        boundsVersion: subject.boundsVersion,
+        visible: clampedVisibility >= objective.visibilityMin,
+        visibleSampleCount,
+        totalSampleCount,
+        visibilityRatio: clampedVisibility,
+        obstructionRatio: clamp01(1 - clampedVisibility),
+        projectedAnchor,
         screenRectangle,
-        centeringErrorFromCenter:
-          anchorScreen === null ? null : centeringError(anchorScreen, centeringTarget),
+        inFrontOfCamera: anchorProjection.value.inFrontOfCamera,
+        centeringError:
+          projectedAnchor === null ? null : centeringError(projectedAnchor, centeringTarget),
         distanceMeters: distance(camera.worldPose.position, subject.scoringAnchor),
         viewingAngleDeg: angle.ok ? angle.value : null,
         viewingSide: side.ok ? side.value.side : null,
@@ -269,13 +331,17 @@ export class PhotoEvidenceBuilder {
   }
 }
 
-/** Stable capture identity: `${sessionId}:${objectiveId}:${attemptNumber}`. */
+/**
+ * Stable capture identity across retries:
+ * `${sessionId}:g${sessionGeneration}:${objectiveId}:${attemptNumber}`.
+ */
 export function buildCaptureId(
   sessionId: string,
+  sessionGeneration: number,
   objectiveId: string,
   attemptNumber: number,
 ): string {
-  return `${sessionId}:${objectiveId}:${attemptNumber}`;
+  return `${sessionId}:g${sessionGeneration}:${objectiveId}:${attemptNumber}`;
 }
 
 /**
@@ -302,6 +368,18 @@ export function toBodyAngularVelocityVec3(rates: {
   readonly roll: number;
 }): Vec3 {
   return { x: rates.pitch, y: rates.yaw, z: rates.roll };
+}
+
+function bodyAngularSpeedFromRates(rates: {
+  readonly pitch: number;
+  readonly yaw: number;
+  readonly roll: number;
+}): number {
+  return Math.hypot(rates.pitch, rates.yaw, rates.roll);
+}
+
+function magnitudeVec3(v: Vec3): number {
+  return Math.hypot(v.x, v.y, v.z);
 }
 
 function resolvePositionZone(
@@ -332,4 +410,12 @@ function averageOf(values: readonly number[]): number | null {
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+/** @internal exported for tests — clone a pose without sharing nested refs. */
+export function clonePose(pose: Pose): Pose {
+  return {
+    position: { ...pose.position },
+    orientation: { ...pose.orientation },
+  };
 }

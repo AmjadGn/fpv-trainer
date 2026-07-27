@@ -40,6 +40,8 @@ export interface PhotographyMissionRuntimeBeginInput {
   readonly sessionId: string;
   readonly sessionGeneration: number;
   readonly locationGeneration: number;
+  readonly locationId: string;
+  readonly locationVersion: string;
   readonly subjects: readonly PhotographySubjectDefinition[];
   /** Playable/hard boundary the out-of-bounds grace countdown is evaluated against. */
   readonly boundaryShape: BoundaryShape | null;
@@ -56,6 +58,8 @@ interface ActiveMissionContext {
   readonly scoringPolicy: PhotographyScoringPolicy;
   readonly sessionId: string;
   readonly locationGeneration: number;
+  readonly locationId: string;
+  readonly locationVersion: string;
   readonly subjects: readonly PhotographySubjectDefinition[];
   readonly zones: readonly MissionZoneShape[];
 }
@@ -132,6 +136,8 @@ export class PhotographyMissionRuntime {
       scoringPolicy: input.scoringPolicy,
       sessionId: input.sessionId,
       locationGeneration: input.locationGeneration,
+      locationId: input.locationId,
+      locationVersion: input.locationVersion,
       subjects: input.subjects,
       zones: input.zones ?? [],
     };
@@ -328,6 +334,10 @@ export class PhotographyMissionRuntime {
         sessionGeneration,
         locationGeneration: context.locationGeneration,
         sessionId: context.sessionId,
+        missionId: String(context.mission.missionId),
+        missionVersion: String(context.mission.versions.version),
+        locationId: context.locationId,
+        locationVersion: context.locationVersion,
         subjects: context.subjects,
         zones: context.zones,
         stability: this.stabilitySignal() ?? this.stabilityWindow.snapshot(0),

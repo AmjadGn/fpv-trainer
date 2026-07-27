@@ -4,8 +4,9 @@ import { asObjectiveId } from '@fpv/mission-domain';
 import {
   asPhotoCaptureEvidenceId,
   asPhotographyObjectiveId,
-  asSubjectId,
   createDefaultPhotographyScoringPolicy,
+  createPhotoCaptureEvidence,
+  EVIDENCE_SCHEMA_VERSION,
   type PhotoCaptureEvidence,
   type PhotographyObjectiveDefinition,
 } from '@fpv/photography-domain';
@@ -25,6 +26,21 @@ import { PhotoStabilityWindow } from './photo-stability-window';
 
 const OBJECTIVE_ID = asPhotographyObjectiveId('test-photo-objective');
 const MISSION_OBJECTIVE_ID = asObjectiveId('mission-obj-1');
+const SESSION_ID = 'session-1';
+const SESSION_GENERATION = 1;
+
+const TEST_CAMERA_RIG = {
+  rigId: 'test-rig',
+  rigVersion: '1.0.0',
+  resolutionStrategy: 'aircraft-profile-v1',
+  cameraTiltRad: 0,
+  templateDerivedCamera: false,
+} as const;
+
+const TEST_MISSION_ID = 'test-mission';
+const TEST_MISSION_VERSION = '1.0.0';
+const TEST_LOCATION_ID = 'test-location';
+const TEST_LOCATION_VERSION = '1.0.0';
 
 /** A permissive objective definition with no required subjects, so scoring never hard-fails on visibility. */
 const TEST_OBJECTIVE: PhotographyObjectiveDefinition = {
@@ -98,24 +114,39 @@ function observation(overrides: Partial<MissionRuntimeObservation> = {}): Missio
   return {
     flight: flightSnapshot(),
     camera: CAMERA_SNAPSHOT,
+    cameraRig: TEST_CAMERA_RIG,
     missionElapsedTicks: 10,
     ...overrides,
   };
 }
 
 function fixtureEvidence(evidenceId: string): PhotoCaptureEvidence {
-  return {
+  const pose = CAMERA_SNAPSHOT.worldPose;
+  const result = createPhotoCaptureEvidence({
     identity: {
       evidenceId: asPhotoCaptureEvidenceId(evidenceId),
+      schemaVersion: EVIDENCE_SCHEMA_VERSION,
+      missionId: TEST_MISSION_ID,
+      missionVersion: TEST_MISSION_VERSION,
+      missionSessionId: SESSION_ID,
+      sessionGeneration: SESSION_GENERATION,
       objectiveId: OBJECTIVE_ID,
-      missionAttemptId: 'session-1',
+      objectiveVersion: TEST_OBJECTIVE.version,
       attemptNumber: 1,
+      locationId: TEST_LOCATION_ID,
+      locationVersion: TEST_LOCATION_VERSION,
+      locationGeneration: 1,
       capturedAtTick: asSimulationTick(10),
-      schemaVersion: '1.0.0',
+      missionElapsedTicks: asElapsedTicks(10),
+      scoringPolicyVersion: createDefaultPhotographyScoringPolicy().policyVersion,
     },
     aircraftSnapshot: {
       aircraftId: 'test-aircraft',
-      pose: CAMERA_SNAPSHOT.worldPose,
+      aircraftSourceType: 'factory',
+      definitionVersion: null,
+      physicsProfileVersion: null,
+      runtimeCompatibilityVersion: '1',
+      pose,
       linearVelocityMps: { x: 0, y: 0, z: 0 },
       bodyAngularVelocityRadps: { x: 0, y: 0, z: 0 },
       altitudeMeters: 5,
@@ -123,23 +154,35 @@ function fixtureEvidence(evidenceId: string): PhotoCaptureEvidence {
       crashed: false,
     },
     cameraSnapshot: {
-      worldPose: CAMERA_SNAPSHOT.worldPose,
+      rigId: TEST_CAMERA_RIG.rigId,
+      rigVersion: TEST_CAMERA_RIG.rigVersion,
+      resolutionStrategy: TEST_CAMERA_RIG.resolutionStrategy,
+      worldPose: pose,
       projection: CAMERA_SNAPSHOT.projection,
+      cameraTiltRad: TEST_CAMERA_RIG.cameraTiltRad,
       cameraMode: 'fpv',
       cosmeticEffectsExcluded: true,
+      templateDerivedCamera: TEST_CAMERA_RIG.templateDerivedCamera,
     },
     spatialContext: { lineOfSightRatio: 1, obstructionRatio: 0 },
     subjectObservations: [],
     stability: {
+      linearSpeedMps: 0,
+      angularSpeedRadps: 0,
       stableDurationTicks: asElapsedTicks(0),
       requiredDurationTicks: asElapsedTicks(0),
       isStable: true,
     },
-  };
+  });
+  if (!result.ok) {
+    throw new Error(`fixture evidence invalid: ${result.reason}`);
+  }
+  return result.value;
 }
 
 function passingEvidenceResult(): PhotoEvidenceBuildResult {
-  return { ok: true, evidence: fixtureEvidence('session-1:test-photo-objective:1'), evidenceId: 'session-1:test-photo-objective:1' };
+  const evidenceId = `${SESSION_ID}:g${SESSION_GENERATION}:${OBJECTIVE_ID}:1`;
+  return { ok: true, evidence: fixtureEvidence(evidenceId), evidenceId };
 }
 
 interface Fakes {
@@ -198,7 +241,7 @@ describe('PhotoCaptureCoordinator', () => {
     const first = coordinator.requestPhotoCapture({
       sessionGeneration: 1,
       objectiveId: String(OBJECTIVE_ID),
-      sessionId: 'session-1',
+      sessionId: SESSION_ID,
     });
     expect(first.accepted).toBe(true);
     expect(coordinator.hasPendingCapture()).toBe(true);
@@ -206,7 +249,7 @@ describe('PhotoCaptureCoordinator', () => {
     const second = coordinator.requestPhotoCapture({
       sessionGeneration: 1,
       objectiveId: String(OBJECTIVE_ID),
-      sessionId: 'session-1',
+      sessionId: SESSION_ID,
     });
     expect(second.accepted).toBe(false);
     expect(second.diagnostic?.code).toBe('PHOTO_CAPTURE_ALREADY_PENDING');
@@ -227,7 +270,7 @@ describe('PhotoCaptureCoordinator', () => {
     coordinator.requestPhotoCapture({
       sessionGeneration: 1,
       objectiveId: String(OBJECTIVE_ID),
-      sessionId: 'session-1',
+      sessionId: SESSION_ID,
     });
 
     const outcome = coordinator.onAuthoritativeObservation(observation(), {
@@ -235,7 +278,11 @@ describe('PhotoCaptureCoordinator', () => {
       cameraModeFpv: true,
       sessionGeneration: 1,
       locationGeneration: 1,
-      sessionId: 'session-1',
+      sessionId: SESSION_ID,
+      missionId: TEST_MISSION_ID,
+      missionVersion: TEST_MISSION_VERSION,
+      locationId: TEST_LOCATION_ID,
+      locationVersion: TEST_LOCATION_VERSION,
       subjects: [],
       zones: [],
       stability: new PhotoStabilityWindow().snapshot(0),
@@ -260,7 +307,7 @@ describe('PhotoCaptureCoordinator', () => {
     coordinator.requestPhotoCapture({
       sessionGeneration: 1,
       objectiveId: String(OBJECTIVE_ID),
-      sessionId: 'session-1',
+      sessionId: SESSION_ID,
     });
 
     const outcome = coordinator.onAuthoritativeObservation(observation(), {
@@ -268,7 +315,11 @@ describe('PhotoCaptureCoordinator', () => {
       cameraModeFpv: true,
       sessionGeneration: 1,
       locationGeneration: 1,
-      sessionId: 'session-1',
+      sessionId: SESSION_ID,
+      missionId: TEST_MISSION_ID,
+      missionVersion: TEST_MISSION_VERSION,
+      locationId: TEST_LOCATION_ID,
+      locationVersion: TEST_LOCATION_VERSION,
       subjects: [],
       zones: [],
       stability: new PhotoStabilityWindow().snapshot(0),

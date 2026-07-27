@@ -50,6 +50,20 @@ const SESSION_ID = 'session-shutter';
 const SESSION_GENERATION = 21;
 const LOCATION_GENERATION = 4;
 
+const TEST_CAMERA_RIG = {
+  rigId: 'test-rig',
+  rigVersion: '1.0.0',
+  resolutionStrategy: 'aircraft-profile-v1',
+  cameraTiltRad: 0,
+  templateDerivedCamera: false,
+} as const;
+
+const COASTAL_MISSION = getCoastalRuinsSurveyMission();
+const CONSUME_MISSION_ID = String(COASTAL_MISSION.missionId);
+const CONSUME_MISSION_VERSION = String(COASTAL_MISSION.versions.version);
+const CONSUME_LOCATION_ID = 'mediterranean-expedition-region';
+const CONSUME_LOCATION_VERSION = '1.0.0';
+
 const ARCH_OBJECTIVE_ID = String(COASTAL_RUINS_PHOTO_OBJECTIVES[0].objectiveId);
 const LOOKOUT_OBJECTIVE_ID = String(COASTAL_RUINS_PHOTO_OBJECTIVES[1].objectiveId);
 const ARCH_ANCHOR = COASTAL_RUINS_SUBJECTS.find(
@@ -119,6 +133,7 @@ function observation(
   return {
     flight,
     camera: overrides.camera === undefined ? cameraSnapshot() : overrides.camera,
+    cameraRig: overrides.cameraRig === undefined ? TEST_CAMERA_RIG : overrides.cameraRig,
     missionElapsedTicks: flight.simulationTick,
   };
 }
@@ -157,20 +172,28 @@ function spatialStub(options: SpatialStubOptions = {}): MissionSpatialQueryPort 
     }),
     queryVisibilitySamples: (
       query: MissionVisibilitySampleQuery,
-    ): MissionVisibilitySampleResult =>
-      options.available === false
-        ? {
-            status: 'unavailable',
-            visibleFraction: null,
-            sampleCount: query.samplePointsWorld.length,
-            diagnosticCode: 'SPATIAL_QUERY_UNAVAILABLE',
-            diagnosticMessage: 'stubbed unavailable',
-          }
-        : {
-            status: 'ok',
-            visibleFraction: options.visibleFraction ?? 1,
-            sampleCount: query.samplePointsWorld.length,
-          },
+    ): MissionVisibilitySampleResult => {
+      const totalSampleCount = query.samplePointsWorld.length;
+      if (options.available === false) {
+        return {
+          status: 'unavailable',
+          visibleFraction: null,
+          visibleSampleCount: null,
+          totalSampleCount,
+          sampleCount: totalSampleCount,
+          diagnosticCode: 'SPATIAL_QUERY_UNAVAILABLE',
+          diagnosticMessage: 'stubbed unavailable',
+        };
+      }
+      const fraction = options.visibleFraction ?? 1;
+      return {
+        status: 'ok',
+        visibleFraction: fraction,
+        visibleSampleCount: Math.round(fraction * totalSampleCount),
+        totalSampleCount,
+        sampleCount: totalSampleCount,
+      };
+    },
   };
 }
 
@@ -245,6 +268,10 @@ function consumeContext(
     sessionGeneration: SESSION_GENERATION,
     locationGeneration: LOCATION_GENERATION,
     sessionId: SESSION_ID,
+    missionId: CONSUME_MISSION_ID,
+    missionVersion: CONSUME_MISSION_VERSION,
+    locationId: CONSUME_LOCATION_ID,
+    locationVersion: CONSUME_LOCATION_VERSION,
     subjects: COASTAL_RUINS_SUBJECTS,
     zones: [],
     stability: stabilityFor(ARCH_OBJECTIVE_ID),
@@ -325,7 +352,9 @@ describe('Checkpoint 5 — photo shutter queue', () => {
     const outcome = coordinator.onAuthoritativeObservation(observation(), consumeContext());
 
     expect(outcome).not.toBeNull();
-    expect(outcome!.captureId).toBe(`${SESSION_ID}:${ARCH_OBJECTIVE_ID}:1`);
+    expect(outcome!.captureId).toBe(
+      `${SESSION_ID}:g${SESSION_GENERATION}:${ARCH_OBJECTIVE_ID}:1`,
+    );
     expect(outcome!.capturedAtTick).toBe(900);
     expect(outcome!.passed).toBe(true);
     expect(coordinator.hasPendingCapture()).toBe(false);
@@ -351,7 +380,9 @@ describe('Checkpoint 5 — photo shutter queue', () => {
     expect(coordinator.hasPendingCapture()).toBe(true);
 
     const resumed = coordinator.onAuthoritativeObservation(observation(), consumeContext());
-    expect(resumed?.captureId).toBe(`${SESSION_ID}:${ARCH_OBJECTIVE_ID}:1`);
+    expect(resumed?.captureId).toBe(
+      `${SESSION_ID}:g${SESSION_GENERATION}:${ARCH_OBJECTIVE_ID}:1`,
+    );
   });
 
   it('rejects a shutter that belongs to a previous flight session', () => {
@@ -481,6 +512,38 @@ describe('Checkpoint 5 — photo shutter queue', () => {
     expect(coordinator.hasPendingCapture()).toBe(false);
   });
 
+  it('restores capture eligibility when the pilot returns to FPV', () => {
+    const { coordinator } = setup();
+    coordinator.requestPhotoCapture({
+      sessionGeneration: SESSION_GENERATION,
+      objectiveId: ARCH_OBJECTIVE_ID,
+      sessionId: SESSION_ID,
+    });
+    const rejected = coordinator.onAuthoritativeObservation(
+      observation(),
+      consumeContext({ cameraModeFpv: false }),
+    );
+    expect(rejected?.diagnostic?.code).toBe('PHOTO_CAPTURE_WRONG_CAMERA_MODE');
+
+    const requeued = coordinator.requestPhotoCapture({
+      sessionGeneration: SESSION_GENERATION,
+      objectiveId: ARCH_OBJECTIVE_ID,
+      sessionId: SESSION_ID,
+    });
+    expect(requeued.accepted).toBe(true);
+
+    const outcome = coordinator.onAuthoritativeObservation(
+      observation(),
+      consumeContext({ cameraModeFpv: true }),
+    );
+
+    expect(outcome).not.toBeNull();
+    expect(outcome?.diagnostic?.code).not.toBe('PHOTO_CAPTURE_WRONG_CAMERA_MODE');
+    expect(outcome?.captureId).toMatch(
+      new RegExp(`^${SESSION_ID}:g${SESSION_GENERATION}:`),
+    );
+  });
+
   it('rejects a step that carries no canonical camera snapshot', () => {
     const { coordinator } = setup();
     coordinator.requestPhotoCapture({
@@ -490,7 +553,7 @@ describe('Checkpoint 5 — photo shutter queue', () => {
     });
 
     const outcome = coordinator.onAuthoritativeObservation(
-      observation({ camera: null }),
+      observation({ camera: null, cameraRig: null }),
       consumeContext(),
     );
 

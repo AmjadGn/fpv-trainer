@@ -129,10 +129,10 @@ describe('photography-domain: smoke test — end to end', () => {
     expect(projected.ok).toBe(true);
 
     const bounds = projectSubjectBounds(
-      [
-        { x: -1, y: 9, z: -10 },
-        { x: 1, y: 11, z: -10 },
-      ],
+      {
+        kind: 'aabb',
+        aabb: { min: { x: -1, y: 9, z: -11 }, max: { x: 1, y: 11, z: -9 } },
+      },
       cameraSnapshotForProjection,
     );
     expect(bounds.ok).toBe(true);
@@ -144,13 +144,27 @@ describe('photography-domain: smoke test — end to end', () => {
     const evidenceResult = createPhotoCaptureEvidence({
       identity: {
         evidenceId: asPhotoCaptureEvidenceId('smoke-evidence'),
-        objectiveId,
-        attemptNumber: 1,
-        capturedAtTick: asSimulationTick(10),
         schemaVersion: EVIDENCE_SCHEMA_VERSION,
+        missionId: 'smoke-mission',
+        missionVersion: '1.0.0',
+        missionSessionId: 'smoke-session',
+        sessionGeneration: 1,
+        objectiveId,
+        objectiveVersion: '1.0.0',
+        attemptNumber: 1,
+        locationId: 'smoke-location',
+        locationVersion: '1.0.0',
+        locationGeneration: 1,
+        capturedAtTick: asSimulationTick(10),
+        missionElapsedTicks: asElapsedTicks(10),
+        scoringPolicyVersion: '1.0.0',
       },
       aircraftSnapshot: {
         aircraftId: 'smoke-aircraft',
+        aircraftSourceType: 'factory',
+        definitionVersion: '1.0.0',
+        physicsProfileVersion: '1.0.0',
+        runtimeCompatibilityVersion: '1.3.0-runtime-c3',
         pose: cameraPose,
         linearVelocityMps: { x: 0, y: 0, z: 0 },
         bodyAngularVelocityRadps: { x: 0, y: 0, z: 0 },
@@ -159,19 +173,29 @@ describe('photography-domain: smoke test — end to end', () => {
         crashed: false,
       },
       cameraSnapshot: {
+        rigId: 'smoke-rig',
+        rigVersion: '1.0.0',
+        resolutionStrategy: 'aircraft-profile-v1',
         worldPose: cameraPose,
         projection: cameraSnapshotForProjection.projection,
         cameraMode: 'fpv',
         cosmeticEffectsExcluded: true,
+        templateDerivedCamera: false,
       },
       spatialContext: { lineOfSightRatio: 1, obstructionRatio: 0 },
       subjectObservations: [
         {
           subjectId,
+          boundsVersion: '1.0.0',
           visible: true,
+          visibleSampleCount: 4,
+          totalSampleCount: 4,
           visibilityRatio: 1,
+          obstructionRatio: 0,
+          projectedAnchor: { u: 0.5, v: 0.5 },
           screenRectangle: { minU: 0.4, minV: 0.4, maxU: 0.6, maxV: 0.6 },
-          centeringErrorFromCenter: 0,
+          inFrontOfCamera: true,
+          centeringError: 0,
           distanceMeters: 10,
           viewingAngleDeg: 0,
           viewingSide: 'front',
@@ -179,7 +203,13 @@ describe('photography-domain: smoke test — end to end', () => {
           frameIntersectionRatio: 1,
         },
       ],
-      stability: { stableDurationTicks: stabilityTicks, requiredDurationTicks: stabilityTicks, isStable: true },
+      stability: {
+        linearSpeedMps: 0,
+        angularSpeedRadps: 0,
+        stableDurationTicks: stabilityTicks,
+        requiredDurationTicks: stabilityTicks,
+        isStable: true,
+      },
     });
     expect(evidenceResult.ok).toBe(true);
     if (!evidenceResult.ok) return;
