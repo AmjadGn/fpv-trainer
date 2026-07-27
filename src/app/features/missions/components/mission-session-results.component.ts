@@ -8,11 +8,11 @@ import {
 } from '../mission-photo-feedback.map';
 
 /**
- * Session-only mission results overlay.
+ * Mission results overlay with durable persistence status.
  *
- * Shows the attempt that just ended and nothing else: no personal bests, no
- * rankings, no cloud state. Presentation images are session object URLs owned
- * and revoked by `MissionResultsFacade`.
+ * Presentation images are session object URLs owned and revoked by
+ * `MissionResultsFacade`. Personal Best confirmation comes only from
+ * persistence comparator outcomes.
  */
 @Component({
   selector: 'app-mission-session-results',
@@ -88,7 +88,18 @@ import {
         @if (viewModel().customResultsNote; as note) {
           <p class="results-card__note">{{ note }}</p>
         }
-        <p class="results-card__session">Results are kept for this session only.</p>
+        @if (viewModel().isNewPersonalBest) {
+          <p class="results-card__best" data-testid="new-personal-best">New Personal Best</p>
+        }
+        @if (persistenceLabel(); as persistence) {
+          <p
+            class="results-card__session"
+            data-testid="persistence-status"
+            [attr.data-status]="viewModel().persistenceStatus"
+          >
+            {{ persistence }}
+          </p>
+        }
 
         <div class="results-card__actions">
           <button type="button" class="results-btn results-btn--primary" (click)="retryRequested.emit()">
@@ -208,6 +219,14 @@ import {
         font-size: 0.78rem;
         color: var(--fpv-muted, #8fa3ad);
       }
+      .results-card__best {
+        margin: 0 0 0.5rem;
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #7dffb3;
+      }
       .results-card__actions {
         display: flex;
         flex-wrap: wrap;
@@ -260,6 +279,33 @@ export class MissionSessionResultsComponent {
   protected readonly durationLabel = computed(() =>
     formatMissionDuration(this.viewModel().elapsedSeconds),
   );
+
+  protected readonly persistenceLabel = computed(() => {
+    const note = this.viewModel().persistenceNote;
+    if (note) {
+      return note;
+    }
+    switch (this.viewModel().persistenceStatus) {
+      case 'saving':
+        return 'Saving result…';
+      case 'saved-new-personal-best-images-pending':
+        return 'New Personal Best — saving photos…';
+      case 'saved-new-personal-best':
+        return 'New Personal Best';
+      case 'saved-without-images':
+        return 'Personal Best saved. Photo storage incomplete.';
+      case 'memory-only':
+        return 'Saved for this session only — durable storage is unavailable.';
+      case 'attempt-saved':
+        return 'Attempt saved';
+      case 'saved':
+        return 'Result saved';
+      case 'save-failed':
+        return 'Could not save this result.';
+      default:
+        return null;
+    }
+  });
 
   protected feedbackText(codes: readonly string[]): string {
     return codes.map(missionPhotoFeedbackText).join(' · ');

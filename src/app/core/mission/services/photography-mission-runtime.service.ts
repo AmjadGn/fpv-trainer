@@ -16,6 +16,7 @@ import {
   type MissionBoundaryWarningState,
 } from './mission-boundary-runtime';
 import { MissionObjectiveRuntime } from './mission-objective-runtime.service';
+import type { MissionResultAircraftContext } from './mission-presentation-image-settlement';
 import { MissionResultsFacade } from './mission-results.facade';
 import {
   MissionRuntimeCoordinator,
@@ -62,6 +63,8 @@ interface ActiveMissionContext {
   readonly locationVersion: string;
   readonly subjects: readonly PhotographySubjectDefinition[];
   readonly zones: readonly MissionZoneShape[];
+  /** Authored photography-objective versions keyed by mission objective id. */
+  readonly objectiveVersions: ReadonlyMap<string, string>;
 }
 
 /**
@@ -70,8 +73,8 @@ interface ActiveMissionContext {
  * Attaches exactly one observation listener to `MissionRuntimeCoordinator`
  * and, per authoritative fixed step, drives stability, boundary grace, crash
  * failure, pending-shutter consumption, and objective progression. It owns no
- * loop of its own: no RAF, no second Rapier world, no rendering, no
- * persistence.
+ * loop of its own: no RAF, no second Rapier world, no rendering. Durable
+ * persistence is triggered by `MissionResultsFacade` after results are set.
  */
 @Injectable({ providedIn: 'root' })
 export class PhotographyMissionRuntime {
@@ -93,6 +96,11 @@ export class PhotographyMissionRuntime {
   private resultsPrepared = false;
   private paused = false;
   private cameraModeFpv = true;
+  /**
+   * Trusted aircraft metadata from the latest valid authoritative observation
+   * for the active session. Never sourced from Hangar/UI selection state.
+   */
+  private trustedAircraftContext: MissionResultAircraftContext | null = null;
 
   private readonly boundaryStateSignal = signal<MissionBoundaryWarningState>(
     this.boundaryRuntime.state(),
@@ -140,12 +148,14 @@ export class PhotographyMissionRuntime {
       locationVersion: input.locationVersion,
       subjects: input.subjects,
       zones: input.zones ?? [],
+      objectiveVersions: buildObjectiveVersionMap(input.mission, photographyObjectives),
     };
     this.sessionGeneration = input.sessionGeneration;
     this.fixedStepSeconds = input.fixedStepSeconds ?? DEFAULT_FIXED_STEP_SECONDS;
     this.crashHandled = false;
     this.resultsPrepared = false;
     this.paused = false;
+    this.trustedAircraftContext = null;
     this.captureCoordinator.reset();
     this.results.clear();
     this.diagnosticsSignal.set([]);
@@ -181,6 +191,7 @@ export class PhotographyMissionRuntime {
     this.crashHandled = false;
     this.resultsPrepared = false;
     this.paused = false;
+    this.trustedAircraftContext = null;
     this.captureCoordinator.reset();
     this.results.clear();
     this.boundaryRuntime.rebindSession(sessionGeneration);
@@ -209,6 +220,7 @@ export class PhotographyMissionRuntime {
     this.boundStabilityObjectiveId = null;
     this.crashHandled = false;
     this.resultsPrepared = false;
+    this.trustedAircraftContext = null;
     this.photographyObjectiveActiveSignal.set(false);
   }
 
@@ -280,6 +292,7 @@ export class PhotographyMissionRuntime {
     if (observation.flight.sessionGeneration !== sessionGeneration) {
       return;
     }
+    this.cacheTrustedAircraftContext(observation);
     if (this.paused) {
       // Paused steps must not accumulate stability or boundary grace.
       return;
@@ -379,13 +392,69 @@ export class PhotographyMissionRuntime {
       return;
     }
     this.resultsPrepared = true;
+
+    const sessionGeneration = this.sessionGeneration ?? 0;
+    const expectedObjectiveIds = record.objectiveResults
+      .filter(
+        (objective) =>
+          objective.status === 'completed' && Boolean(objective.photographyEvaluationRef),
+      )
+      .map((objective) => String(objective.objectiveId));
+
+    const settlement = this.captureCoordinator.createPresentationSettlement({
+      sessionId: context.sessionId,
+      sessionGeneration,
+      resultId: String(record.resultId),
+      expectedObjectiveIds,
+    });
+
+    const aircraft = this.trustedAircraftContext;
+    if (!aircraft) {
+      this.pushDiagnostic({
+        code: 'MISSION_PERSISTENCE_RECORD_INVALID',
+        message:
+          'Trusted aircraft metadata was unavailable from the authoritative flight runtime; gameplay result will save without fabricated aircraft identity.',
+      });
+    }
+
     this.results.setResult({
       record,
       mission: context.mission,
       evaluations: this.objectiveRuntime.acceptedEvaluationsSnapshot(),
       attemptCounts: this.objectiveRuntime.attemptCountsSnapshot(),
       fixedStepSeconds: this.fixedStepSeconds,
+      scoringPolicyVersion: context.scoringPolicy.policyVersion,
+      sessionGeneration,
+      locationId: context.locationId,
+      locationVersion: context.locationVersion,
+      objectiveVersions: context.objectiveVersions,
+      aircraftContext: aircraft,
+      presentationSettlement: settlement,
     });
+  }
+
+  /**
+   * Caches immutable trusted aircraft metadata from the authoritative fixed-step
+   * observation. Never reads Hangar, controller, or renderer selection state.
+   */
+  private cacheTrustedAircraftContext(observation: MissionRuntimeObservation): void {
+    const flight = observation.flight;
+    if (!flight.aircraftId || !flight.aircraftSourceType || !flight.runtimeCompatibilityVersion) {
+      return;
+    }
+    if (
+      flight.aircraftSourceType !== 'factory' &&
+      flight.aircraftSourceType !== 'user-compiled'
+    ) {
+      return;
+    }
+    this.trustedAircraftContext = {
+      aircraftId: flight.aircraftId,
+      aircraftSourceType: flight.aircraftSourceType,
+      definitionVersion: flight.definitionVersion,
+      physicsProfileVersion: flight.physicsProfileVersion,
+      runtimeCompatibilityVersion: flight.runtimeCompatibilityVersion,
+    };
   }
 
   /** The authoritative step rate is owned by the flight clock, not by us. */
@@ -484,4 +553,25 @@ export class PhotographyMissionRuntime {
   private pushDiagnostic(diagnostic: MissionRuntimeDiagnostic): void {
     this.diagnosticsSignal.set([...this.diagnosticsSignal(), diagnostic]);
   }
+}
+
+/**
+ * Maps mission objective ids → authored PhotographyObjectiveDefinition.version.
+ * Persistence must not infer versions from index or objective count.
+ */
+function buildObjectiveVersionMap(
+  mission: MissionDefinition,
+  photographyObjectives: ReadonlyMap<string, PhotographyObjectiveDefinition>,
+): ReadonlyMap<string, string> {
+  const versions = new Map<string, string>();
+  for (const declared of mission.objectives) {
+    if (declared.kind !== 'photography') {
+      continue;
+    }
+    const photo = photographyObjectives.get(declared.photographyObjectiveId);
+    if (photo?.version) {
+      versions.set(String(declared.objectiveId), photo.version);
+    }
+  }
+  return versions;
 }

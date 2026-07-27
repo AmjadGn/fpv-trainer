@@ -20,7 +20,8 @@
       "@fpv/location-domain": ["packages/location-domain/src/index.ts"],
       "@fpv/mission-domain": ["packages/mission-domain/src/index.ts"],
       "@fpv/photography-domain": ["packages/photography-domain/src/index.ts"],
-      "@fpv/location-validation": ["packages/location-validation/src/index.ts"]
+      "@fpv/location-validation": ["packages/location-validation/src/index.ts"],
+      "@fpv/mission-persistence": ["packages/mission-persistence/src/index.ts"]
     },
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,

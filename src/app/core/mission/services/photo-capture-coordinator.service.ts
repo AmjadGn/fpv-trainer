@@ -16,6 +16,10 @@ import {
 } from '../ports/mission-photo-presentation-capture.port';
 import type { MissionRuntimeObservation } from './mission-runtime-coordinator.service';
 import { MissionObjectiveRuntime } from './mission-objective-runtime.service';
+import {
+  MissionPresentationSettlementRegistry,
+  type MissionPresentationImageSettlement,
+} from './mission-presentation-image-settlement';
 import { MissionResultsFacade } from './mission-results.facade';
 import { PhotoEvidenceBuilder, type MissionZoneShape } from './photo-evidence-builder.service';
 import type { PhotoStabilityWindowSnapshot } from './photo-stability-window';
@@ -72,6 +76,9 @@ interface PendingCapture extends PhotoCaptureRequest {
  * built from the fixed-step observation, evaluated by
  * `@fpv/photography-domain`, and dispatched to `MissionObjectiveRuntime`.
  * The presentation image is requested afterwards and never gates the score.
+ *
+ * Owns the presentation settlement registry so persistence can await settled
+ * Blobs even after UI retry/exit revokes object URLs.
  */
 @Injectable({ providedIn: 'root' })
 export class PhotoCaptureCoordinator {
@@ -85,6 +92,7 @@ export class PhotoCaptureCoordinator {
   private pending: PendingCapture | null = null;
   /** Bumped on reset/clear so in-flight presentation promises cannot attach stale URLs. */
   private presentationEpoch = 0;
+  private readonly settlementRegistry = new MissionPresentationSettlementRegistry();
 
   private readonly lastOutcomeSignal = signal<PhotoCaptureOutcome | null>(null);
   private readonly pendingSignal = signal(false);
@@ -138,10 +146,32 @@ export class PhotoCaptureCoordinator {
     this.pendingSignal.set(false);
   }
 
+  /**
+   * Clears pending shutter and blocks stale UI object-URL attachment.
+   * Does not cancel settlement tasks — persistence may still await Blobs.
+   */
   reset(): void {
     this.clearPending();
     this.presentationEpoch += 1;
     this.lastOutcomeSignal.set(null);
+  }
+
+  /**
+   * Creates a settlement handle for the immutable mission result so persistence
+   * can await accepted presentation captures independently of UI lifecycle.
+   */
+  createPresentationSettlement(input: {
+    readonly sessionId: string;
+    readonly sessionGeneration: number;
+    readonly resultId: string;
+    readonly expectedObjectiveIds: readonly string[];
+  }): MissionPresentationImageSettlement {
+    return this.settlementRegistry.createSettlement(input);
+  }
+
+  /** Test seam for settlement registry isolation. */
+  resetSettlementRegistryForTests(): void {
+    this.settlementRegistry.resetForTests();
   }
 
   /**
@@ -265,6 +295,7 @@ export class PhotoCaptureCoordinator {
         void this.capturePresentationFrame(
           built.evidenceId,
           String(active.missionObjectiveId),
+          context.sessionGeneration,
           observation,
         );
       }
@@ -289,13 +320,32 @@ export class PhotoCaptureCoordinator {
   private async capturePresentationFrame(
     captureId: string,
     missionObjectiveId: string,
+    sessionGeneration: number,
     observation: MissionRuntimeObservation,
   ): Promise<void> {
+    // Register settlement before awaiting render so persistence can wait.
+    this.settlementRegistry.beginTask({
+      sessionGeneration,
+      objectiveId: missionObjectiveId,
+      captureId,
+    });
+
     const port = this.presentationCapture;
     const camera = observation.camera;
     if (!port || !camera) {
+      this.settlementRegistry.completeTask({
+        sessionGeneration,
+        objectiveId: missionObjectiveId,
+        captureId,
+        status: 'failed',
+        blob: null,
+        mimeType: null,
+        byteLength: 0,
+        diagnosticCode: 'PHOTO_PRESENTATION_CAPTURE_UNAVAILABLE',
+      });
       return;
     }
+
     const epoch = this.presentationEpoch;
     try {
       const result = await port.capturePresentationFrame({
@@ -304,15 +354,39 @@ export class PhotoCaptureCoordinator {
         width: MISSION_PHOTO_PRESENTATION_WIDTH,
         height: MISSION_PHOTO_PRESENTATION_HEIGHT,
       });
+
+      const blob = result.ok ? (result.blob ?? null) : null;
+      const mimeType = blob?.type ?? (result.ok ? 'image/jpeg' : null);
+      const byteLength = blob?.size ?? 0;
+
+      // Settlement always resolves with the retained Blob (URL may be revoked).
+      this.settlementRegistry.completeTask({
+        sessionGeneration,
+        objectiveId: missionObjectiveId,
+        captureId,
+        status: result.ok && blob ? 'available' : 'failed',
+        blob,
+        mimeType,
+        byteLength,
+        diagnosticCode: result.ok
+          ? undefined
+          : (result.diagnosticCode ?? 'PHOTO_PRESENTATION_CAPTURE_FAILED'),
+      });
+
       if (epoch !== this.presentationEpoch) {
-        // Retry/exit invalidated this request — revoke any URL we were given.
+        // Retry/exit invalidated UI attachment — revoke object URL only.
         if (result.ok && result.objectUrl) {
           revokePresentationUrl(result.objectUrl);
         }
         return;
       }
       if (result.ok && result.objectUrl) {
-        this.results.attachPresentationImage(missionObjectiveId, result.objectUrl);
+        this.results.attachPresentationImage(missionObjectiveId, result.objectUrl, {
+          blob,
+          captureId,
+          mimeType: mimeType ?? 'image/jpeg',
+          byteLength,
+        });
         return;
       }
       this.noteDiagnostic({
@@ -321,6 +395,16 @@ export class PhotoCaptureCoordinator {
         details: { captureId, presentationDiagnosticCode: result.diagnosticCode ?? null },
       });
     } catch (error) {
+      this.settlementRegistry.completeTask({
+        sessionGeneration,
+        objectiveId: missionObjectiveId,
+        captureId,
+        status: 'failed',
+        blob: null,
+        mimeType: null,
+        byteLength: 0,
+        diagnosticCode: 'PHOTO_PRESENTATION_CAPTURE_FAILED',
+      });
       if (epoch !== this.presentationEpoch) {
         return;
       }

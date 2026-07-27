@@ -143,7 +143,7 @@ describe('Checkpoint 5 dependency boundaries', () => {
     expect(violations).toEqual([]);
   });
 
-  it('mission results never reach persistence', () => {
+  it('mission runtime services do not open IndexedDB or Web Storage APIs', () => {
     const files = walk(join(ROOT, 'src/app/core/mission'));
     const violations = violationsIn(files, [/indexedDB/, /localStorage/, /sessionStorage/]);
     expect(violations).toEqual([]);

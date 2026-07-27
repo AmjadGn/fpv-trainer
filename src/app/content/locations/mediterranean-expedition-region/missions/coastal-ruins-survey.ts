@@ -21,7 +21,7 @@ const OBJ_CLIFF = asObjectiveId('obj-photo-cliff');
 /**
  * Coastal Ruins Survey — first playable photography mission.
  * Capture and scoring run on the authoritative fixed-step mission loop;
- * results are session-only and never persisted.
+ * durable local results and Personal Bests are persisted by Checkpoint 6.
  */
 export function createCoastalRuinsSurveyMission(): MissionDefinition {
   return createMissionDefinition({
@@ -124,7 +124,7 @@ export function createCoastalRuinsSurveyMission(): MissionDefinition {
       showObjectiveBreakdown: true,
       showTimeBonus: true,
       customResultsNote:
-        'Results are session-only: scores and captured photos are kept for this run and are not saved between sessions.',
+        'Results are saved locally on this device. Personal Best photos are kept for your best completed run.',
     },
   });
 }

@@ -143,6 +143,14 @@ function fakeCaptureCoordinator() {
     onAuthoritativeObservation: vi.fn(() => null),
     requestPhotoCapture: vi.fn(() => ({ accepted: true })),
     clearPending: vi.fn(),
+    createPresentationSettlement: vi.fn((input) => ({
+      sessionId: input.sessionId,
+      sessionGeneration: input.sessionGeneration,
+      resultId: input.resultId,
+      expectedObjectiveIds: input.expectedObjectiveIds,
+      waitForSettled: async () => [],
+      release: vi.fn(),
+    })),
     capturePending: signal(false),
     lastOutcome: signal(null),
   };
@@ -153,22 +161,24 @@ function setupRuntime(): {
   runtimeCoordinator: ReturnType<typeof fakeRuntimeCoordinator>;
   objectiveRuntime: ReturnType<typeof fakeObjectiveRuntime>;
   captureCoordinator: ReturnType<typeof fakeCaptureCoordinator>;
+  results: { setResult: ReturnType<typeof vi.fn>; clear: ReturnType<typeof vi.fn> };
 } {
   const runtimeCoordinator = fakeRuntimeCoordinator();
   const objectiveRuntime = fakeObjectiveRuntime();
   const captureCoordinator = fakeCaptureCoordinator();
+  const results = { clear: vi.fn(), setResult: vi.fn() };
 
   TestBed.configureTestingModule({
     providers: [
       { provide: MissionRuntimeCoordinator, useValue: runtimeCoordinator },
       { provide: MissionObjectiveRuntime, useValue: objectiveRuntime },
       { provide: PhotoCaptureCoordinator, useValue: captureCoordinator },
-      { provide: MissionResultsFacade, useValue: { clear: vi.fn(), setResult: vi.fn() } },
+      { provide: MissionResultsFacade, useValue: results },
       { provide: MissionSessionFacade, useValue: { snapshot: vi.fn(() => ({ phase: 'active' })) } },
     ],
   });
   const runtime = TestBed.inject(PhotographyMissionRuntime);
-  return { runtime, runtimeCoordinator, objectiveRuntime, captureCoordinator };
+  return { runtime, runtimeCoordinator, objectiveRuntime, captureCoordinator, results };
 }
 
 describe('PhotographyMissionRuntime', () => {
@@ -247,6 +257,120 @@ describe('PhotographyMissionRuntime', () => {
       false,
       false,
       'active',
+    );
+  });
+
+  it('passes trusted aircraft metadata and authored objective versions into setResult', () => {
+    const { runtime, runtimeCoordinator, objectiveRuntime, captureCoordinator, results } =
+      setupRuntime();
+
+    const record = {
+      resultId: 'result-aircraft',
+      missionId: MISSION.missionId,
+      sessionId: 'session-1',
+      status: 'completed' as const,
+      objectiveResults: [
+        {
+          objectiveId: MISSION.objectives[0]!.objectiveId,
+          status: 'completed' as const,
+          scorePoints: 28,
+          maxPoints: 29,
+          photographyEvaluationRef: 'evidence-arch',
+        },
+      ],
+      score: {
+        finalScore: 28,
+        maxScore: 87,
+        requiredPoints: 28,
+        timeBonusPoints: 0,
+        normalizedScore: 28 / 87,
+      },
+      elapsedTicks: 100,
+      failureReasonCode: null,
+    };
+    objectiveRuntime.completeMissionAndPrepareResults.mockReturnValue(record as never);
+    objectiveRuntime.missionState.mockReturnValue('missionCompleted' as never);
+
+    const photoObjectives = [
+      {
+        objectiveId: 'photo-coastal-arch-01',
+        version: '2.3.4',
+      },
+    ];
+
+    expect(
+      runtime.begin(
+        beginInput({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          photographyObjectives: photoObjectives as any,
+        }),
+      ).ok,
+    ).toBe(true);
+
+    const listener = runtimeCoordinator.listeners[0]!;
+    listener(
+      observationFixture({
+        flight: flightSnapshot({
+          aircraftId: 'factory-quad-01',
+          aircraftSourceType: 'user-compiled',
+          definitionVersion: 'def-9',
+          physicsProfileVersion: 'phys-9',
+          runtimeCompatibilityVersion: '1.3.0-runtime-c3',
+        }),
+      }),
+    );
+
+    expect(results.setResult).toHaveBeenCalledTimes(1);
+    const input = results.setResult.mock.calls[0]![0];
+    expect(input.aircraftContext).toEqual({
+      aircraftId: 'factory-quad-01',
+      aircraftSourceType: 'user-compiled',
+      definitionVersion: 'def-9',
+      physicsProfileVersion: 'phys-9',
+      runtimeCompatibilityVersion: '1.3.0-runtime-c3',
+    });
+    expect(input.objectiveVersions.get(String(MISSION.objectives[0]!.objectiveId))).toBe('2.3.4');
+    expect(captureCoordinator.createPresentationSettlement).toHaveBeenCalled();
+    expect(input.presentationSettlement).toBeTruthy();
+  });
+
+  it('emits a diagnostic and still prepares results when trusted aircraft metadata is missing', () => {
+    const { runtime, runtimeCoordinator, objectiveRuntime, results } = setupRuntime();
+
+    objectiveRuntime.completeMissionAndPrepareResults.mockReturnValue({
+      resultId: 'result-no-aircraft',
+      missionId: MISSION.missionId,
+      sessionId: 'session-1',
+      status: 'completed',
+      objectiveResults: [],
+      score: {
+        finalScore: 0,
+        maxScore: 87,
+        requiredPoints: 0,
+        timeBonusPoints: 0,
+        normalizedScore: 0,
+      },
+      elapsedTicks: 10,
+      failureReasonCode: null,
+    } as never);
+    objectiveRuntime.missionState.mockReturnValue('missionCompleted' as never);
+
+    expect(runtime.begin(beginInput()).ok).toBe(true);
+    runtimeCoordinator.listeners[0]!(
+      observationFixture({
+        flight: flightSnapshot({
+          aircraftId: '',
+          aircraftSourceType: 'factory',
+          runtimeCompatibilityVersion: '1.3.0-runtime-c3',
+        }),
+      }),
+    );
+
+    expect(results.setResult).toHaveBeenCalled();
+    const input = results.setResult.mock.calls[0]![0];
+    expect(input.aircraftContext).toBeNull();
+    expect(runtime.diagnostics().some((d) => d.code === 'MISSION_PERSISTENCE_RECORD_INVALID')).toBe(
+      true,
     );
   });
 });
