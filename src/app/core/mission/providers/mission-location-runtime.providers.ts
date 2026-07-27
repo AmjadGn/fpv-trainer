@@ -5,11 +5,13 @@ import { BundledLocationAssetLoadAdapter } from '../adapters/bundled-location-as
 import { BundledLocationDefinitionSource } from '../adapters/bundled-location-definition-source';
 import { CuratedLocationRuntimeInstallAdapter } from '../adapters/curated-location-runtime-install.adapter';
 import { RapierMissionSpatialQueryAdapter } from '../adapters/rapier-mission-spatial-query.adapter';
+import { ThreeMissionPhotoPresentationCaptureAdapter } from '../adapters/three-mission-photo-presentation-capture.adapter';
 import {
   LOCATION_ASSET_LOAD,
   LOCATION_DEFINITION_SOURCE,
   LOCATION_RUNTIME_INSTALL,
 } from '../ports/location-definition-source.port';
+import { MISSION_PHOTO_PRESENTATION_CAPTURE } from '../ports/mission-photo-presentation-capture.port';
 import { MISSION_SPATIAL_QUERY } from '../ports/mission-spatial-query.token';
 
 export function provideMissionLocationRuntime(): Provider[] {
@@ -18,6 +20,10 @@ export function provideMissionLocationRuntime(): Provider[] {
     { provide: LOCATION_ASSET_LOAD, useExisting: BundledLocationAssetLoadAdapter },
     { provide: LOCATION_RUNTIME_INSTALL, useExisting: CuratedLocationRuntimeInstallAdapter },
     { provide: MISSION_SPATIAL_QUERY, useExisting: RapierMissionSpatialQueryAdapter },
+    {
+      provide: MISSION_PHOTO_PRESENTATION_CAPTURE,
+      useExisting: ThreeMissionPhotoPresentationCaptureAdapter,
+    },
   ];
 }
 

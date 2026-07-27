@@ -53,6 +53,8 @@ export class UnavailableMissionSpatialQueryAdapter implements MissionSpatialQuer
     return {
       status: 'unavailable',
       visibleFraction: null,
+      visibleSampleCount: null,
+      totalSampleCount: query.samplePointsWorld.length,
       sampleCount: query.samplePointsWorld.length,
       diagnosticCode: 'SPATIAL_QUERY_UNAVAILABLE',
       diagnosticMessage: UNAVAILABLE_MSG,

@@ -22,7 +22,7 @@ describe('ExpeditionsHubComponent', () => {
     });
   });
 
-  it('lists Coastal Ruins Survey and does not claim scoring is complete', () => {
+  it('lists Coastal Ruins Survey with capture scoring but no persisted records', () => {
     const fixture = TestBed.createComponent(ExpeditionsHubComponent);
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
@@ -31,7 +31,7 @@ describe('ExpeditionsHubComponent', () => {
 
     const catalog = TestBed.inject(ExpeditionMissionCatalog);
     expect(catalog.get(MISSION_ID_COASTAL_RUINS_SURVEY)?.summary.captureScoringEnabled).toBe(
-      false,
+      true,
     );
   });
 

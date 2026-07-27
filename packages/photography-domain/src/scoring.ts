@@ -388,7 +388,7 @@ export function evaluatePhotoCapture(
 
   // centering
   const centeringErrors = primaryObservations
-    .map((o) => o.centeringErrorFromCenter)
+    .map((o) => o.centeringError)
     .filter((v): v is number => v !== null)
     .map(q);
   const avgCenteringError = average(centeringErrors);

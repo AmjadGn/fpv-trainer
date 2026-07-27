@@ -41,8 +41,14 @@ export {
   evaluateAltitudeRange,
   evaluateSpeedThresholds,
 } from './projection';
-/** Alias for `projectSubjectSamplePoints`, kept for API-naming symmetry with "bounds" language elsewhere. */
-export { projectSubjectSamplePoints as projectSubjectBounds } from './projection';
+
+// ---- subject bounds projection (framing / coverage authority) ----
+export type { SubjectBoundsShape, SubjectBoundsProjection } from './subject-bounds-projection';
+export {
+  getSubjectBoundsProjectionPoints,
+  projectSubjectBounds,
+  isCameraInsideSubjectBounds,
+} from './subject-bounds-projection';
 
 // Re-exported for convenience: the projection model version this package's
 // projection math is written against (see `@fpv/simulation-contracts/camera.ts`).
@@ -69,13 +75,19 @@ export type {
   PhotoCaptureEvidenceInput,
   PhotoCaptureEvidenceIdentity,
   AircraftEvidenceSnapshot,
+  AircraftEvidenceSourceType,
   CameraEvidenceSnapshot,
   SpatialEvidenceContext,
   SubjectObservation,
   StabilityEvidence,
   EvidenceConstructionResult,
 } from './evidence';
-export { EVIDENCE_SCHEMA_VERSION, createPhotoCaptureEvidence, findForbiddenAircraftSnapshotKeys } from './evidence';
+export {
+  EVIDENCE_SCHEMA_VERSION,
+  createPhotoCaptureEvidence,
+  deepFreezeEvidence,
+  findForbiddenAircraftSnapshotKeys,
+} from './evidence';
 
 // ---- scoring policy ----
 export type { PhotographyScoringPolicy, ScoringComponentId, ScoringComponentWeight } from './scoring-policy';

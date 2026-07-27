@@ -29,7 +29,9 @@ import {
   SpriteMaterial,
   SRGBColorSpace,
   Vector3,
+  Vector4,
   WebGLRenderer,
+  WebGLRenderTarget,
 } from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 
@@ -651,6 +653,116 @@ export class ThreeRendererService {
 
   getResolvedFlightCameraRig(): ResolvedFlightCameraRig {
     return this.resolvedFpvRig;
+  }
+
+  /**
+   * One-shot offscreen presentation capture from an authoritative camera
+   * snapshot (mission photo capture).
+   *
+   * Renders a single frame through a temporary camera + render target: the
+   * live camera is never mutated, no RAF frame is scheduled, and the render
+   * target is disposed before returning. Presentation only — capture failure
+   * never affects mission scoring.
+   */
+  async captureMissionPresentationFrame(request: {
+    worldPose: { position: Vec3; orientation: Quat };
+    projection: {
+      verticalFovDegrees: number;
+      aspectRatio: number;
+      nearMeters: number;
+      farMeters: number;
+    };
+    width: number;
+    height: number;
+  }): Promise<Blob | null> {
+    const renderer = this.renderer;
+    const scene = this.scene;
+    if (!renderer || !scene) {
+      return null;
+    }
+
+    const width = Math.max(1, Math.floor(request.width));
+    const height = Math.max(1, Math.floor(request.height));
+    const { projection, worldPose } = request;
+
+    const camera = new PerspectiveCamera(
+      projection.verticalFovDegrees,
+      projection.aspectRatio,
+      projection.nearMeters,
+      projection.farMeters,
+    );
+    camera.position.set(worldPose.position.x, worldPose.position.y, worldPose.position.z);
+    camera.quaternion.set(
+      worldPose.orientation.x,
+      worldPose.orientation.y,
+      worldPose.orientation.z,
+      worldPose.orientation.w,
+    );
+    camera.updateMatrixWorld(true);
+    camera.updateProjectionMatrix();
+
+    const target = new WebGLRenderTarget(width, height);
+
+    // Preserve every mutable renderer flag we may touch; restore in finally
+    // even when readback or PNG encoding throws.
+    const previousTarget = renderer.getRenderTarget();
+    const previousViewport = new Vector4();
+    renderer.getViewport(previousViewport);
+    const previousScissor = new Vector4();
+    renderer.getScissor(previousScissor);
+    const previousScissorTest = renderer.getScissorTest();
+    const previousAutoClear = renderer.autoClear;
+    const previousClearColor = new Color();
+    const previousClearAlpha = renderer.getClearAlpha();
+    renderer.getClearColor(previousClearColor);
+    const previousXrEnabled = renderer.xr?.enabled ?? false;
+    const droneWasVisible = this.drone?.visible ?? false;
+
+    let pixels: Uint8Array | null = null;
+    try {
+      if (this.drone) {
+        // The FPV camera sits on the airframe; the own model must not occlude.
+        this.drone.visible = false;
+      }
+      if (renderer.xr) {
+        renderer.xr.enabled = false;
+      }
+      renderer.setRenderTarget(target);
+      renderer.setViewport(0, 0, width, height);
+      renderer.setScissor(0, 0, width, height);
+      renderer.setScissorTest(false);
+      renderer.autoClear = true;
+      // Exactly one explicit render — no second RAF.
+      renderer.render(scene, camera);
+      pixels = new Uint8Array(width * height * 4);
+      renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
+    } catch {
+      pixels = null;
+    } finally {
+      if (this.drone) {
+        this.drone.visible = droneWasVisible;
+      }
+      renderer.setRenderTarget(previousTarget);
+      renderer.setViewport(previousViewport);
+      renderer.setScissor(previousScissor);
+      renderer.setScissorTest(previousScissorTest);
+      renderer.autoClear = previousAutoClear;
+      renderer.setClearColor(previousClearColor, previousClearAlpha);
+      if (renderer.xr) {
+        renderer.xr.enabled = previousXrEnabled;
+      }
+      target.dispose();
+      camera.removeFromParent();
+    }
+
+    if (!pixels) {
+      return null;
+    }
+    try {
+      return await encodeRgbaPixelsToBlob(pixels, width, height);
+    } finally {
+      pixels = null;
+    }
   }
 
   setReplayCameraMode(mode: ReplayCameraMode): void {
@@ -2617,6 +2729,39 @@ function applyGateMaterials(handle: GateHandle, visual: GateVisualState): void {
   }
   handle.frameMat.needsUpdate = true;
   handle.chevronMat.needsUpdate = true;
+}
+
+/**
+ * Encodes bottom-up RGBA pixels read back from a WebGL render target into a
+ * top-down PNG blob. Returns null when no 2D canvas is available.
+ */
+async function encodeRgbaPixelsToBlob(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+): Promise<Blob | null> {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return null;
+  }
+
+  const flipped = new Uint8ClampedArray(width * height * 4);
+  const rowBytes = width * 4;
+  for (let row = 0; row < height; row++) {
+    const sourceStart = (height - 1 - row) * rowBytes;
+    flipped.set(pixels.subarray(sourceStart, sourceStart + rowBytes), row * rowBytes);
+  }
+  ctx.putImageData(new ImageData(flipped, width, height), 0, 0);
+
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), 'image/png');
+  });
 }
 
 function createDefaultLegacyResolvedRig(tiltRad: number): ResolvedFlightCameraRig {

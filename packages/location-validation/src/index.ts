@@ -30,3 +30,15 @@ export { validatePhotographyObjective } from '@fpv/photography-domain';
 
 export { validateAll } from './validate-all';
 export type { ValidateAllInput } from './validate-all';
+
+/**
+ * Boundary containment geometry, shared with mission runtime boundary
+ * evaluation so validation and runtime never diverge on "inside" semantics.
+ */
+export {
+  pointInAabb,
+  pointInBoundaryShape,
+  pointInObb,
+  pointInPolygonPrism,
+  pointInSphere,
+} from './geometry';

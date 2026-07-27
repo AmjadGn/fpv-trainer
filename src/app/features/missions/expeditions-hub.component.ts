@@ -25,7 +25,8 @@ type HubPhase = 'list' | 'briefing' | 'loading' | 'error';
 
 /**
  * Fly → Expeditions entry with Coastal Ruins Survey briefing and launch.
- * Does not claim photography scoring is active.
+ * Results from a launched mission are session-only: nothing here reads or
+ * writes personal bests, rankings, or cloud state.
  */
 @Component({
   selector: 'app-expeditions-hub',
@@ -87,7 +88,12 @@ type HubPhase = 'list' | 'briefing' | 'loading' | 'error';
             <p class="compat" [attr.data-status]="compat()?.status ?? 'unknown'">
               Compatibility: {{ compatibilityLabel() }}
             </p>
-            @if (!mission.captureScoringEnabled) {
+            @if (mission.captureScoringEnabled) {
+              <p class="notice" data-testid="capture-enabled">
+                Photo capture is scored in flight — press <kbd>V</kbd> or the HUD shutter with the
+                FPV camera active. Results are shown for this session only.
+              </p>
+            } @else {
               <p class="notice" data-testid="capture-not-enabled">
                 Photography capture and scoring are not enabled in this build. Launch explores the
                 Coastal Ruins location through the shared flight runtime.
@@ -283,9 +289,8 @@ export class ExpeditionsHubComponent {
       aircraftSourceType: adapted.capabilities.sourceType,
       spawnPointId: 'spawn-coastal-ruins-main',
       returnDestination: 'expeditions',
-      developmentFlags: {
-        framingGuidePreview: true,
-      },
+      // No development flags: the framing guide follows the real active
+      // photography objective in flight.
     });
     if (!intent.ok) {
       this.errorMessage.set(intent.reason);

@@ -19,8 +19,9 @@ const OBJ_LOOKOUT = asObjectiveId('obj-photo-lookout');
 const OBJ_CLIFF = asObjectiveId('obj-photo-cliff');
 
 /**
- * Coastal Ruins Survey — first structurally valid photography mission.
- * Capture/scoring loop is not enabled in Checkpoint 4.
+ * Coastal Ruins Survey — first playable photography mission.
+ * Capture and scoring run on the authoritative fixed-step mission loop;
+ * results are session-only and never persisted.
  */
 export function createCoastalRuinsSurveyMission(): MissionDefinition {
   return createMissionDefinition({
@@ -45,7 +46,7 @@ export function createCoastalRuinsSurveyMission(): MissionDefinition {
       ],
       hints: [
         'Cinewhoop and hybrid aircraft are recommended.',
-        'Photography capture and scoring are not yet enabled in this build — you can explore the location.',
+        'Hold the aircraft steady until the shot is stable, then capture in FPV view.',
         'Stay within the authored Coastal Ruins playable boundary.',
       ],
     },
@@ -107,12 +108,23 @@ export function createCoastalRuinsSurveyMission(): MissionDefinition {
       optionalBonusWeight: 0.25,
       timeBonusEnabled: true,
       maxScore: 100,
+      // Equal shares of (100 − 15 time bonus) = 85 across three objectives.
+      // Largest-remainder rounding yields 29 + 28 + 28; perfect photos +
+      // max time bonus = 100. Perfect photos alone = 85 (not clamped to 100).
+      objectiveScoreAllocation: {
+        version: '1.0.0',
+        requiredObjectiveWeights: [
+          { objectiveId: OBJ_ARCH, weight: 1 },
+          { objectiveId: OBJ_LOOKOUT, weight: 1 },
+          { objectiveId: OBJ_CLIFF, weight: 1 },
+        ],
+      },
     },
     resultsMetadata: {
       showObjectiveBreakdown: true,
       showTimeBonus: true,
       customResultsNote:
-        'Photography capture/scoring is not enabled in Checkpoint 4. Explore the location; final results are deferred.',
+        'Results are session-only: scores and captured photos are kept for this run and are not saved between sessions.',
     },
   });
 }

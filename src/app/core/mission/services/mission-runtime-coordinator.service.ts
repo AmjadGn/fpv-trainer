@@ -6,19 +6,35 @@ import type { AuthoritativeFlightStepSnapshot } from '../../flight-runtime/model
 import type { AuthoritativeFlightStepObserver } from '../../flight-runtime/ports/flight-runtime-step.port';
 import { AuthoritativeFlightStepPublisher } from '../../flight-runtime/services/authoritative-flight-step-publisher.service';
 import { FlightCameraSnapshotAdapter } from '../../camera/services/flight-camera-snapshot-adapter.service';
+import type { ResolvedFlightCameraRig } from '../../camera/models/resolved-flight-camera-rig';
 import { UnavailableMissionSpatialQueryAdapter } from '../adapters/unavailable-mission-spatial-query.adapter';
 import { MISSION_SPATIAL_QUERY } from '../ports/mission-spatial-query.token';
 import type { MissionSpatialQueryPort } from '../ports/mission-spatial-query.port';
 import type { MissionRuntimeDiagnostic } from '../models/mission-runtime-diagnostics';
 import { MissionSessionFacade } from './mission-session.facade';
 import { LocationLoadCoordinator } from './location-load-coordinator.service';
+import type { PhotoEvidenceCameraRigContext } from './photo-evidence-builder.service';
 
 export const MISSION_RUNTIME_OBSERVER_ID = 'mission-runtime-coordinator';
 
 export interface MissionRuntimeObservation {
   readonly flight: AuthoritativeFlightStepSnapshot;
   readonly camera: CameraSnapshot | null;
+  /** Canonical resolved-rig provenance for the same fixed step (null when no rig). */
+  readonly cameraRig: PhotoEvidenceCameraRigContext | null;
   readonly missionElapsedTicks: number;
+}
+
+function cameraRigContextFromResolved(
+  rig: ResolvedFlightCameraRig,
+): PhotoEvidenceCameraRigContext {
+  return {
+    rigId: rig.rigId,
+    rigVersion: rig.rigVersion,
+    resolutionStrategy: rig.resolutionStrategy,
+    cameraTiltRad: rig.localCameraTiltRad,
+    templateDerivedCamera: rig.templateDerivedCamera,
+  };
 }
 
 /**
@@ -91,6 +107,7 @@ export class MissionRuntimeCoordinator implements AuthoritativeFlightStepObserve
     }
 
     let camera: CameraSnapshot | null = null;
+    let cameraRig: PhotoEvidenceCameraRigContext | null = null;
     try {
       const rig = this.cameraSnapshots.getActiveRig();
       if (rig) {
@@ -99,6 +116,7 @@ export class MissionRuntimeCoordinator implements AuthoritativeFlightStepObserve
           snapshot.pose.orientation,
           rig,
         );
+        cameraRig = cameraRigContextFromResolved(rig);
       }
     } catch (error) {
       this.facade.reportFailure({
@@ -111,6 +129,7 @@ export class MissionRuntimeCoordinator implements AuthoritativeFlightStepObserve
     const observation: MissionRuntimeObservation = {
       flight: snapshot,
       camera,
+      cameraRig,
       missionElapsedTicks: snapshot.simulationTick,
     };
     this.lastObservation = observation;
