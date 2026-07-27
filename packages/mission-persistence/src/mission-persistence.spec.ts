@@ -42,6 +42,7 @@ function makeResult(
     aircraftId: 'factory-demo',
     aircraftSourceType: 'factory',
     aircraftDefinitionVersion: '1.0.0',
+    aircraftPhysicsProfileVersion: '1.0.0',
     aircraftRuntimeCompatibilityVersion: '1.0.0',
     failureReasonCode: null,
     maximumScore: 100,

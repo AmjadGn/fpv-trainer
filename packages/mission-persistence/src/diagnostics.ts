@@ -37,6 +37,7 @@ export type MissionResultSaveUiStatus =
   | 'idle'
   | 'saving'
   | 'saved'
+  | 'saved-new-personal-best-images-pending'
   | 'saved-new-personal-best'
   | 'saved-without-images'
   | 'memory-only'

@@ -1,6 +1,9 @@
 /**
  * Converts an immutable session mission result into a persisted DTO.
  * Does not re-score or mutate the session result.
+ *
+ * Expected-image metadata comes from completed photography evidence references,
+ * never from whether a presentation Blob has arrived yet.
  */
 
 import {
@@ -12,14 +15,6 @@ import type { MissionDefinition, MissionResultRecord } from '@fpv/mission-domain
 import type { PhotoEvaluationResult } from '@fpv/photography-domain';
 import { EVIDENCE_SCHEMA_VERSION } from '@fpv/photography-domain';
 
-export interface MissionSessionPresentationImageRef {
-  readonly objectiveId: string;
-  readonly captureId: string | null;
-  readonly mimeType: string | null;
-  readonly byteLength: number | null;
-  readonly hasBlob: boolean;
-}
-
 export interface BuildPersistedMissionResultInput {
   readonly record: MissionResultRecord;
   readonly mission: MissionDefinition;
@@ -30,11 +25,13 @@ export interface BuildPersistedMissionResultInput {
   readonly evaluations: ReadonlyMap<string, PhotoEvaluationResult>;
   readonly attemptCounts: ReadonlyMap<string, number>;
   readonly fixedStepSeconds: number;
+  /** Authored photography-objective versions keyed by mission objective id. */
+  readonly objectiveVersions?: ReadonlyMap<string, string>;
   readonly aircraftId?: string | null;
   readonly aircraftSourceType?: string | null;
   readonly aircraftDefinitionVersion?: string | null;
+  readonly aircraftPhysicsProfileVersion?: string | null;
   readonly aircraftRuntimeCompatibilityVersion?: string | null;
-  readonly presentationImages?: readonly MissionSessionPresentationImageRef[];
   readonly savedAtEpochMs?: number;
   readonly evidenceSchemaVersion?: string;
 }
@@ -49,27 +46,28 @@ export function buildPersistedMissionResult(
     scoringPolicyVersion: input.scoringPolicyVersion,
   });
 
-  const imageByObjective = new Map(
-    (input.presentationImages ?? []).map((image) => [image.objectiveId, image]),
-  );
-
   const objectives = input.record.objectiveResults.map((objective) => {
     const objectiveId = String(objective.objectiveId);
     const evaluation = input.evaluations.get(objectiveId);
-    const declared = input.mission.objectives.find((o) => o.objectiveId === objective.objectiveId);
-    const image = imageByObjective.get(objectiveId);
+    const evidenceRef = objective.photographyEvaluationRef ?? null;
+    const captureId = evidenceRef;
+    const acceptedImageExpected =
+      objective.status === 'completed' && Boolean(evidenceRef);
+    const authoredVersion = input.objectiveVersions?.get(objectiveId) ?? null;
     return {
       objectiveId,
-      objectiveVersion: declared ? '1.0.0' : null,
+      objectiveVersion: authoredVersion,
       status: objective.status,
       scorePoints: objective.scorePoints,
       maxPoints: objective.maxPoints,
       normalizedPhotographyScore: evaluation?.normalizedScore ?? null,
       attemptCount: input.attemptCounts.get(objectiveId) ?? 0,
-      captureId: image?.captureId ?? null,
-      evidenceRef: objective.photographyEvaluationRef ?? null,
+      captureId,
+      evidenceRef,
       feedbackCodes: evaluation?.feedbackCodes ?? [],
-      acceptedImageAvailable: Boolean(image?.hasBlob),
+      acceptedImageExpected,
+      // Core DTO never embeds presentation bytes.
+      acceptedImagePersisted: false,
     };
   });
 
@@ -93,6 +91,7 @@ export function buildPersistedMissionResult(
     aircraftId: input.aircraftId ?? null,
     aircraftSourceType: input.aircraftSourceType ?? null,
     aircraftDefinitionVersion: input.aircraftDefinitionVersion ?? null,
+    aircraftPhysicsProfileVersion: input.aircraftPhysicsProfileVersion ?? null,
     aircraftRuntimeCompatibilityVersion:
       input.aircraftRuntimeCompatibilityVersion ?? null,
     status: input.record.status,
@@ -107,7 +106,9 @@ export function buildPersistedMissionResult(
     objectives,
     attemptCountTotal,
     imageAvailability: objectives.map((o) => ({
-      acceptedImageAvailable: o.acceptedImageAvailable,
+      objectiveId: o.objectiveId,
+      acceptedImageExpected: o.acceptedImageExpected,
+      acceptedImagePersisted: o.acceptedImagePersisted,
       captureId: o.captureId,
       evidenceRef: o.evidenceRef,
     })),

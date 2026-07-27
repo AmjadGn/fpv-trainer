@@ -15,8 +15,19 @@ export type PersistedObjectiveStatus =
   | 'skipped'
   | 'incomplete';
 
+/**
+ * Image-availability metadata for one objective.
+ *
+ * `acceptedImageExpected` is true when a completed photography objective has an
+ * evidence/capture reference — independent of whether a presentation Blob has
+ * arrived yet. `acceptedImagePersisted` records whether presentation bytes were
+ * claimed on this core result row (always false for Checkpoint 6 core saves;
+ * durable PB images live in `bestImages`).
+ */
 export interface PersistedObjectiveImageAvailability {
-  readonly acceptedImageAvailable: boolean;
+  readonly objectiveId: string;
+  readonly acceptedImageExpected: boolean;
+  readonly acceptedImagePersisted: boolean;
   readonly captureId: string | null;
   readonly evidenceRef: string | null;
 }
@@ -32,7 +43,13 @@ export interface PersistedMissionObjectiveRecord {
   readonly captureId: string | null;
   readonly evidenceRef: string | null;
   readonly feedbackCodes: readonly string[];
-  readonly acceptedImageAvailable: boolean;
+  /** True when a completed photography objective expects a presentation image. */
+  readonly acceptedImageExpected: boolean;
+  /**
+   * Core result rows do not embed presentation bytes. Remains false on the
+   * immutable core DTO; Personal Best image rows are stored separately.
+   */
+  readonly acceptedImagePersisted: boolean;
 }
 
 /**
@@ -59,6 +76,7 @@ export interface PersistedMissionResultRecord {
   readonly aircraftId: string | null;
   readonly aircraftSourceType: string | null;
   readonly aircraftDefinitionVersion: string | null;
+  readonly aircraftPhysicsProfileVersion: string | null;
   readonly aircraftRuntimeCompatibilityVersion: string | null;
   readonly status: PersistedMissionStatus;
   readonly failureReasonCode: string | null;

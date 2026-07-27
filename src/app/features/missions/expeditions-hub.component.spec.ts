@@ -38,6 +38,7 @@ describe('ExpeditionsHubComponent', () => {
       aircraftId: null,
       aircraftSourceType: null,
       aircraftDefinitionVersion: null,
+      aircraftPhysicsProfileVersion: null,
       aircraftRuntimeCompatibilityVersion: null,
       status: 'completed',
       failureReasonCode: null,

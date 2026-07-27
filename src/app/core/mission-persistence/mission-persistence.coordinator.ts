@@ -1,6 +1,15 @@
 /**
  * Thin coordinator: one durable save per immutable session result.
  * Does not score, evaluate evidence, step physics, raycast, or block the flight loop.
+ *
+ * Core result persistence never waits on presentation rendering. Personal Best
+ * image persistence may await settlement Blobs independently of UI object URLs.
+ *
+ * Storage failure policy (Checkpoint 6):
+ * - IndexedDB open failure → memory fallback for the page lifetime
+ * - Core transaction failure after a successful open → report save-failed and
+ *   allow explicit retry with the same immutable result ID (do not auto-switch
+ *   an already-open IndexedDB database to memory)
  */
 
 import { Injectable, computed, inject, signal } from '@angular/core';
@@ -21,7 +30,7 @@ import type { PhotoEvaluationResult } from '@fpv/photography-domain';
 import { buildPersistedMissionResult } from './build-persisted-mission-result';
 import { createIndexedDbMissionPersistenceAdapter } from './indexed-db-mission-persistence.adapter';
 import { createMemoryMissionPersistenceAdapter } from './memory-mission-persistence.adapter';
-import type { MissionSessionPresentationImage } from '../mission/services/mission-results.facade';
+import type { MissionPresentationImageSettlement } from '../mission/services/mission-presentation-image-settlement';
 
 export interface MissionPersistenceSaveRequest {
   readonly record: MissionResultRecord;
@@ -33,19 +42,29 @@ export interface MissionPersistenceSaveRequest {
   readonly evaluations: ReadonlyMap<string, PhotoEvaluationResult>;
   readonly attemptCounts: ReadonlyMap<string, number>;
   readonly fixedStepSeconds: number;
+  readonly objectiveVersions?: ReadonlyMap<string, string>;
   readonly aircraftId?: string | null;
   readonly aircraftSourceType?: string | null;
   readonly aircraftDefinitionVersion?: string | null;
+  readonly aircraftPhysicsProfileVersion?: string | null;
   readonly aircraftRuntimeCompatibilityVersion?: string | null;
-  readonly presentationImages: readonly MissionSessionPresentationImage[];
+  readonly presentationSettlement?: MissionPresentationImageSettlement | null;
+}
+
+interface PendingFailedSave {
+  readonly request: MissionPersistenceSaveRequest;
+  readonly dto: PersistedMissionResultRecord;
 }
 
 @Injectable({ providedIn: 'root' })
 export class MissionPersistenceCoordinator {
   private port: MissionPersistencePort | null = null;
   private initPromise: Promise<void> | null = null;
-  private readonly savedResultIds = new Set<string>();
-  private saveGeneration = 0;
+  private readonly inFlightResultIds = new Set<string>();
+  private readonly successfullySavedResultIds = new Set<string>();
+  private lastFailedSave: PendingFailedSave | null = null;
+  /** Bumped only to ignore stale UI status updates after retry/exit. */
+  private uiGeneration = 0;
 
   private readonly storageModeSignal = signal<MissionPersistenceStorageMode>('unavailable');
   private readonly saveStatusSignal = signal<MissionResultSaveUiStatus>('idle');
@@ -85,12 +104,16 @@ export class MissionPersistenceCoordinator {
     await this.ensureReady();
     const port = this.requirePort();
     const resultId = String(request.record.resultId);
-    if (this.savedResultIds.has(resultId)) {
+
+    if (this.successfullySavedResultIds.has(resultId)) {
       return;
     }
-    this.savedResultIds.add(resultId);
+    if (this.inFlightResultIds.has(resultId)) {
+      return;
+    }
+    this.inFlightResultIds.add(resultId);
 
-    const generation = ++this.saveGeneration;
+    const uiGeneration = this.uiGeneration;
     this.saveStatusSignal.set('saving');
     this.becamePersonalBestSignal.set(false);
 
@@ -104,84 +127,159 @@ export class MissionPersistenceCoordinator {
       evaluations: request.evaluations,
       attemptCounts: request.attemptCounts,
       fixedStepSeconds: request.fixedStepSeconds,
+      objectiveVersions: request.objectiveVersions,
       aircraftId: request.aircraftId,
       aircraftSourceType: request.aircraftSourceType,
       aircraftDefinitionVersion: request.aircraftDefinitionVersion,
+      aircraftPhysicsProfileVersion: request.aircraftPhysicsProfileVersion,
       aircraftRuntimeCompatibilityVersion: request.aircraftRuntimeCompatibilityVersion,
-      presentationImages: request.presentationImages.map((image) => ({
-        objectiveId: image.objectiveId,
-        captureId: image.captureId,
-        mimeType: image.mimeType,
-        byteLength: image.byteLength,
-        hasBlob: Boolean(image.blob),
-      })),
     });
+
+    const missingVersion = dto.objectives.find(
+      (o) => o.status === 'completed' && o.acceptedImageExpected && !o.objectiveVersion,
+    );
+    if (missingVersion) {
+      this.inFlightResultIds.delete(resultId);
+      this.lastFailedSave = null;
+      if (uiGeneration === this.uiGeneration) {
+        this.saveStatusSignal.set('save-failed');
+        this.diagnosticSignal.set({
+          code: MISSION_PERSISTENCE_DIAGNOSTICS.RECORD_INVALID,
+          message: `Missing authored objectiveVersion for ${missingVersion.objectiveId}`,
+          details: { objectiveId: missingVersion.objectiveId },
+        });
+      }
+      request.presentationSettlement?.release();
+      return;
+    }
+
+    if (
+      dto.status === 'completed' &&
+      (!dto.aircraftId || !dto.aircraftSourceType || !dto.aircraftRuntimeCompatibilityVersion)
+    ) {
+      this.diagnosticSignal.set({
+        code: MISSION_PERSISTENCE_DIAGNOSTICS.RECORD_INVALID,
+        message:
+          'Trusted aircraft metadata missing from authoritative runtime; saving gameplay result without fabricated aircraft identity.',
+        details: {
+          aircraftId: dto.aircraftId,
+          aircraftSourceType: dto.aircraftSourceType,
+          aircraftRuntimeCompatibilityVersion: dto.aircraftRuntimeCompatibilityVersion,
+        },
+      });
+    }
 
     let saveOutcome;
     try {
       saveOutcome = await port.saveMissionResult(dto);
     } catch (error) {
-      if (generation !== this.saveGeneration) {
-        return;
+      this.inFlightResultIds.delete(resultId);
+      this.lastFailedSave = { request, dto };
+      if (uiGeneration === this.uiGeneration) {
+        this.saveStatusSignal.set('save-failed');
+        this.diagnosticSignal.set({
+          code: MISSION_PERSISTENCE_DIAGNOSTICS.WRITE_FAILED,
+          message: error instanceof Error ? error.message : String(error),
+        });
       }
-      this.saveStatusSignal.set('save-failed');
-      this.diagnosticSignal.set({
-        code: MISSION_PERSISTENCE_DIAGNOSTICS.WRITE_FAILED,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      return;
-    }
-
-    if (generation !== this.saveGeneration) {
       return;
     }
 
     if (!saveOutcome.ok) {
-      this.saveStatusSignal.set('save-failed');
-      this.diagnosticSignal.set(saveOutcome.diagnostic ?? {
-        code: MISSION_PERSISTENCE_DIAGNOSTICS.WRITE_FAILED,
-        message: 'Mission result save failed',
-      });
+      this.inFlightResultIds.delete(resultId);
+      const validationFailed =
+        saveOutcome.diagnostic?.code === MISSION_PERSISTENCE_DIAGNOSTICS.RECORD_INVALID;
+      this.lastFailedSave = validationFailed ? null : { request, dto };
+      if (uiGeneration === this.uiGeneration) {
+        this.saveStatusSignal.set('save-failed');
+        this.diagnosticSignal.set(
+          saveOutcome.diagnostic ?? {
+            code: MISSION_PERSISTENCE_DIAGNOSTICS.WRITE_FAILED,
+            message: 'Mission result save failed',
+          },
+        );
+      }
       return;
     }
 
-    this.lastSummarySignal.set(saveOutcome.summary);
-    this.becamePersonalBestSignal.set(saveOutcome.becamePersonalBest);
+    // Successful or idempotent duplicate — core result is committed.
+    this.inFlightResultIds.delete(resultId);
+    this.successfullySavedResultIds.add(resultId);
+    this.lastFailedSave = null;
+
+    if (uiGeneration === this.uiGeneration) {
+      this.lastSummarySignal.set(saveOutcome.summary);
+      this.becamePersonalBestSignal.set(saveOutcome.becamePersonalBest);
+    }
 
     if (saveOutcome.becamePersonalBest) {
+      if (uiGeneration === this.uiGeneration) {
+        this.applyUiStatus({
+          completed: dto.status === 'completed',
+          becamePersonalBest: true,
+          imageStatus: 'pending',
+        });
+      }
+
       const imageStatus = await this.persistPersonalBestImages(
         port,
         dto,
-        request.presentationImages,
-        generation,
+        request.presentationSettlement ?? null,
       );
-      if (generation !== this.saveGeneration) {
-        return;
+
+      if (uiGeneration === this.uiGeneration) {
+        this.applyUiStatus({
+          completed: dto.status === 'completed',
+          becamePersonalBest: true,
+          imageStatus,
+        });
       }
-      this.applyUiStatus({
-        completed: dto.status === 'completed',
-        becamePersonalBest: true,
-        imageStatus,
-      });
       return;
     }
 
-    this.applyUiStatus({
-      completed: dto.status === 'completed',
-      becamePersonalBest: false,
-      imageStatus: 'none',
-    });
+    request.presentationSettlement?.release();
+    if (uiGeneration === this.uiGeneration) {
+      this.applyUiStatus({
+        completed: dto.status === 'completed',
+        becamePersonalBest: false,
+        imageStatus: 'none',
+      });
+    }
   }
 
-  /** Call on retry / exit so stale async callbacks are ignored. */
+  /**
+   * Explicit UI/action seam to retry a failed core write with the same
+   * immutable persisted result and stable result ID.
+   */
+  async retryLastFailedSave(): Promise<void> {
+    const failed = this.lastFailedSave;
+    if (!failed) {
+      return;
+    }
+    if (this.successfullySavedResultIds.has(failed.dto.resultId)) {
+      this.lastFailedSave = null;
+      return;
+    }
+    await this.saveSessionResult(failed.request);
+  }
+
+  /**
+   * Call on retry / exit so stale async callbacks cannot update the results UI.
+   * Does not cancel in-flight core or image persistence.
+   */
+  invalidatePendingUi(): void {
+    this.uiGeneration += 1;
+  }
+
+  /** @deprecated Use invalidatePendingUi — persistence continues after retry/exit. */
   invalidatePending(): void {
-    this.saveGeneration += 1;
+    this.invalidatePendingUi();
   }
 
   resetSaveStatus(): void {
     this.saveStatusSignal.set('idle');
     this.becamePersonalBestSignal.set(false);
-    this.diagnosticSignal.set(null);
+    // Keep diagnostic for failed-save retry context unless explicitly cleared later.
   }
 
   getPort(): MissionPersistencePort {
@@ -226,20 +324,39 @@ export class MissionPersistenceCoordinator {
   private async persistPersonalBestImages(
     port: MissionPersistencePort,
     dto: PersistedMissionResultRecord,
-    presentationImages: readonly MissionSessionPresentationImage[],
-    generation: number,
-  ): Promise<'complete' | 'partial' | 'failed' | 'none' | 'saved-without-images'> {
+    settlement: MissionPresentationImageSettlement | null,
+  ): Promise<'complete' | 'partial' | 'failed' | 'none' | 'saved-without-images' | 'pending'> {
     const expectedObjectiveIds = dto.objectives
-      .filter((o) => o.status === 'completed' && o.acceptedImageAvailable)
+      .filter((o) => o.status === 'completed' && o.acceptedImageExpected)
       .map((o) => o.objectiveId);
 
     if (expectedObjectiveIds.length === 0) {
+      settlement?.release();
       return 'none';
     }
 
+    if (!settlement) {
+      return 'saved-without-images';
+    }
+
+    let settled;
+    try {
+      settled = await settlement.waitForSettled();
+    } catch (error) {
+      settlement.release();
+      this.diagnosticSignal.set({
+        code: MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return 'saved-without-images';
+    }
+
     const payloads: MissionBestImagePayload[] = [];
-    for (const image of presentationImages) {
-      if (!expectedObjectiveIds.includes(image.objectiveId) || !image.blob) {
+    for (const image of settled) {
+      if (image.status !== 'available' || !image.blob) {
+        continue;
+      }
+      if (!expectedObjectiveIds.includes(image.objectiveId)) {
         continue;
       }
       try {
@@ -255,10 +372,6 @@ export class MissionPersistenceCoordinator {
       }
     }
 
-    if (generation !== this.saveGeneration) {
-      return 'none';
-    }
-
     try {
       const outcome = await port.saveBestImages(
         String(dto.missionScopeKey),
@@ -266,6 +379,7 @@ export class MissionPersistenceCoordinator {
         payloads,
         expectedObjectiveIds,
       );
+      settlement.release();
       if (outcome.diagnostic) {
         this.diagnosticSignal.set(outcome.diagnostic);
       }
@@ -280,6 +394,7 @@ export class MissionPersistenceCoordinator {
       }
       return 'saved-without-images';
     } catch (error) {
+      settlement.release();
       this.diagnosticSignal.set({
         code: MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
         message: error instanceof Error ? error.message : String(error),
@@ -294,13 +409,11 @@ export class MissionPersistenceCoordinator {
     readonly imageStatus: string;
   }): void {
     if (this.storageModeSignal() === 'memory') {
-      this.saveStatusSignal.set(
-        input.completed && input.becamePersonalBest ? 'memory-only' : 'memory-only',
-      );
-      // Failed attempts in memory still report attempt-saved semantics via note.
       if (!input.completed) {
         this.saveStatusSignal.set('attempt-saved');
+        return;
       }
+      this.saveStatusSignal.set('memory-only');
       return;
     }
 
@@ -310,6 +423,10 @@ export class MissionPersistenceCoordinator {
     }
 
     if (input.becamePersonalBest) {
+      if (input.imageStatus === 'pending') {
+        this.saveStatusSignal.set('saved-new-personal-best-images-pending');
+        return;
+      }
       if (input.imageStatus === 'complete' || input.imageStatus === 'none') {
         this.saveStatusSignal.set('saved-new-personal-best');
         return;

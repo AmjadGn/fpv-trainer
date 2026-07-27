@@ -65,6 +65,21 @@ describe('MissionSessionResultsComponent', () => {
     expect(fixture.nativeElement.textContent).toMatch(/New Personal Best/);
   });
 
+  it('shows photo-saving pending distinctly from completed Personal Best', () => {
+    const fixture = TestBed.createComponent(MissionSessionResultsComponent);
+    fixture.componentRef.setInput(
+      'viewModel',
+      viewModel({
+        isNewPersonalBest: true,
+        persistenceStatus: 'saved-new-personal-best-images-pending',
+        persistenceNote: 'New Personal Best — saving photos…',
+      }),
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="new-personal-best"]')).toBeTruthy();
+    expect(fixture.nativeElement.textContent).toMatch(/saving photos/i);
+  });
+
   it('shows memory-only and image warnings', () => {
     const fixture = TestBed.createComponent(MissionSessionResultsComponent);
     fixture.componentRef.setInput(

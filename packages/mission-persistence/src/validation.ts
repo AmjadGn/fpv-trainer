@@ -141,6 +141,21 @@ export function validatePersistedMissionResult(
   if (!Array.isArray(raw['imageAvailability'])) {
     return fail('imageAvailability must be an array', raw);
   }
+  for (const item of raw['imageAvailability']) {
+    if (!isObject(item) || !isString(item['objectiveId']) || !item['objectiveId']) {
+      return fail('imageAvailability entry missing objectiveId', raw);
+    }
+  }
+  for (const objective of objectives) {
+    if (objective.status === 'completed' && objective.acceptedImageExpected) {
+      if (!objective.objectiveVersion) {
+        return fail('completed photography objective missing objectiveVersion', raw);
+      }
+      if (!objective.evidenceRef && !objective.captureId) {
+        return fail('completed photography objective missing capture/evidence reference', raw);
+      }
+    }
+  }
   const savedAt = raw['savedAt'];
   if (!isObject(savedAt) || !isNonNegInt(savedAt['savedAtEpochMs']) || !isString(savedAt['savedAtIso'])) {
     return fail('invalid savedAt metadata', raw);
@@ -161,6 +176,7 @@ export function validatePersistedMissionResult(
     aircraftId: nullableString(raw['aircraftId']),
     aircraftSourceType: nullableString(raw['aircraftSourceType']),
     aircraftDefinitionVersion: nullableString(raw['aircraftDefinitionVersion']),
+    aircraftPhysicsProfileVersion: nullableString(raw['aircraftPhysicsProfileVersion']),
     aircraftRuntimeCompatibilityVersion: nullableString(
       raw['aircraftRuntimeCompatibilityVersion'],
     ),
@@ -177,8 +193,11 @@ export function validatePersistedMissionResult(
     attemptCountTotal: raw['attemptCountTotal'],
     imageAvailability: raw['imageAvailability'].map((item) => {
       const row = isObject(item) ? item : {};
+      const objectiveId = isString(row['objectiveId']) ? row['objectiveId'] : '';
       return {
-        acceptedImageAvailable: Boolean(row['acceptedImageAvailable']),
+        objectiveId,
+        acceptedImageExpected: Boolean(row['acceptedImageExpected']),
+        acceptedImagePersisted: Boolean(row['acceptedImagePersisted']),
         captureId: nullableString(row['captureId']),
         evidenceRef: nullableString(row['evidenceRef']),
       };
@@ -235,7 +254,8 @@ function validateObjective(
       captureId: nullableString(raw['captureId']),
       evidenceRef: nullableString(raw['evidenceRef']),
       feedbackCodes: (raw['feedbackCodes'] as unknown[]).map(String),
-      acceptedImageAvailable: Boolean(raw['acceptedImageAvailable']),
+      acceptedImageExpected: Boolean(raw['acceptedImageExpected']),
+      acceptedImagePersisted: Boolean(raw['acceptedImagePersisted']),
     },
   };
 }

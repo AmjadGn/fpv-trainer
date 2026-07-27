@@ -2,6 +2,9 @@
  * In-memory mission persistence adapter.
  * Used when IndexedDB is unavailable, blocked, or permanently unsafe.
  * Same behavioral contract for the current page lifetime; storageMode = memory.
+ *
+ * Image-set replacement is atomic with respect to the in-memory maps: validate
+ * first, snapshot prior rows, mutate, and restore the snapshot on failure.
  */
 
 import {
@@ -32,15 +35,20 @@ import {
   type PersistedMissionSummaryRecord,
 } from '@fpv/mission-persistence';
 
+type ImageEntry = {
+  readonly manifest: MissionBestImageRecord['manifest'];
+  readonly data: ArrayBuffer;
+};
+
 export class MemoryMissionPersistenceAdapter implements MissionPersistencePort {
   private readonly results = new Map<string, PersistedMissionResultRecord>();
   private readonly summaries = new Map<string, PersistedMissionSummaryRecord>();
-  private readonly images = new Map<
-    string,
-    { readonly manifest: MissionBestImageRecord['manifest']; readonly data: ArrayBuffer }
-  >();
+  private readonly images = new Map<string, ImageEntry>();
   private opened = false;
   private mode: MissionPersistenceStorageMode = 'unavailable';
+
+  /** Test seam: fail the next image replacement after validation. */
+  failNextImageWriteForTests = false;
 
   async open(): Promise<MissionPersistenceOpenResult> {
     this.opened = true;
@@ -234,11 +242,31 @@ export class MemoryMissionPersistenceAdapter implements MissionPersistencePort {
       }
     }
 
-    // Remove any partial new keys for this scope before writing the new set.
-    this.deleteImagesForScope(missionScopeKey);
+    // Snapshot prior scope images so a failed mutation can restore them.
+    const prior = new Map<string, ImageEntry>();
+    for (const [key, entry] of this.images.entries()) {
+      if (key.startsWith(`${missionScopeKey}:`)) {
+        prior.set(key, entry);
+      }
+    }
 
-    const storedObjectiveIds: string[] = [];
+    if (this.failNextImageWriteForTests) {
+      this.failNextImageWriteForTests = false;
+      this.summaries.set(missionScopeKey, withImageStatus(summary, 'failed'));
+      return {
+        ok: false,
+        status: 'failed',
+        storedObjectiveIds: [],
+        diagnostic: {
+          code: MISSION_PERSISTENCE_DIAGNOSTICS.TRANSACTION_ABORTED,
+          message: 'Injected image transaction failure',
+        },
+      };
+    }
+
     try {
+      this.deleteImagesForScope(missionScopeKey);
+      const storedObjectiveIds: string[] = [];
       for (const image of accepted) {
         const key = bestImageStoreKey(missionScopeKey, image.objectiveId);
         this.images.set(key, {
@@ -254,10 +282,33 @@ export class MemoryMissionPersistenceAdapter implements MissionPersistencePort {
         });
         storedObjectiveIds.push(image.objectiveId);
       }
+
+      let status: MissionBestImagesSaveOutcome['status'] = 'complete';
+      if (storedObjectiveIds.length === 0) {
+        status = expectedObjectiveIds.length === 0 ? 'none' : 'failed';
+      } else if (storedObjectiveIds.length < expectedObjectiveIds.length) {
+        status = 'partial';
+      }
+
+      this.summaries.set(missionScopeKey, withImageStatus(summary, status));
+      return {
+        ok: status === 'complete' || status === 'none',
+        status,
+        storedObjectiveIds,
+        diagnostic:
+          status === 'complete' || status === 'none'
+            ? undefined
+            : {
+                code: MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
+                message: `Stored ${storedObjectiveIds.length} of ${expectedObjectiveIds.length} Personal Best images`,
+              },
+      };
     } catch (error) {
       this.deleteImagesForScope(missionScopeKey);
-      const failed = withImageStatus(summary, 'failed');
-      this.summaries.set(missionScopeKey, failed);
+      for (const [key, entry] of prior.entries()) {
+        this.images.set(key, entry);
+      }
+      this.summaries.set(missionScopeKey, withImageStatus(summary, 'failed'));
       return {
         ok: false,
         status: 'failed',
@@ -268,27 +319,6 @@ export class MemoryMissionPersistenceAdapter implements MissionPersistencePort {
         },
       };
     }
-
-    let status: MissionBestImagesSaveOutcome['status'] = 'complete';
-    if (storedObjectiveIds.length === 0) {
-      status = expectedObjectiveIds.length === 0 ? 'none' : 'failed';
-    } else if (storedObjectiveIds.length < expectedObjectiveIds.length) {
-      status = 'partial';
-    }
-
-    this.summaries.set(missionScopeKey, withImageStatus(summary, status));
-    return {
-      ok: status === 'complete' || status === 'none',
-      status,
-      storedObjectiveIds,
-      diagnostic:
-        status === 'complete' || status === 'none'
-          ? undefined
-          : {
-              code: MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
-              message: `Stored ${storedObjectiveIds.length} of ${expectedObjectiveIds.length} Personal Best images`,
-            },
-    };
   }
 
   async getBestImages(
@@ -296,12 +326,19 @@ export class MemoryMissionPersistenceAdapter implements MissionPersistencePort {
     personalBestResultId: string,
   ): Promise<MissionPersistenceImagesResult> {
     this.assertOpen();
+    const summary = this.summaries.get(missionScopeKey);
+    if (summary?.personalBestResultId !== personalBestResultId) {
+      return { ok: true, images: [] };
+    }
     const images: MissionBestImageRecord[] = [];
     for (const entry of this.images.values()) {
       if (String(entry.manifest.missionScopeKey) !== missionScopeKey) {
         continue;
       }
       if (entry.manifest.personalBestResultId !== personalBestResultId) {
+        continue;
+      }
+      if (entry.manifest.personalBestResultId !== summary.personalBestResultId) {
         continue;
       }
       images.push({

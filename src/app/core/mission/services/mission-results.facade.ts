@@ -12,6 +12,10 @@ import type { PhotoEvaluationResult } from '@fpv/photography-domain';
 import type { MissionResultSaveUiStatus } from '@fpv/mission-persistence';
 
 import { DEFAULT_FIXED_STEP_SECONDS } from './mission-boundary-runtime';
+import type {
+  MissionPresentationImageSettlement,
+  MissionResultAircraftContext,
+} from './mission-presentation-image-settlement';
 import { MissionPersistenceCoordinator } from '../../mission-persistence/mission-persistence.coordinator';
 
 export interface MissionSessionPresentationImage {
@@ -75,9 +79,14 @@ export interface MissionResultsSetInput {
   readonly sessionGeneration?: number;
   readonly locationId?: string;
   readonly locationVersion?: string;
+  readonly objectiveVersions?: ReadonlyMap<string, string>;
+  readonly aircraftContext?: MissionResultAircraftContext | null;
+  readonly presentationSettlement?: MissionPresentationImageSettlement | null;
+  /** @deprecated Prefer aircraftContext from the authoritative flight runtime. */
   readonly aircraftId?: string | null;
   readonly aircraftSourceType?: string | null;
   readonly aircraftDefinitionVersion?: string | null;
+  readonly aircraftPhysicsProfileVersion?: string | null;
   readonly aircraftRuntimeCompatibilityVersion?: string | null;
 }
 
@@ -106,9 +115,9 @@ const EMPTY_VIEW_MODEL: MissionResultsViewModel = {
 /**
  * Mission results view model with session presentation images.
  *
- * Durable persistence is coordinated separately; this facade retains Blob
- * references long enough for Personal Best image persistence before retry/exit
- * cleanup revokes object URLs.
+ * Durable persistence is coordinated separately; this facade owns UI object
+ * URLs only. Personal Best image Blobs are retained by presentation settlement
+ * independently of revoke/clear.
  */
 @Injectable({ providedIn: 'root' })
 export class MissionResultsFacade {
@@ -244,13 +253,21 @@ export class MissionResultsFacade {
     this.images.clear();
   }
 
-  /** Clears results and revokes images — call on retry and on exit. */
+  /**
+   * Clears results UI and revokes object URLs — call on retry and on exit.
+   * Does not cancel in-flight core/image persistence or settlement Blobs.
+   */
   clear(): void {
-    this.persistence?.invalidatePending();
+    this.persistence?.invalidatePendingUi();
     this.persistence?.resetSaveStatus();
     this.revokeAllPresentationImages();
     this.lastSetInput = null;
     this.viewModelSignal.set(EMPTY_VIEW_MODEL);
+  }
+
+  /** Explicit UI seam for retrying a failed durable core save. */
+  retryLastFailedSave(): void {
+    void this.persistence?.retryLastFailedSave();
   }
 
   private async persistAfterSet(input: MissionResultsSetInput): Promise<void> {
@@ -270,6 +287,7 @@ export class MissionResultsFacade {
     const sessionGeneration = input.sessionGeneration ?? 0;
     const locationId = input.locationId ?? input.mission.requiredLocationId;
     const locationVersion = input.locationVersion ?? '1.0.0';
+    const aircraft = input.aircraftContext;
 
     await this.persistence.saveSessionResult({
       record: input.record,
@@ -281,11 +299,18 @@ export class MissionResultsFacade {
       evaluations: input.evaluations,
       attemptCounts: input.attemptCounts,
       fixedStepSeconds: input.fixedStepSeconds ?? DEFAULT_FIXED_STEP_SECONDS,
-      aircraftId: input.aircraftId,
-      aircraftSourceType: input.aircraftSourceType,
-      aircraftDefinitionVersion: input.aircraftDefinitionVersion,
-      aircraftRuntimeCompatibilityVersion: input.aircraftRuntimeCompatibilityVersion,
-      presentationImages: this.presentationImages(),
+      objectiveVersions: input.objectiveVersions,
+      aircraftId: aircraft?.aircraftId ?? input.aircraftId ?? null,
+      aircraftSourceType: aircraft?.aircraftSourceType ?? input.aircraftSourceType ?? null,
+      aircraftDefinitionVersion:
+        aircraft?.definitionVersion ?? input.aircraftDefinitionVersion ?? null,
+      aircraftPhysicsProfileVersion:
+        aircraft?.physicsProfileVersion ?? input.aircraftPhysicsProfileVersion ?? null,
+      aircraftRuntimeCompatibilityVersion:
+        aircraft?.runtimeCompatibilityVersion ??
+        input.aircraftRuntimeCompatibilityVersion ??
+        null,
+      presentationSettlement: input.presentationSettlement ?? null,
     });
 
     const current = this.viewModelSignal();
@@ -293,6 +318,13 @@ export class MissionResultsFacade {
       return;
     }
 
+    this.syncPersistenceView(current);
+  }
+
+  private syncPersistenceView(current: MissionResultsViewModel): void {
+    if (!this.persistence) {
+      return;
+    }
     const status = this.persistence.saveStatus();
     const memoryOnly = this.persistence.isMemoryOnly();
     this.viewModelSignal.set({
@@ -312,6 +344,8 @@ function persistenceNoteFor(
   switch (status) {
     case 'saving':
       return 'Saving result…';
+    case 'saved-new-personal-best-images-pending':
+      return 'New Personal Best — saving photos…';
     case 'saved-new-personal-best':
       return 'New Personal Best';
     case 'saved-without-images':
@@ -325,7 +359,7 @@ function persistenceNoteFor(
     case 'saved':
       return 'Result saved';
     case 'save-failed':
-      return 'Could not save this result.';
+      return 'Could not save this result. Retry save to try again.';
     default:
       return null;
   }

@@ -75,6 +75,15 @@ function diagnoseQuota(error: unknown): boolean {
   return name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
 }
 
+function isAbortError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const name = 'name' in error ? String((error as { name?: string }).name) : '';
+  const message = error instanceof Error ? error.message : String(error);
+  return name === 'AbortError' || /abort/i.test(message);
+}
+
 export class IndexedDbMissionPersistenceAdapter implements MissionPersistencePort {
   private db: IDBDatabase | null = null;
   private openPromise: Promise<IDBDatabase> | null = null;
@@ -306,119 +315,23 @@ export class IndexedDbMissionPersistenceAdapter implements MissionPersistencePor
   ): Promise<MissionBestImagesSaveOutcome> {
     try {
       const db = await this.ensureDb();
-      const summaryRaw = await idbGet<PersistedMissionSummaryRecord>(
+      return await this.runAtomicBestImageReplacement(
         db,
-        MISSIONS_IDB_STORES.missionSummaries,
         missionScopeKey,
+        personalBestResultId,
+        images,
+        expectedObjectiveIds,
       );
-      const summaryValidated = summaryRaw
-        ? validatePersistedMissionSummary(summaryRaw)
-        : null;
-      if (!summaryValidated?.ok || summaryValidated.value.personalBestResultId !== personalBestResultId) {
-        return {
-          ok: false,
-          status: 'failed',
-          storedObjectiveIds: [],
-          diagnostic: {
-            code: MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
-            message: 'Images rejected: result is not the current Personal Best',
-          },
-        };
-      }
-
-      const maxCount = Math.min(expectedObjectiveIds.length, MISSION_BEST_IMAGES_MAX_COUNT);
-      const accepted: MissionBestImagePayload[] = [];
-      for (const image of images) {
-        if (!expectedObjectiveIds.includes(image.objectiveId)) {
-          continue;
-        }
-        if (image.byteLength <= 0 || image.byteLength > MISSION_BEST_IMAGE_MAX_BYTES) {
-          continue;
-        }
-        if (image.data.byteLength !== image.byteLength) {
-          continue;
-        }
-        if (!image.mimeType.startsWith('image/')) {
-          continue;
-        }
-        accepted.push(image);
-        if (accepted.length >= maxCount) {
-          break;
-        }
-      }
-
-      // Drop previous images for this scope before writing the replacement set.
-      await this.deleteImagesForScope(db, missionScopeKey);
-
-      const storedObjectiveIds: string[] = [];
-      for (const image of accepted) {
-        const row: BestImageRow = {
-          key: bestImageStoreKey(missionScopeKey, image.objectiveId),
-          persistenceSchemaVersion: MISSION_PERSISTENCE_SCHEMA_VERSION,
-          missionScopeKey,
-          personalBestResultId,
-          objectiveId: image.objectiveId,
-          mimeType: image.mimeType,
-          byteLength: image.byteLength,
-          data: image.data.slice(0),
-        };
-        await idbPut(db, MISSIONS_IDB_STORES.bestImages, row);
-        storedObjectiveIds.push(image.objectiveId);
-      }
-
-      let status: MissionBestImagesSaveOutcome['status'] = 'complete';
-      if (storedObjectiveIds.length === 0) {
-        status = expectedObjectiveIds.length === 0 ? 'none' : 'failed';
-      } else if (storedObjectiveIds.length < expectedObjectiveIds.length) {
-        status = 'partial';
-      }
-
-      if (status === 'failed' || status === 'partial') {
-        // Partial failure: do not leave a mixed old/new set — already cleared.
-        // Keep whatever we stored; mark status accordingly.
-      }
-
-      await idbPut(
-        db,
-        MISSIONS_IDB_STORES.missionSummaries,
-        withImageStatus(summaryValidated.value, status),
-      );
-
-      return {
-        ok: status === 'complete' || status === 'none',
-        status,
-        storedObjectiveIds,
-        diagnostic:
-          status === 'complete' || status === 'none'
-            ? undefined
-            : {
-                code: MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
-                message: `Stored ${storedObjectiveIds.length} of ${expectedObjectiveIds.length} Personal Best images`,
-              },
-      };
     } catch (error) {
+      // Transaction abort preserves prior image rows. Attempt a safe follow-up
+      // status update to `failed` without mutating image bytes.
       try {
         const db = this.db;
         if (db) {
-          await this.deleteImagesForScope(db, missionScopeKey);
-          const summaryRaw = await idbGet<PersistedMissionSummaryRecord>(
-            db,
-            MISSIONS_IDB_STORES.missionSummaries,
-            missionScopeKey,
-          );
-          if (summaryRaw) {
-            const validated = validatePersistedMissionSummary(summaryRaw);
-            if (validated.ok) {
-              await idbPut(
-                db,
-                MISSIONS_IDB_STORES.missionSummaries,
-                withImageStatus(validated.value, 'failed'),
-              );
-            }
-          }
+          await this.markImageStatusFailed(db, missionScopeKey, personalBestResultId);
         }
       } catch {
-        // Best-effort cleanup only.
+        // Best-effort status update only.
       }
       return {
         ok: false,
@@ -427,7 +340,9 @@ export class IndexedDbMissionPersistenceAdapter implements MissionPersistencePor
         diagnostic: {
           code: diagnoseQuota(error)
             ? MISSION_PERSISTENCE_DIAGNOSTICS.QUOTA_EXCEEDED
-            : MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
+            : isAbortError(error)
+              ? MISSION_PERSISTENCE_DIAGNOSTICS.TRANSACTION_ABORTED
+              : MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
           message: error instanceof Error ? error.message : String(error),
         },
       };
@@ -440,6 +355,22 @@ export class IndexedDbMissionPersistenceAdapter implements MissionPersistencePor
   ): Promise<MissionPersistenceImagesResult> {
     try {
       const db = await this.ensureDb();
+      const summaryRaw = await idbGet<PersistedMissionSummaryRecord>(
+        db,
+        MISSIONS_IDB_STORES.missionSummaries,
+        missionScopeKey,
+      );
+      const summaryValidated = summaryRaw
+        ? validatePersistedMissionSummary(summaryRaw)
+        : null;
+      const currentPbId = summaryValidated?.ok
+        ? summaryValidated.value.personalBestResultId
+        : null;
+      // Never present orphaned rows that do not match the current PB pointer.
+      if (currentPbId !== personalBestResultId) {
+        return { ok: true, images: [] };
+      }
+
       const rows = await idbGetAll<BestImageRow>(db, MISSIONS_IDB_STORES.bestImages);
       const images: MissionBestImageRecord[] = [];
       for (const row of rows) {
@@ -447,6 +378,9 @@ export class IndexedDbMissionPersistenceAdapter implements MissionPersistencePor
           continue;
         }
         if (row.personalBestResultId !== personalBestResultId) {
+          continue;
+        }
+        if (row.personalBestResultId !== currentPbId) {
           continue;
         }
         images.push({
@@ -544,6 +478,179 @@ export class IndexedDbMissionPersistenceAdapter implements MissionPersistencePor
   /** Test helper — closes without deleting the database. */
   async resetConnection(): Promise<void> {
     await this.close();
+  }
+
+  /**
+   * Test seam: abort the next atomic image replacement after validation and
+   * after mutation requests are queued, simulating a transaction abort that
+   * must preserve the prior image set.
+   */
+  abortNextImageTransactionForTests = false;
+
+  private runAtomicBestImageReplacement(
+    db: IDBDatabase,
+    missionScopeKey: string,
+    personalBestResultId: string,
+    images: readonly MissionBestImagePayload[],
+    expectedObjectiveIds: readonly string[],
+  ): Promise<MissionBestImagesSaveOutcome> {
+    // Validate the complete settled payload list before opening the mutation TX.
+    const maxCount = Math.min(expectedObjectiveIds.length, MISSION_BEST_IMAGES_MAX_COUNT);
+    const accepted: MissionBestImagePayload[] = [];
+    for (const image of images) {
+      if (!expectedObjectiveIds.includes(image.objectiveId)) {
+        continue;
+      }
+      if (image.byteLength <= 0 || image.byteLength > MISSION_BEST_IMAGE_MAX_BYTES) {
+        continue;
+      }
+      if (image.data.byteLength !== image.byteLength) {
+        continue;
+      }
+      if (!image.mimeType.startsWith('image/')) {
+        continue;
+      }
+      accepted.push(image);
+      if (accepted.length >= maxCount) {
+        break;
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      let outcome: MissionBestImagesSaveOutcome | null = null;
+      try {
+        const tx = db.transaction(
+          [MISSIONS_IDB_STORES.bestImages, MISSIONS_IDB_STORES.missionSummaries],
+          'readwrite',
+        );
+        const imagesStore = tx.objectStore(MISSIONS_IDB_STORES.bestImages);
+        const summariesStore = tx.objectStore(MISSIONS_IDB_STORES.missionSummaries);
+        const imageIndex = imagesStore.index('missionScopeKey');
+
+        const summaryReq = summariesStore.get(missionScopeKey);
+        summaryReq.onsuccess = () => {
+          const summaryRaw = summaryReq.result as PersistedMissionSummaryRecord | undefined;
+          const summaryValidated = summaryRaw
+            ? validatePersistedMissionSummary(summaryRaw)
+            : null;
+          if (
+            !summaryValidated?.ok ||
+            summaryValidated.value.personalBestResultId !== personalBestResultId
+          ) {
+            outcome = {
+              ok: false,
+              status: 'failed',
+              storedObjectiveIds: [],
+              diagnostic: {
+                code: MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
+                message: 'Images rejected: result is not the current Personal Best',
+              },
+            };
+            return;
+          }
+
+          const keysReq = imageIndex.getAllKeys(missionScopeKey);
+          keysReq.onsuccess = () => {
+            const keys = (keysReq.result as IDBValidKey[]) ?? [];
+            for (const key of keys) {
+              imagesStore.delete(key);
+            }
+
+            const storedObjectiveIds: string[] = [];
+            for (const image of accepted) {
+              const row: BestImageRow = {
+                key: bestImageStoreKey(missionScopeKey, image.objectiveId),
+                persistenceSchemaVersion: MISSION_PERSISTENCE_SCHEMA_VERSION,
+                missionScopeKey,
+                personalBestResultId,
+                objectiveId: image.objectiveId,
+                mimeType: image.mimeType,
+                byteLength: image.byteLength,
+                data: image.data.slice(0),
+              };
+              imagesStore.put(row);
+              storedObjectiveIds.push(image.objectiveId);
+            }
+
+            let status: MissionBestImagesSaveOutcome['status'] = 'complete';
+            if (storedObjectiveIds.length === 0) {
+              status = expectedObjectiveIds.length === 0 ? 'none' : 'failed';
+            } else if (storedObjectiveIds.length < expectedObjectiveIds.length) {
+              status = 'partial';
+            }
+
+            summariesStore.put(withImageStatus(summaryValidated.value, status));
+            outcome = {
+              ok: status === 'complete' || status === 'none',
+              status,
+              storedObjectiveIds,
+              diagnostic:
+                status === 'complete' || status === 'none'
+                  ? undefined
+                  : {
+                      code: MISSION_PERSISTENCE_DIAGNOSTICS.BEST_IMAGES_PERSIST_FAILED,
+                      message: `Stored ${storedObjectiveIds.length} of ${expectedObjectiveIds.length} Personal Best images`,
+                    },
+            };
+
+            if (this.abortNextImageTransactionForTests) {
+              this.abortNextImageTransactionForTests = false;
+              try {
+                tx.abort();
+              } catch {
+                // ignore
+              }
+            }
+          };
+        };
+
+        tx.oncomplete = () => {
+          resolve(
+            outcome ?? {
+              ok: false,
+              status: 'failed',
+              storedObjectiveIds: [],
+              diagnostic: {
+                code: MISSION_PERSISTENCE_DIAGNOSTICS.WRITE_FAILED,
+                message: 'Image transaction completed without outcome',
+              },
+            },
+          );
+        };
+        tx.onabort = () => {
+          reject(new Error(tx.error?.message ?? 'transaction aborted'));
+        };
+        tx.onerror = () => {
+          reject(tx.error ?? new Error('transaction error'));
+        };
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private async markImageStatusFailed(
+    db: IDBDatabase,
+    missionScopeKey: string,
+    personalBestResultId: string,
+  ): Promise<void> {
+    const summaryRaw = await idbGet<PersistedMissionSummaryRecord>(
+      db,
+      MISSIONS_IDB_STORES.missionSummaries,
+      missionScopeKey,
+    );
+    if (!summaryRaw) {
+      return;
+    }
+    const validated = validatePersistedMissionSummary(summaryRaw);
+    if (!validated.ok || validated.value.personalBestResultId !== personalBestResultId) {
+      return;
+    }
+    await idbPut(
+      db,
+      MISSIONS_IDB_STORES.missionSummaries,
+      withImageStatus(validated.value, 'failed'),
+    );
   }
 
   private async ensureDb(): Promise<IDBDatabase> {

@@ -288,6 +288,8 @@ export class MissionSessionResultsComponent {
     switch (this.viewModel().persistenceStatus) {
       case 'saving':
         return 'Saving result…';
+      case 'saved-new-personal-best-images-pending':
+        return 'New Personal Best — saving photos…';
       case 'saved-new-personal-best':
         return 'New Personal Best';
       case 'saved-without-images':

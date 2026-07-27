@@ -3,8 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   MISSION_PERSISTENCE_SCHEMA_VERSION,
   buildMissionScopeKey,
-  type MissionPersistencePort,
-  type PersistedMissionResultRecord,
 } from '@fpv/mission-persistence';
 import { asMissionResultId, asMissionSessionId, createMissionResultRecord } from '@fpv/mission-domain';
 import { asElapsedTicks } from '@fpv/simulation-contracts';
@@ -12,6 +10,9 @@ import { asElapsedTicks } from '@fpv/simulation-contracts';
 import { getCoastalRuinsSurveyMission } from '../../content/locations/mediterranean-expedition-region/missions/coastal-ruins-survey';
 import { MissionPersistenceCoordinator } from './mission-persistence.coordinator';
 import { createMemoryMissionPersistenceAdapter } from './memory-mission-persistence.adapter';
+import {
+  MissionPresentationSettlementRegistry,
+} from '../mission/services/mission-presentation-image-settlement';
 
 const MISSION = getCoastalRuinsSurveyMission();
 const REQUIRED_IDS =
@@ -38,6 +39,10 @@ function sessionRecord(resultId: string, status: 'completed' | 'failed' = 'compl
   });
 }
 
+function objectiveVersions(): ReadonlyMap<string, string> {
+  return new Map(REQUIRED_IDS.map((id) => [String(id), '1.0.0']));
+}
+
 describe('MissionPersistenceCoordinator', () => {
   it('saves a result once and ignores duplicate renders', async () => {
     const memory = createMemoryMissionPersistenceAdapter();
@@ -56,7 +61,13 @@ describe('MissionPersistenceCoordinator', () => {
       evaluations: new Map(),
       attemptCounts: new Map(),
       fixedStepSeconds: 1 / 120,
-      presentationImages: [],
+      objectiveVersions: objectiveVersions(),
+      aircraftId: 'factory-demo',
+      aircraftSourceType: 'factory' as const,
+      aircraftDefinitionVersion: '1.0.0',
+      aircraftPhysicsProfileVersion: '1.0.0',
+      aircraftRuntimeCompatibilityVersion: '1.3.0-runtime-c3',
+      presentationSettlement: null,
     };
 
     await coordinator.saveSessionResult(request);
@@ -75,17 +86,17 @@ describe('MissionPersistenceCoordinator', () => {
     expect(coordinator.saveStatus()).toMatch(/saved|memory-only|attempt-saved|saved-new-personal-best/);
   });
 
-  it('rejects stale callbacks after invalidatePending', async () => {
+  it('rejects stale UI callbacks after invalidatePendingUi', async () => {
     let resolveSave!: (value: unknown) => void;
     const deferred = new Promise((resolve) => {
       resolveSave = resolve;
     });
-    const slowPort: MissionPersistencePort = {
+    const slowPort = {
       async open() {
-        return { ok: true, storageMode: 'memory' };
+        return { ok: true, storageMode: 'memory' as const };
       },
-      storageMode: () => 'memory',
-      async saveMissionResult(result: PersistedMissionResultRecord) {
+      storageMode: () => 'memory' as const,
+      async saveMissionResult(result: { resultId: string }) {
         await deferred;
         return {
           ok: true,
@@ -105,7 +116,7 @@ describe('MissionPersistenceCoordinator', () => {
         return { ok: true, results: [], invalidCount: 0 };
       },
       async saveBestImages() {
-        return { ok: true, status: 'none', storedObjectiveIds: [] };
+        return { ok: true, status: 'none' as const, storedObjectiveIds: [] };
       },
       async getBestImages() {
         return { ok: true, images: [] };
@@ -123,6 +134,14 @@ describe('MissionPersistenceCoordinator', () => {
     coordinator.usePortForTests(slowPort);
     await coordinator.ensureReady();
 
+    const registry = new MissionPresentationSettlementRegistry();
+    const settlement = registry.createSettlement({
+      sessionId: 'slow',
+      sessionGeneration: 1,
+      resultId: 'slow:result',
+      expectedObjectiveIds: [],
+    });
+
     const pending = coordinator.saveSessionResult({
       record: sessionRecord('slow:result'),
       mission: MISSION,
@@ -133,12 +152,16 @@ describe('MissionPersistenceCoordinator', () => {
       evaluations: new Map(),
       attemptCounts: new Map(),
       fixedStepSeconds: 1 / 120,
-      presentationImages: [],
+      objectiveVersions: objectiveVersions(),
+      aircraftId: 'factory-demo',
+      aircraftSourceType: 'factory',
+      aircraftRuntimeCompatibilityVersion: '1.3.0-runtime-c3',
+      presentationSettlement: settlement,
     });
     await vi.waitFor(() => {
       expect(coordinator.saveStatus()).toBe('saving');
     });
-    coordinator.invalidatePending();
+    coordinator.invalidatePendingUi();
     resolveSave(undefined);
     await pending;
     // Stale completion must not force a newer "saved" UI state after invalidate.
@@ -162,5 +185,4 @@ describe('schema constant lock', () => {
   });
 });
 
-// Silence unused import if tree-shaken oddly in some runners.
 void vi;
