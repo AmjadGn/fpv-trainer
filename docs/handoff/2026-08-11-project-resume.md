@@ -14,18 +14,25 @@ GitHub Release title: **FPV Simulator v1.3.0 — Expeditions Preview**
 
 ## 2. Final main SHA
 
-Recorded at release closure (update if `main` advances after this handoff):
+Release commit tagged as `v1.3.0` (squash merge of release closure PR #14):
 
 ```text
-FINAL_MAIN_SHA_PENDING_RELEASE_MERGE
+00ba1ac5524b9d7d079958ec9965b7b6ca10aaf9
 ```
 
-After merge, verify with:
+Checkpoint 6 squash merge (PR #12):
+
+```text
+c251d087a0423b601481750f4806acf1dcb7c5c6
+```
+
+After resume, verify with:
 
 ```bash
 git fetch upstream
 git rev-parse upstream/main
-git show -s --oneline upstream/main
+git rev-parse v1.3.0^{}
+git show -s --oneline v1.3.0
 ```
 
 ## 3. Production URL
@@ -47,7 +54,7 @@ There was no prior Firebase / Vercel / Netlify / Wrangler production frontend ho
 
 ## 5. Release validation results
 
-Accepted on Checkpoint 6 head `0ff6bc1` before merge (Node `v22.22.3`):
+Accepted on Checkpoint 6 head `0ff6bc1` and again on `release/v1.3.0` (Node `v22.22.3`):
 
 | Check | Result |
 | --- | --- |
@@ -57,7 +64,7 @@ Accepted on Checkpoint 6 head `0ff6bc1` before merge (Node `v22.22.3`):
 | `npm run test:ci` | 809 passed |
 | `npm run build` | successful |
 
-Release-closure validation on `release/v1.3.0` must be re-recorded in the release PR before merge.
+Production deploy workflow run `30296638475` concluded **success** for commit `00ba1ac`. Live checks: root HTTP 200, hashed JS/CSS 200, catalog/asset files 200, version `1.3.0` present in deployed chunks, SPA refresh served via Pages `404.html` (HTTP 404 status with app shell HTML).
 
 ## 6. Current architecture checkpoints
 
