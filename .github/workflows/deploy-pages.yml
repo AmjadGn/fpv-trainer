@@ -1,0 +1,83 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build static production site
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22.22.3'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Production static build for repository Pages path
+        run: >
+          npm run build --
+          --configuration=production
+          --output-mode=static
+          --base-href=/fpv-trainer/
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+
+      - name: Prepare Pages artifact (SPA fallback)
+        run: |
+          set -euo pipefail
+          SITE_DIR=dist/fpv-trainer-web/browser
+          test -d "$SITE_DIR"
+          if [ -f "$SITE_DIR/index.html" ]; then
+            :
+          elif [ -f "$SITE_DIR/index.csr.html" ]; then
+            cp "$SITE_DIR/index.csr.html" "$SITE_DIR/index.html"
+          else
+            echo "No index.html or index.csr.html in $SITE_DIR" >&2
+            ls -la "$SITE_DIR" >&2
+            exit 1
+          fi
+          # GitHub Pages SPA refresh fallback for Angular client routes.
+          cp "$SITE_DIR/index.html" "$SITE_DIR/404.html"
+          # Do not ship server bundles or source maps as the website.
+          rm -rf dist/fpv-trainer-web/server
+          find "$SITE_DIR" -name '*.map' -type f -delete
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/fpv-trainer-web/browser
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

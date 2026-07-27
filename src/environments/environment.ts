@@ -3,7 +3,7 @@ export type ReleaseChannel = 'development' | 'internal' | 'alpha' | 'beta' | 'pr
 export const environment = {
   production: false,
   releaseChannel: 'development' as ReleaseChannel,
-  appVersion: '1.0.0-alpha.1',
+  appVersion: '1.3.0',
   buildId: 'dev-local',
   apiBaseUrl: 'http://localhost:8000/api/v1',
   appPublicUrl: 'http://localhost:4200',

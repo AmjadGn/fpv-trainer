@@ -1,14 +1,13 @@
-# FPV Trainer v1.0.0-alpha.1
+# FPV Simulator v1.3.0 — Expeditions Preview
 
-A browser-based FPV drone flight trainer: a Three.js/Angular flight
-simulator with a multi-aircraft hangar platform and training academy,
-backed by a Laravel API for accounts, ranked race submissions,
-leaderboards, challenges, seasons, tournaments, ghost events, cosmetics,
-notifications, and public-beta controls.
+A browser-based FPV drone flight simulator with training, Hangar, Drone Builder,
+and an **Expeditions Preview** (Coastal Ruins Survey photography mission with
+local Personal Bests).
 
-**Alpha focus:** Learn / Fly / Compete product paths, guest-first access,
-first-run onboarding, feedback, privacy controls, and stabilization — not
-new major gameplay systems.
+**Release focus:** public usable simulator + Expeditions Preview. Mission data is
+local to the browser. Coastal Ruins uses repository-owned proxy art — not final
+production art. Cloud sync, accounts-backed mission progress, and online
+leaderboards are out of scope for v1.3.0.
 
 This is a monorepo with three top-level pieces:
 
