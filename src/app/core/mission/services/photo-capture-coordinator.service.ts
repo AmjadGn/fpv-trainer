@@ -312,7 +312,12 @@ export class PhotoCaptureCoordinator {
         return;
       }
       if (result.ok && result.objectUrl) {
-        this.results.attachPresentationImage(missionObjectiveId, result.objectUrl);
+        this.results.attachPresentationImage(missionObjectiveId, result.objectUrl, {
+          blob: result.blob ?? null,
+          captureId,
+          mimeType: result.blob?.type ?? 'image/jpeg',
+          byteLength: result.blob?.size ?? 0,
+        });
         return;
       }
       this.noteDiagnostic({

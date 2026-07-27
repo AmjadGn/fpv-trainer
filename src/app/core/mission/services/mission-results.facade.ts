@@ -1,4 +1,4 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, Optional, computed, signal } from '@angular/core';
 
 import type {
   FailureReasonCode,
@@ -9,8 +9,19 @@ import type {
   ObjectiveResultStatus,
 } from '@fpv/mission-domain';
 import type { PhotoEvaluationResult } from '@fpv/photography-domain';
+import type { MissionResultSaveUiStatus } from '@fpv/mission-persistence';
 
 import { DEFAULT_FIXED_STEP_SECONDS } from './mission-boundary-runtime';
+import { MissionPersistenceCoordinator } from '../../mission-persistence/mission-persistence.coordinator';
+
+export interface MissionSessionPresentationImage {
+  readonly objectiveId: string;
+  readonly captureId: string | null;
+  readonly blob: Blob | null;
+  readonly objectUrl: string | null;
+  readonly mimeType: string;
+  readonly byteLength: number;
+}
 
 export interface MissionResultsObjectiveEntry {
   readonly objectiveId: string;
@@ -24,7 +35,7 @@ export interface MissionResultsObjectiveEntry {
   readonly photoMaxScore: number | null;
   readonly feedbackCodes: readonly string[];
   readonly attemptCount: number;
-  /** Session-only object URL; revoked on retry/exit. */
+  /** Session presentation object URL; revoked on retry/exit. */
   readonly presentationImageUrl: string | null;
 }
 
@@ -43,8 +54,15 @@ export interface MissionResultsViewModel {
   readonly showObjectiveBreakdown: boolean;
   readonly showTimeBonus: boolean;
   readonly customResultsNote: string | null;
-  /** Always true: results exist for the current session only. */
+  /**
+   * Legacy flag retained for Checkpoint 5 tests: session presentation is still
+   * ephemeral. Durable copies may also exist via mission persistence.
+   */
   readonly sessionOnly: true;
+  readonly persistenceStatus: MissionResultSaveUiStatus;
+  readonly persistenceNote: string | null;
+  readonly isNewPersonalBest: boolean;
+  readonly memoryOnly: boolean;
 }
 
 export interface MissionResultsSetInput {
@@ -53,6 +71,14 @@ export interface MissionResultsSetInput {
   readonly evaluations: ReadonlyMap<string, PhotoEvaluationResult>;
   readonly attemptCounts: ReadonlyMap<string, number>;
   readonly fixedStepSeconds?: number;
+  readonly scoringPolicyVersion?: string;
+  readonly sessionGeneration?: number;
+  readonly locationId?: string;
+  readonly locationVersion?: string;
+  readonly aircraftId?: string | null;
+  readonly aircraftSourceType?: string | null;
+  readonly aircraftDefinitionVersion?: string | null;
+  readonly aircraftRuntimeCompatibilityVersion?: string | null;
 }
 
 const EMPTY_VIEW_MODEL: MissionResultsViewModel = {
@@ -71,25 +97,35 @@ const EMPTY_VIEW_MODEL: MissionResultsViewModel = {
   showTimeBonus: true,
   customResultsNote: null,
   sessionOnly: true,
+  persistenceStatus: 'idle',
+  persistenceNote: null,
+  isNewPersonalBest: false,
+  memoryOnly: false,
 };
 
 /**
- * Session-only mission results view model.
+ * Mission results view model with session presentation images.
  *
- * Deliberately has NO persistence and NO personal-best tracking: results
- * live for the current session and are cleared (with their object URLs
- * revoked) on retry or exit. Nothing here touches IndexedDB or localStorage.
+ * Durable persistence is coordinated separately; this facade retains Blob
+ * references long enough for Personal Best image persistence before retry/exit
+ * cleanup revokes object URLs.
  */
 @Injectable({ providedIn: 'root' })
 export class MissionResultsFacade {
   private readonly viewModelSignal = signal<MissionResultsViewModel>(EMPTY_VIEW_MODEL);
-  private readonly imageUrls = new Map<string, string>();
+  private readonly images = new Map<string, MissionSessionPresentationImage>();
+  private lastSetInput: MissionResultsSetInput | null = null;
 
   readonly viewModel = this.viewModelSignal.asReadonly();
   readonly available = computed(() => this.viewModelSignal().available);
 
+  constructor(
+    @Optional() private readonly persistence: MissionPersistenceCoordinator | null = null,
+  ) {}
+
   setResult(input: MissionResultsSetInput): void {
     const { record, mission } = input;
+    this.lastSetInput = input;
     const fixedStepSeconds = input.fixedStepSeconds ?? DEFAULT_FIXED_STEP_SECONDS;
     const elapsedTicks = record.elapsedTicks as unknown as number;
 
@@ -109,7 +145,7 @@ export class MissionResultsFacade {
         photoMaxScore: evaluation?.maxScore ?? null,
         feedbackCodes: evaluation?.feedbackCodes ?? [],
         attemptCount: input.attemptCounts.get(objectiveId) ?? 0,
-        presentationImageUrl: this.imageUrls.get(objectiveId) ?? null,
+        presentationImageUrl: this.images.get(objectiveId)?.objectUrl ?? null,
       };
     });
 
@@ -129,19 +165,46 @@ export class MissionResultsFacade {
       showTimeBonus: mission.resultsMetadata?.showTimeBonus ?? true,
       customResultsNote: mission.resultsMetadata?.customResultsNote ?? null,
       sessionOnly: true,
+      persistenceStatus: 'saving',
+      persistenceNote: null,
+      isNewPersonalBest: false,
+      memoryOnly: false,
     });
+
+    void this.persistAfterSet(input);
   }
 
   /**
-   * Attaches (or replaces) the presentation image for an objective. Replacing
-   * an existing URL revokes the previous one so a retry cannot leak blobs.
+   * Attaches (or replaces) the presentation image for an objective.
+   * Prefer passing the Blob so persistence can snapshot it without refetching.
    */
-  attachPresentationImage(objectiveId: string, objectUrl: string): void {
-    const previous = this.imageUrls.get(objectiveId);
-    if (previous && previous !== objectUrl) {
-      revokeObjectUrl(previous);
+  attachPresentationImage(
+    objectiveId: string,
+    objectUrl: string,
+    options: {
+      readonly blob?: Blob | null;
+      readonly captureId?: string | null;
+      readonly mimeType?: string;
+      readonly byteLength?: number;
+    } = {},
+  ): void {
+    const previous = this.images.get(objectiveId);
+    if (previous?.objectUrl && previous.objectUrl !== objectUrl) {
+      revokeObjectUrl(previous.objectUrl);
     }
-    this.imageUrls.set(objectiveId, objectUrl);
+    const blob = options.blob ?? previous?.blob ?? null;
+    const mimeType =
+      options.mimeType ?? blob?.type ?? previous?.mimeType ?? 'image/jpeg';
+    const byteLength =
+      options.byteLength ?? blob?.size ?? previous?.byteLength ?? 0;
+    this.images.set(objectiveId, {
+      objectiveId,
+      captureId: options.captureId ?? previous?.captureId ?? null,
+      blob,
+      objectUrl,
+      mimeType,
+      byteLength,
+    });
 
     const current = this.viewModelSignal();
     if (!current.available) {
@@ -158,25 +221,113 @@ export class MissionResultsFacade {
   }
 
   presentationImageUrl(objectiveId: string): string | null {
-    return this.imageUrls.get(objectiveId) ?? null;
+    return this.images.get(objectiveId)?.objectUrl ?? null;
   }
 
   presentationImageUrls(): readonly string[] {
-    return [...this.imageUrls.values()];
+    return [...this.images.values()]
+      .map((image) => image.objectUrl)
+      .filter((url): url is string => Boolean(url));
+  }
+
+  presentationImages(): readonly MissionSessionPresentationImage[] {
+    return [...this.images.values()];
   }
 
   /** Revokes every retained object URL. Safe to call repeatedly. */
   revokeAllPresentationImages(): void {
-    for (const url of this.imageUrls.values()) {
-      revokeObjectUrl(url);
+    for (const image of this.images.values()) {
+      if (image.objectUrl) {
+        revokeObjectUrl(image.objectUrl);
+      }
     }
-    this.imageUrls.clear();
+    this.images.clear();
   }
 
   /** Clears results and revokes images — call on retry and on exit. */
   clear(): void {
+    this.persistence?.invalidatePending();
+    this.persistence?.resetSaveStatus();
     this.revokeAllPresentationImages();
+    this.lastSetInput = null;
     this.viewModelSignal.set(EMPTY_VIEW_MODEL);
+  }
+
+  private async persistAfterSet(input: MissionResultsSetInput): Promise<void> {
+    if (!this.persistence) {
+      const current = this.viewModelSignal();
+      if (current.available) {
+        this.viewModelSignal.set({
+          ...current,
+          persistenceStatus: 'idle',
+          persistenceNote: 'Results are kept for this session only.',
+        });
+      }
+      return;
+    }
+
+    const scoringPolicyVersion = input.scoringPolicyVersion ?? '1.0.0';
+    const sessionGeneration = input.sessionGeneration ?? 0;
+    const locationId = input.locationId ?? input.mission.requiredLocationId;
+    const locationVersion = input.locationVersion ?? '1.0.0';
+
+    await this.persistence.saveSessionResult({
+      record: input.record,
+      mission: input.mission,
+      scoringPolicyVersion,
+      sessionGeneration,
+      locationId,
+      locationVersion,
+      evaluations: input.evaluations,
+      attemptCounts: input.attemptCounts,
+      fixedStepSeconds: input.fixedStepSeconds ?? DEFAULT_FIXED_STEP_SECONDS,
+      aircraftId: input.aircraftId,
+      aircraftSourceType: input.aircraftSourceType,
+      aircraftDefinitionVersion: input.aircraftDefinitionVersion,
+      aircraftRuntimeCompatibilityVersion: input.aircraftRuntimeCompatibilityVersion,
+      presentationImages: this.presentationImages(),
+    });
+
+    const current = this.viewModelSignal();
+    if (!current.available || String(current.sessionId) !== String(input.record.sessionId)) {
+      return;
+    }
+
+    const status = this.persistence.saveStatus();
+    const memoryOnly = this.persistence.isMemoryOnly();
+    this.viewModelSignal.set({
+      ...current,
+      persistenceStatus: status,
+      isNewPersonalBest: this.persistence.becamePersonalBest(),
+      memoryOnly,
+      persistenceNote: persistenceNoteFor(status, memoryOnly),
+    });
+  }
+}
+
+function persistenceNoteFor(
+  status: MissionResultSaveUiStatus,
+  memoryOnly: boolean,
+): string | null {
+  switch (status) {
+    case 'saving':
+      return 'Saving result…';
+    case 'saved-new-personal-best':
+      return 'New Personal Best';
+    case 'saved-without-images':
+      return 'Personal Best saved. Photo storage incomplete.';
+    case 'memory-only':
+      return 'Saved for this session only — durable storage is unavailable.';
+    case 'attempt-saved':
+      return memoryOnly
+        ? 'Attempt saved for this session only.'
+        : 'Attempt saved';
+    case 'saved':
+      return 'Result saved';
+    case 'save-failed':
+      return 'Could not save this result.';
+    default:
+      return null;
   }
 }
 

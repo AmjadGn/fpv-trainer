@@ -1,6 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  OnDestroy,
+  OnInit,
   computed,
   inject,
   signal,
@@ -9,6 +11,7 @@ import {
   evaluateMissionAircraftCompatibility,
   type MissionAircraftCompatibilityResult,
 } from '@fpv/mission-domain';
+import { SCORING_POLICY_VERSION } from '@fpv/photography-domain';
 
 import { AircraftCatalogService } from '../../core/aircraft/services/aircraft-catalog.service';
 import { SelectedAircraftService } from '../../core/aircraft/services/selected-aircraft.service';
@@ -16,6 +19,7 @@ import { MissionAircraftCapabilitiesAdapter } from '../../core/mission/adapters/
 import { createMissionFlightLaunchIntent } from '../../core/mission/models/mission-launch-intent';
 import { ExpeditionMissionCatalog } from '../../core/mission/services/expedition-mission-catalog.service';
 import type { ExpeditionMissionSummary } from '../../core/mission/services/expedition-mission-catalog.service';
+import { MissionHistoryFacade } from '../../core/mission-persistence/mission-history.facade';
 import { AppShellService } from '../../core/shell/app-shell.service';
 import { FpvPageHeaderComponent } from '../../shared/ui/fpv-page-header.component';
 import { FpvPanelComponent } from '../../shared/ui/fpv-panel.component';
@@ -25,8 +29,7 @@ type HubPhase = 'list' | 'briefing' | 'loading' | 'error';
 
 /**
  * Fly → Expeditions entry with Coastal Ruins Survey briefing and launch.
- * Results from a launched mission are session-only: nothing here reads or
- * writes personal bests, rankings, or cloud state.
+ * Shows durable local progress / Personal Best from mission persistence.
  */
 @Component({
   selector: 'app-expeditions-hub',
@@ -45,13 +48,45 @@ type HubPhase = 'list' | 'briefing' | 'loading' | 'error';
         @if (phase() === 'list') {
           <fpv-panel title="Expeditions" subtitle="Installed mission packages.">
             @for (mission of missions(); track mission.missionId) {
-              <article class="mission-row">
+              <article class="mission-row" data-testid="expedition-mission-row">
                 <div>
                   <h3>{{ mission.title }}</h3>
                   <p class="meta">
                     {{ mission.locationTitle }} · {{ mission.subregionId }}
                   </p>
                   <p class="copy">{{ mission.briefingSummary }}</p>
+                  @if (history().missionScopeKey) {
+                    <div class="progress" data-testid="mission-progress">
+                      <p class="meta">
+                        {{ history().completed ? 'Completed' : 'Not completed' }}
+                        · {{ history().completionCount }} completions
+                      </p>
+                      <p class="meta">
+                        Personal Best:
+                        {{ history().summary?.bestScore ?? '—' }}
+                        · Latest: {{ history().summary?.latestScore ?? '—' }}
+                      </p>
+                      @if (history().lastPlayedAtIso; as played) {
+                        <p class="meta">Last played: {{ formatDate(played) }}</p>
+                      }
+                      <p class="meta">Images: {{ history().imageStatus }}</p>
+                      @if (history().memoryOnly) {
+                        <p class="notice" data-testid="memory-only-warning">
+                          Progress is memory-only on this device and will not survive reload.
+                        </p>
+                      }
+                      @if (history().recentResults.length > 0) {
+                        <ul class="recent" data-testid="recent-results">
+                          @for (result of history().recentResults; track result.resultId) {
+                            <li>
+                              {{ result.status }} · {{ result.totalScore }} /
+                              {{ result.maximumScore }}
+                            </li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  }
                 </div>
                 <button
                   type="button"
@@ -68,7 +103,50 @@ type HubPhase = 'list' | 'briefing' | 'loading' | 'error';
               <button type="button" fpvButton variant="secondary" size="sm" (click)="backToFly()">
                 Back to Fly
               </button>
+              <button
+                type="button"
+                fpvButton
+                variant="secondary"
+                size="sm"
+                data-testid="clear-mission-data"
+                (click)="requestClearMissionData()"
+              >
+                Clear mission data
+              </button>
             </div>
+            @if (clearConfirm()) {
+              <div class="clear-confirm" data-testid="clear-confirm">
+                <p class="copy">
+                  Clear durable mission results, Personal Bests, and mission photos on this device?
+                  Replay, aircraft builds, and settings are not affected.
+                </p>
+                <div class="actions">
+                  <button type="button" fpvButton variant="secondary" size="sm" (click)="cancelClear()">
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    fpvButton
+                    variant="primary"
+                    size="sm"
+                    data-testid="clear-scope"
+                    (click)="confirmClearScope()"
+                  >
+                    Clear this mission
+                  </button>
+                  <button
+                    type="button"
+                    fpvButton
+                    variant="primary"
+                    size="sm"
+                    data-testid="clear-all"
+                    (click)="confirmClearAll()"
+                  >
+                    Clear all mission data
+                  </button>
+                </div>
+              </div>
+            }
           </fpv-panel>
         }
 
@@ -91,7 +169,7 @@ type HubPhase = 'list' | 'briefing' | 'loading' | 'error';
             @if (mission.captureScoringEnabled) {
               <p class="notice" data-testid="capture-enabled">
                 Photo capture is scored in flight — press <kbd>V</kbd> or the HUD shutter with the
-                FPV camera active. Results are shown for this session only.
+                FPV camera active. Results are saved locally on this device.
               </p>
             } @else {
               <p class="notice" data-testid="capture-not-enabled">
@@ -173,11 +251,22 @@ type HubPhase = 'list' | 'briefing' | 'loading' | 'error';
         margin: 0 0 1rem;
         padding-left: 1.1rem;
       }
+      .recent {
+        margin: 0.35rem 0 0.75rem;
+        padding-left: 1.1rem;
+        color: var(--fpv-text-muted, #9aa49c);
+        font-size: 0.85rem;
+      }
       .notice {
         margin: 0 0 1rem;
         padding: 0.75rem;
         border-left: 3px solid var(--fpv-accent, #c4a35a);
         color: var(--fpv-text-muted, #9aa49c);
+      }
+      .clear-confirm {
+        margin-top: 1rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
       }
       .compat[data-status='incompatible'] {
         color: #c45c5c;
@@ -197,20 +286,23 @@ type HubPhase = 'list' | 'briefing' | 'loading' | 'error';
     `,
   ],
 })
-export class ExpeditionsHubComponent {
+export class ExpeditionsHubComponent implements OnInit, OnDestroy {
   private readonly shell = inject(AppShellService);
   private readonly catalog = inject(ExpeditionMissionCatalog);
   private readonly selectedAircraft = inject(SelectedAircraftService);
   private readonly aircraftCatalog = inject(AircraftCatalogService);
   private readonly capabilitiesAdapter = inject(MissionAircraftCapabilitiesAdapter);
+  private readonly historyFacade = inject(MissionHistoryFacade);
 
   protected readonly phase = signal<HubPhase>('list');
   protected readonly selected = signal<ExpeditionMissionSummary | null>(null);
   protected readonly compat = signal<MissionAircraftCompatibilityResult | null>(null);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly loadingMessage = signal('Resolving location…');
+  protected readonly clearConfirm = signal(false);
 
   protected readonly missions = computed(() => this.catalog.list());
+  protected readonly history = this.historyFacade.viewModel;
 
   protected readonly selectedAircraftLabel = computed(() => {
     const id = this.selectedAircraft.selectedAircraftId();
@@ -222,6 +314,22 @@ export class ExpeditionsHubComponent {
     const c = this.compat();
     return c !== null && c.status !== 'incompatible';
   });
+
+  ngOnInit(): void {
+    void this.refreshHistory();
+  }
+
+  ngOnDestroy(): void {
+    this.historyFacade.release();
+  }
+
+  protected formatDate(iso: string): string {
+    try {
+      return new Date(iso).toLocaleString();
+    } catch {
+      return iso;
+    }
+  }
 
   protected compatibilityLabel(): string {
     const c = this.compat();
@@ -245,6 +353,7 @@ export class ExpeditionsHubComponent {
     this.phase.set('list');
     this.selected.set(null);
     this.errorMessage.set(null);
+    void this.refreshHistory();
   }
 
   protected openBriefing(mission: ExpeditionMissionSummary): void {
@@ -252,6 +361,29 @@ export class ExpeditionsHubComponent {
     this.errorMessage.set(null);
     this.phase.set('briefing');
     this.refreshCompatibility(mission.missionId);
+  }
+
+  protected requestClearMissionData(): void {
+    this.clearConfirm.set(true);
+  }
+
+  protected cancelClear(): void {
+    this.clearConfirm.set(false);
+  }
+
+  protected async confirmClearScope(): Promise<void> {
+    const scopeKey = this.history().missionScopeKey;
+    if (scopeKey) {
+      await this.historyFacade.clearMissionScope(scopeKey);
+    }
+    this.clearConfirm.set(false);
+    await this.refreshHistory();
+  }
+
+  protected async confirmClearAll(): Promise<void> {
+    await this.historyFacade.clearAllMissionData();
+    this.clearConfirm.set(false);
+    await this.refreshHistory();
   }
 
   protected launch(): void {
@@ -289,8 +421,6 @@ export class ExpeditionsHubComponent {
       aircraftSourceType: adapted.capabilities.sourceType,
       spawnPointId: 'spawn-coastal-ruins-main',
       returnDestination: 'expeditions',
-      // No development flags: the framing guide follows the real active
-      // photography objective in flight.
     });
     if (!intent.ok) {
       this.errorMessage.set(intent.reason);
@@ -315,6 +445,23 @@ export class ExpeditionsHubComponent {
     } else {
       this.backToList();
     }
+  }
+
+  private async refreshHistory(): Promise<void> {
+    const first = this.catalog.list()[0];
+    if (!first) {
+      return;
+    }
+    const pack = this.catalog.get(first.missionId);
+    if (!pack) {
+      return;
+    }
+    await this.historyFacade.refreshForMission({
+      missionId: String(pack.mission.missionId),
+      missionVersion: String(pack.mission.versions.version),
+      scoringPolicyVersion: pack.scoringPolicy.policyVersion || SCORING_POLICY_VERSION,
+      recentLimit: 5,
+    });
   }
 
   private refreshCompatibility(missionId: string): void {
@@ -348,7 +495,6 @@ export class ExpeditionsHubComponent {
       });
       return;
     }
-    // Do not pass non-semver flight runtime stamps into domain major-compat checks.
     this.compat.set(
       evaluateMissionAircraftCompatibility(
         adapted.capabilities,

@@ -70,8 +70,8 @@ interface ActiveMissionContext {
  * Attaches exactly one observation listener to `MissionRuntimeCoordinator`
  * and, per authoritative fixed step, drives stability, boundary grace, crash
  * failure, pending-shutter consumption, and objective progression. It owns no
- * loop of its own: no RAF, no second Rapier world, no rendering, no
- * persistence.
+ * loop of its own: no RAF, no second Rapier world, no rendering. Durable
+ * persistence is triggered by `MissionResultsFacade` after results are set.
  */
 @Injectable({ providedIn: 'root' })
 export class PhotographyMissionRuntime {
@@ -385,6 +385,10 @@ export class PhotographyMissionRuntime {
       evaluations: this.objectiveRuntime.acceptedEvaluationsSnapshot(),
       attemptCounts: this.objectiveRuntime.attemptCountsSnapshot(),
       fixedStepSeconds: this.fixedStepSeconds,
+      scoringPolicyVersion: context.scoringPolicy.policyVersion,
+      sessionGeneration: this.sessionGeneration ?? 0,
+      locationId: context.locationId,
+      locationVersion: context.locationVersion,
     });
   }
 

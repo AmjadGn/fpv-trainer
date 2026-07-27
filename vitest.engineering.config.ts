@@ -19,6 +19,7 @@ export default defineConfig({
       'src/app/core/engineering/**/*.spec.ts',
       'src/app/core/physics/services/physics-world.suspension.spec.ts',
       'src/app/core/mission/adapters/curated-location-runtime-install.rollback.spec.ts',
+      'src/app/core/mission-persistence/**/*.spec.ts',
     ],
     setupFiles: [],
   },
@@ -46,6 +47,7 @@ export default defineConfig({
       '@fpv/mission-domain': resolve(root, 'packages/mission-domain/src/index.ts'),
       '@fpv/photography-domain': resolve(root, 'packages/photography-domain/src/index.ts'),
       '@fpv/location-validation': resolve(root, 'packages/location-validation/src/index.ts'),
+      '@fpv/mission-persistence': resolve(root, 'packages/mission-persistence/src/index.ts'),
     },
   },
 });

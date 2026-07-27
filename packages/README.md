@@ -56,3 +56,4 @@ location-validation
 - Mission and photography must not import controller-calibration models.
 - `mission-domain` does not depend on `photography-domain` (no circular edge); photography results cross the boundary via explicit score/evidence contracts joined in `location-validation`.
 - `@fpv/location-validation` validates location, mission, and photography content for versioned location/mission packages. A future rename to `@fpv/content-validation` may be considered only if responsibilities expand beyond that curated content.
+- `@fpv/mission-persistence` is pure contracts for durable mission results / Personal Bests (no IndexedDB, Blob, or Angular). Application adapters live under `src/app/core/mission-persistence/`.
